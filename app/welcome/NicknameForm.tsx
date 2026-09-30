@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { lastGymPath } from "@/lib/gyms";
+import { safeInternalPath } from "@/lib/nav";
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +11,10 @@ import { Label, TextField } from "@/components/ui/Form";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 
-const safeNext = (n: string | null) => (n && n.startsWith("/") && !n.startsWith("//") && n !== "/welcome" ? n : lastGymPath());
+const safeNext = (n: string | null) => {
+  const p = safeInternalPath(n, lastGymPath());
+  return p.startsWith("/welcome") ? lastGymPath() : p;
+};
 
 // 第一次登入填暱稱（也用來改暱稱）；預設帶入帳號名稱
 export default function NicknameForm() {

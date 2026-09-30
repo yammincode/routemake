@@ -288,3 +288,27 @@ export async function updateScoringRules(r: ScoringRules) {
 export async function getPointsSummary(year: number, month: number): Promise<PointsSummary> {
   return must(await supabase().rpc("points_summary", { p_year: year, p_month: month }));
 }
+
+// ---------- 操作紀錄（店長、老闆） ----------
+export type AuditEntry = {
+  id: number;
+  gym_id: string | null;
+  action: string;
+  target_id: string | null;
+  detail: Record<string, unknown> | null;
+  created_at: string;
+  nickname: string | null;
+};
+// 這間館的操作紀錄（老闆另外看得到全館共用的，例如計分規則），新的在前
+export async function getAuditLog(gym: string, opts: { before?: number; actions?: string[]; limit?: number } = {}): Promise<AuditEntry[]> {
+  let q = supabase()
+    .from("audit_log")
+    .select("id,gym_id,action,target_id,detail,created_at,profiles(nickname)")
+    .or(`gym_id.eq.${gym},gym_id.is.null`)
+    .order("id", { ascending: false })
+    .limit(opts.limit ?? 30);
+  if (opts.before) q = q.lt("id", opts.before);
+  if (opts.actions?.length) q = q.in("action", opts.actions);
+  const rows = must(await q) as unknown as (Omit<AuditEntry, "nickname"> & { profiles: { nickname: string | null } | null })[];
+  return rows.map(({ profiles, ...a }) => ({ ...a, nickname: profiles?.nickname ?? null }));
+}

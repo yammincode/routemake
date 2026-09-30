@@ -13,6 +13,32 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*"],
   // 試用版（next dev）用 Turbopack；Serwist 只在正式建置（webpack）時產生 Service Worker
   turbopack: {},
+  // 防護標頭：不能被別的網站嵌入、只載入自己與 Supabase 的資源（正式版才加 CSP，試用版需要即時更新）
+  async headers() {
+    const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://*.supabase.co";
+    const base = [
+      { key: "X-Frame-Options", value: "DENY" },
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+    ];
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      `img-src 'self' data: blob: ${supabase}`,
+      "font-src 'self'",
+      `connect-src 'self' ${supabase}`,
+      "worker-src 'self'",
+      "manifest-src 'self'",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "object-src 'none'",
+    ].join("; ");
+    const headers = process.env.NODE_ENV === "production" ? [...base, { key: "Content-Security-Policy", value: csp }] : base;
+    return [{ source: "/:path*", headers }];
+  },
   // 舊的區域網址 /zone/{id} 轉到 /zone?id={id}
   async redirects() {
     return [{ source: "/zone/:id", destination: "/zone?id=:id", permanent: true }];

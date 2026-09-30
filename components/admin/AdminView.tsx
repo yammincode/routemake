@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteEditor, { type EditTarget } from "@/components/admin/RouteEditor";
+import AuditPanel from "@/components/admin/AuditPanel";
 import ScoringPanel from "@/components/admin/ScoringPanel";
 import ShareQr from "@/components/admin/ShareQr";
 import StaffPanel from "@/components/admin/StaffPanel";
@@ -320,6 +321,7 @@ export default function AdminView() {
       )}
 
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
+      {manager && gym && <AuditPanel gymId={gymId} gymName={gym.name} />}
       {access.is_owner && <ScoringPanel />}
       <ShareQr />
 

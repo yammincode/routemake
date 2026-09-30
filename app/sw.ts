@@ -1,6 +1,6 @@
 import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
-import { NetworkFirst, Serwist } from "serwist";
+import { NetworkFirst, NetworkOnly, Serwist } from "serwist";
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -25,6 +25,14 @@ self.addEventListener("install", (event) => {
   );
 });
 
+// Supabase 的資料（登入、紀錄、心得、留言）一律不存進 Service Worker 快取：
+// 快取不會隨登出清掉，共用手機時可能被下一個人看到。離線用的資料改由 App 存在手機並在登出時清除。
+// 公開照片（storage/v1/object/public）不含個人資料，仍照一般圖片快取
+const supabaseData = {
+  matcher: ({ url }: { url: URL }) => url.hostname.endsWith(".supabase.co") && !url.pathname.startsWith("/storage/v1/object/public/"),
+  handler: new NetworkOnly(),
+};
+
 const zoneShell = {
   matcher: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) => sameOrigin && url.pathname === "/zone",
   handler: new NetworkFirst({ cacheName: ZONE_CACHE, matchOptions: { ignoreSearch: true }, networkTimeoutSeconds: 5 }),
@@ -35,7 +43,7 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  runtimeCaching: [zoneShell, ...defaultCache],
+  runtimeCaching: [supabaseData, zoneShell, ...defaultCache],
 });
 
 serwist.addEventListeners();

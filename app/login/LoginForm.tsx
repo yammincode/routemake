@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { lastGymPath } from "@/lib/gyms";
-import { backOr } from "@/lib/nav";
+import { backOr, safeInternalPath } from "@/lib/nav";
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/Button";
@@ -14,7 +14,7 @@ import { SetBox } from "@/components/ui/Stats";
 import { isValidUsername, PASSWORD_MIN, USERNAME_RULE } from "@/lib/auth";
 
 // 只允許站內路徑，避免被導到別的網站
-const safeNext = (n: string | null) => (n && n.startsWith("/") && !n.startsWith("//") ? n : lastGymPath());
+const safeNext = (n: string | null) => safeInternalPath(n, lastGymPath());
 
 export default function LoginForm() {
   const { signIn, signUp, session, ready } = useAuth();

@@ -12,6 +12,7 @@
 | `setup/step3-username-login.sql` | migration 0007：帳號名稱＋密碼登入、指派員工改用帳號名稱 | 已套用 |
 | `setup/step4-scoring.sql` | migration 0008：路線分數、風格加成、每日積分（scoring_rules、points_summary） | 待套用 |
 | `setup/step5-gym-names.sql` | migration 0009：六間店正式名稱 | 待套用 |
+| `setup/step6-security-audit.sql` | migration 0010：留言頻率限制、操作紀錄顯示暱稱與看得懂的內容 | 待套用 |
 
 ## 規則摘要
 
@@ -21,7 +22,7 @@
 | zones | 所有人 | 員工；定線長只能改照片和換線日，其他欄位只有店長 | 店長，且區域沒有任何路線 |
 | routes | 所有人 | 該館員工；編號自動產生、不能改 | 不開放，用 `archived_at` 下架 |
 | ascents | 只有本人 | 只有本人 | 只有本人 |
-| comments | 所有人（未刪除） | 登入且有暱稱；路線未下架、路線與場館留言都開啟 | `delete_comment()`：本人或該館員工（軟刪除） |
+| comments | 所有人（未刪除） | 登入且有暱稱；路線未下架、路線與場館留言都開啟；1 分鐘最多 5 則、24 小時最多 100 則 | `delete_comment()`：本人或該館員工（軟刪除） |
 | profiles | 所有人只能讀 id、暱稱、頭像（帳號名稱、手機不公開） | 本人只能改暱稱、頭像 | 不開放 |
 | staff_roles | 本人、該館店長 | 店長只能指派定線長，店長由老闆指派（`lookup_user()` 先確認暱稱，再 `assign_staff(帳號, 館, 角色)`） | 同左（`remove_staff()`） |
 | audit_log | 該館店長、老闆 | 只能由函式寫入 | 不開放 |

@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test:db": "scripts/test-db.sh",
     "bundle:sql": "scripts/bundle-sql.sh",
-    "trial": "next dev -H 0.0.0.0"
+    "trial": "next dev -H 0.0.0.0",
+    "test:e2e": "node scripts/test-e2e.mjs"
   },
   "dependencies": {
     "@serwist/next": "^9.5.12",
@@ -29,6 +30,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.7",
+    "playwright-core": "^1.63.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

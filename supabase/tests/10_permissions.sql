@@ -405,6 +405,24 @@ select tests.throws('未登入：不能查積分', 'select public.points_summary
 reset role;
 
 -- ---------------------------------------------------------------------
+-- 安全加強與操作紀錄
+-- ---------------------------------------------------------------------
+update public.gyms set comments_enabled = true;
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y, created_at)
+values ((select v from ids where k = 'zoneB'), 'B-80', 1, '綠', 1, 1, now() - interval '1 day');
+set role authenticated; select tests.login(:NN);
+update public.profiles set nickname = '洗版' where id = :NN;
+select tests.lives('留言：1 分鐘內 5 則可以', $q$do $$ begin for i in 1..5 loop insert into public.comments (route_id, body) select id, '第' || i || '則' from public.routes where code = 'B-80'; end loop; end $$$q$);
+select tests.throws('留言：1 分鐘內第 6 則被擋', $q$insert into public.comments (route_id, body) select id, '第六則' from public.routes where code = 'B-80'$q$);
+reset role;
+select tests.ok('操作紀錄：指派員工記下暱稱與帳號', exists (select 1 from public.audit_log where action = 'staff.assign' and detail ->> 'username' = 'climber_b' and detail ? 'nickname'));
+select tests.ok('操作紀錄：整區換線記下區域名稱', exists (select 1 from public.audit_log where action = 'zone.archive_all' and detail ->> 'zone' = 'A 區'));
+set role authenticated; select tests.login(:MG);
+select tests.ok('操作紀錄：店長可以連同暱稱一起讀（profiles 關聯）',
+  (select count(*) from public.audit_log a left join public.profiles p on p.id = a.user_id where a.gym_id = 'mingde') >= 1);
+reset role;
+
+-- ---------------------------------------------------------------------
 -- 結果
 -- ---------------------------------------------------------------------
 \o

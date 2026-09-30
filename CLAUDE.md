@@ -14,6 +14,7 @@
   - 修改集中做完再 push，不要一個小改動就 push
   - 使用者在自己電腦用 scripts/trial.ps1 跑試用版確認
   - 使用者說「更新正式版」時，才把開發分支合併到 main 並 push（這是唯一會部署的動作）
+- push 前跑 npm run test:db、npm run build、npm run test:e2e，全部通過才 push；新功能要補測試（supabase/tests、tests/e2e）
 
 ## 技術規則
 - Next.js（App Router）+ TypeScript + Tailwind CSS，PWA

@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
+import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
 import { ColorPicker, GradePicker, Label, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
@@ -295,6 +296,11 @@ export default function DesignShowcase() {
           <TextField id="rn" maxLength={40} placeholder="例如：最後一手要果斷" />
         </SetBox>
         <Tip>點空白處新增，點標記編輯、管理留言或下架。</Tip>
+        <LogList>
+          <LogRow time="10/05 14:32" text="A 區整區換線，下架 12 條" who="阿定" />
+          <LogRow time="10/04 20:11" text="刪除 小安 在 A-07 的留言「這條好難」" who="店長" />
+          <LogRow time="10/03 09:02" text="修改計分規則（Flash ×1.2、風格加成上限 30%）" who={null} />
+        </LogList>
       </Block>
 
       <Block title="我的紀錄">
