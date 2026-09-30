@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// 管理後台分頁：第 3 步做完登入後，改成只有員工看得到
+// 底部三個分頁（原型 .tabs）；管理後台分頁在第 3 步做完登入後，改成只有員工看得到
 const TABS = [
   { href: "/", label: "館內路線", match: (p: string) => p === "/" || p.startsWith("/zone") || p.startsWith("/gym") },
   { href: "/me", label: "我的紀錄", match: (p: string) => p.startsWith("/me") },
@@ -13,7 +13,7 @@ const TABS = [
 export default function TabBar() {
   const pathname = usePathname();
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-10 flex justify-center gap-1 border-t border-line bg-surface/90 px-3 pt-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] backdrop-blur-md">
+    <nav className="fixed inset-x-0 bottom-0 z-10 flex justify-center gap-1 border-t border-line bg-surface/92 px-3 pt-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] backdrop-blur-[10px]">
       {TABS.map((t) => {
         const current = t.match(pathname);
         return (
@@ -21,9 +21,7 @@ export default function TabBar() {
             key={t.href}
             href={t.href}
             aria-current={current ? "page" : undefined}
-            className={`max-w-[180px] flex-1 rounded-xl px-1 py-2 text-center text-[15px] ${
-              current ? "bg-bg font-bold text-ink" : "font-medium text-muted"
-            }`}
+            className={`max-w-[180px] flex-1 rounded-btn px-1 py-2 text-center text-sub ${current ? "bg-bg font-bold text-ink" : "font-medium text-muted"}`}
           >
             {t.label}
           </Link>

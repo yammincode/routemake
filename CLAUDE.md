@@ -20,3 +20,4 @@
 - 介面全部繁體中文，時區 Asia/Taipei，手機優先（寬 360–430px）
 - 難度 V0–V10；紀錄狀態只有 flash（顯示 Flash）、send（完攀）、project（嘗試中）
 - 配色沿用原型：主色原岩酒紅 #6B2D3C，Flash 黃色 #F5B700
+- 畫面完全照原型：每一頁都用 docs/design-system.md 的設計規範和 components/ui/ 的共用元件，不在頁面裡另寫顏色、字級、圓角；新元件先加進 components/ui/ 和 /design 展示頁

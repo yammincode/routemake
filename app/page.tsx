@@ -1,13 +1,13 @@
 import Header from "@/components/Header";
-import Placeholder from "@/components/Placeholder";
+import { Empty, PageTitle } from "@/components/ui/Card";
 import { LIVE_GYM } from "@/lib/gyms";
 
 export default function Home() {
   return (
     <>
       <Header gym={LIVE_GYM} />
-      <h1 className="mt-1 mb-1.5 text-[30px] leading-tight font-black">今天爬哪一區？</h1>
-      <Placeholder>館內平面圖和各區路線建置中。</Placeholder>
+      <PageTitle sub="館內平面圖和各區路線建置中">今天爬哪一區？</PageTitle>
+      <Empty>路線資料建置中，完成後就能在這裡選區域、看路線。</Empty>
     </>
   );
 }

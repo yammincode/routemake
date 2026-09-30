@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, Noto_Sans_TC } from "next/font/google";
 import TabBar from "@/components/TabBar";
+import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
 const noto = Noto_Sans_TC({
@@ -50,8 +51,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="zh-Hant" className={`${noto.variable} ${barlow.variable}`}>
       <body className="font-sans">
-        <main className="mx-auto max-w-[560px] px-4 pt-3 pb-28">{children}</main>
-        <TabBar />
+        <ToastProvider>
+          <main className="mx-auto max-w-page px-4 pt-3 pb-28">{children}</main>
+          <TabBar />
+        </ToastProvider>
       </body>
     </html>
   );
