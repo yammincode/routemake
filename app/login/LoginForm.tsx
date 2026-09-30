@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
@@ -103,7 +104,15 @@ export default function LoginForm() {
           {busy ? "請稍候…" : mode === "login" ? "登入" : "註冊並登入"}
         </Button>
       </form>
-      {mode === "login" && <Tip>忘記密碼請洽櫃檯。</Tip>}
+      {mode === "login" ? (
+        <Tip>忘記密碼請洽櫃檯。</Tip>
+      ) : (
+        <Tip>
+          註冊即表示你同意
+          <Link href="/privacy" className="text-accent underline">隱私權政策</Link>和
+          <Link href="/rules" className="text-accent underline">留言規範</Link>。
+        </Tip>
+      )}
     </>
   );
 }

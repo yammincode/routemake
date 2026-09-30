@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -239,7 +240,12 @@ function RouteBody({
             )}
             {!r.archived_at &&
               (session ? (
-                <CommentForm value={draft} onChange={setDraft} onSubmit={post} />
+                <>
+                  <CommentForm value={draft} onChange={setDraft} onSubmit={post} />
+                  <p className="mt-1.5 mb-0 text-tiny text-muted">
+                    留言前請看<Link href="/rules" className="underline">留言規範</Link>
+                  </p>
+                </>
               ) : (
                 <Button onClick={toLogin}>登入後留言</Button>
               ))}

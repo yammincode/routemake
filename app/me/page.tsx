@@ -1,3 +1,4 @@
+import Link from "next/link";
 import AccountCard from "@/components/AccountCard";
 import Header from "@/components/Header";
 import MeView from "@/components/MeView";
@@ -13,6 +14,11 @@ export default function MePage() {
       <div className="mt-7">
         <AccountCard />
       </div>
+      <p className="mt-4 text-center text-meta text-muted">
+        <Link href="/privacy" className="underline">隱私權政策</Link>
+        {" · "}
+        <Link href="/rules" className="underline">留言規範</Link>
+      </p>
     </>
   );
 }
