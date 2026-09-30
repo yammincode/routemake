@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:db": "scripts/test-db.sh",
+    "bundle:sql": "scripts/bundle-sql.sh"
   },
   "dependencies": {
     "@serwist/next": "^9.5.12",
