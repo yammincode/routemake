@@ -11,6 +11,7 @@
 | `setup/step2-database.sql` | migration 0001–0006：8 張表、RLS、函式、照片 bucket、六間店與明德館 5 區 | 已套用 |
 | `setup/step3-username-login.sql` | migration 0007：帳號名稱＋密碼登入、指派員工改用帳號名稱 | 已套用 |
 | `setup/step4-scoring.sql` | migration 0008：路線分數、風格加成、每日積分（scoring_rules、points_summary） | 待套用 |
+| `setup/step5-gym-names.sql` | migration 0009：六間店正式名稱 | 待套用 |
 
 ## 規則摘要
 

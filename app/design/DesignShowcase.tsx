@@ -352,7 +352,7 @@ export default function DesignShowcase() {
       <Block title="其他">
         <Empty>這個月還沒有完攀紀錄。</Empty>
         <div className="mt-3">
-          <SoonBox name="第二館" backLabel="看明德館" onBack={() => toast("回明德館")} />
+          <SoonBox name="萬華館" backLabel="看明德館" onBack={() => toast("回明德館")} />
         </div>
         <div className="mt-3 flex items-center gap-3">
           <Tape color="藍" />

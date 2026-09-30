@@ -93,14 +93,18 @@ export function NewRouteCard({ color, grade, zone, ago, ...rest }: ComponentProp
 }
 
 // 場館選擇列（原型 .gymrow）
-export function GymRow({ name, live, selected, ...rest }: ComponentProps<"button"> & { name: string; live: boolean; selected: boolean }) {
+export function GymRow({ name, live, selected, logo, ...rest }: ComponentProps<"button"> & { name: string; live: boolean; selected: boolean; logo?: string }) {
   return (
     <button
       aria-pressed={selected}
-      className="flex w-full items-center justify-between rounded-btn bg-sunk px-4 py-3.5 text-left font-medium aria-pressed:shadow-[inset_0_0_0_2px_var(--ink)]"
+      className={`flex w-full items-center justify-between rounded-btn bg-sunk px-4 text-left font-medium aria-pressed:shadow-[inset_0_0_0_2px_var(--ink)] ${logo ? "py-2.5" : "py-3.5"}`}
       {...rest}
     >
-      <span>{name}</span>
+      <span className="flex items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {logo && <img src={logo} alt="" width={48} height={48} className={`size-12 flex-none ${live ? "" : "opacity-60 grayscale-[40%]"}`} />}
+        {name}
+      </span>
       <small className={`text-meta ${live ? "font-bold text-accent" : "font-normal text-muted"}`}>{live ? "已上線" : "即將上線"}</small>
     </button>
   );

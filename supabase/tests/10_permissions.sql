@@ -119,7 +119,7 @@ select tests.throws('起步點超出照片範圍會被擋', format('insert into 
 select tests.throws('不存在的風格標籤會被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, style_tags) values (%L, 1, ''紅'', 1, 1, ''{飛天}'')', (select v from ids where k = 'zoneA')));
 -- 區域：定線員只能改照片和換線日
 select tests.ok('定線員：可以改照片和換線日',
-  tests.rows(format('update public.zones set photo_path = ''mingde/zones/a.jpg'', next_reset_on = current_date + 5 where id = %L', (select v from ids where k = 'zoneA'))) = 1);
+  tests.rows(format('update public.zones set photo_path = ''mingde/zones/a.jpg'', next_reset_on = public.taipei_today() + 5 where id = %L', (select v from ids where k = 'zoneA'))) = 1);
 select tests.throws('定線員：不能改區域名稱', format('update public.zones set name = ''亂改'' where id = %L', (select v from ids where k = 'zoneA')));
 select tests.throws('定線員：不能新增區域', 'insert into public.zones (gym_id, code, name) values (''mingde'', ''E'', ''E 區'')');
 select tests.ok('定線員：不能改場館設定（0 筆）', tests.rows('update public.gyms set comments_enabled = false where id = ''mingde''') = 0);
@@ -163,8 +163,8 @@ select tests.ok('紀錄的使用者一律是本人（傳別人的 id 也沒用�
   (select user_id from public.ascents where route_id = (select v from ids where k = 'r2')) = :A
   and (select feel from public.ascents where route_id = (select v from ids where k = 'r2')) is null);
 select tests.throws('同一條路線不能記兩筆', format('insert into public.ascents (route_id, status) values (%L, ''send'')', (select v from ids where k = 'r1')));
-select tests.throws('日期不能早於路線設定日', format('update public.ascents set climbed_on = current_date - 3 where route_id = %L', (select v from ids where k = 'r1')));
-select tests.throws('日期不能晚於今天', format('update public.ascents set climbed_on = current_date + 3 where route_id = %L', (select v from ids where k = 'r1')));
+select tests.throws('日期不能早於路線設定日', format('update public.ascents set climbed_on = public.taipei_today() - 3 where route_id = %L', (select v from ids where k = 'r1')));
+select tests.throws('日期不能晚於今天', format('update public.ascents set climbed_on = public.taipei_today() + 3 where route_id = %L', (select v from ids where k = 'r1')));
 select tests.throws('心得超過 300 字會被擋', format('update public.ascents set private_note = repeat(''字'', 301) where route_id = %L', (select v from ids where k = 'r1')));
 select tests.ok('顧客甲：讀得到自己的心得', (select private_note from public.ascents where route_id = (select v from ids where k = 'r1')) = '甲的秘密心得');
 select tests.ok('my_access() 讀得到自己的帳號名稱', (public.my_access() ->> 'username') = 'climber_a');
@@ -181,7 +181,7 @@ select tests.ok('顧客乙：改不了顧客甲的紀錄（0 筆）', tests.rows
 select tests.ok('顧客乙：刪不了顧客甲的紀錄（0 筆）', tests.rows('delete from public.ascents') = 0);
 select tests.throws('顧客乙：讀不到手機號碼', 'select phone from public.profiles');
 select tests.throws('顧客乙：讀不到別人的帳號名稱', 'select username from public.profiles');
-select tests.ok('顧客乙：monthly_stats 只算自己（0 條）', (public.monthly_stats(extract(year from current_date)::int, extract(month from current_date)::int) ->> 'sends')::int = 0);
+select tests.ok('顧客乙：monthly_stats 只算自己（0 條）', (public.monthly_stats(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'sends')::int = 0);
 reset role;
 
 set role authenticated; select tests.login(:ST);
@@ -201,8 +201,8 @@ reset role;
 set role authenticated; select tests.login(:A);
 select tests.ok('monthly_stats：完攀 1、Flash 1、攀爬 1 天、最高 V3',
   (select s ->> 'sends' = '1' and s ->> 'flashes' = '1' and s ->> 'days' = '1' and s ->> 'top_grade' = '3' and s ->> 'total_sends' = '1'
-     from public.monthly_stats(extract(year from current_date)::int, extract(month from current_date)::int) s),
-  public.monthly_stats(extract(year from current_date)::int, extract(month from current_date)::int)::text);
+     from public.monthly_stats(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) s),
+  public.monthly_stats(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int)::text);
 select tests.ok('zone_progress：A 區 2 條、我完成 1 條（嘗試中不算）',
   (select route_count = 2 and done_count = 1 from public.zone_progress('mingde') where code = 'A'));
 reset role;
@@ -283,7 +283,7 @@ select tests.ok('換線後顧客的紀錄和心得還在', (select count(*) from
   and (select private_note from public.ascents where route_id = (select v from ids where k = 'r1')) = '甲的秘密心得');
 select tests.ok('已下架路線：仍可修改自己的心得', tests.rows(format('update public.ascents set private_note = ''補寫'' where route_id = %L', (select v from ids where k = 'r1'))) = 1);
 select tests.throws('已下架路線：不能留言', format('insert into public.comments (route_id, body) values (%L, ''嗨'')', (select v from ids where k = 'r1')));
-select tests.ok('累計完攀包含已下架路線', (public.monthly_stats(extract(year from current_date)::int, extract(month from current_date)::int) ->> 'total_sends')::int = 1);
+select tests.ok('累計完攀包含已下架路線', (public.monthly_stats(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'total_sends')::int = 1);
 reset role;
 
 -- 單條下架
@@ -368,23 +368,23 @@ select (select v from ids where k = 'zoneB'), 'B-9' || g, g, '紅', t, 1, 1, now
   from (values (2, '{}'::text[]), (4, '{動態,指力}'::text[]), (6, '{}'::text[])) v(g, t);
 insert into public.ascents (user_id, route_id, status, climbed_on)
 select :B, r.id, s, d from (values
-  ('B-92', 'send',  current_date),
-  ('B-94', 'flash', current_date - 1),
-  ('B-96', 'send',  current_date - 40)
+  ('B-92', 'send',  public.taipei_today()),
+  ('B-94', 'flash', public.taipei_today() - 1),
+  ('B-96', 'send',  public.taipei_today() - 40)
 ) v(code, s, d) join public.routes r on r.code = v.code;
 
 set role authenticated; select tests.login(:B);
 select tests.ok('積分：今天 20 分、累計 150 分、連續 2 天',
   (select s ->> 'today' = '20' and s ->> 'total' = '150' and s ->> 'streak' = '2'
-     from public.points_summary(extract(year from current_date)::int, extract(month from current_date)::int) s),
-  public.points_summary(extract(year from current_date)::int, extract(month from current_date)::int)::text);
+     from public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) s),
+  public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int)::text);
 select tests.ok('積分：最近 7 天平均（不含今天）= 60 / 7 ≈ 8.6',
-  (public.points_summary(extract(year from current_date)::int, extract(month from current_date)::int) ->> 'avg7')::numeric = 8.6);
+  (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'avg7')::numeric = 8.6);
 select tests.ok('顧客：改不了計分規則（0 筆）', tests.rows('update public.scoring_rules set flash_multiplier = 3') = 0);
 select tests.ok('顧客：改計分規則沒有效果', (select flash_multiplier from public.scoring_rules) = 1.2);
 reset role;
 set role authenticated; select tests.login(:A);
-select tests.ok('顧客甲：積分只算自己', (public.points_summary(extract(year from current_date)::int, extract(month from current_date)::int) ->> 'total')::int
+select tests.ok('顧客甲：積分只算自己', (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'total')::int
   = (select coalesce(sum(public.ascent_points(r.grade, r.style_tags, a.status)), 0) from public.ascents a join public.routes r on r.id = a.route_id));
 reset role;
 set role authenticated; select tests.login(:MG);

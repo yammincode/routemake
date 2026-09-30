@@ -27,7 +27,8 @@ export default function Header({ gym }: { gym: Gym }) {
           onClick={() => setOpen(true)}
           className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-[5px] pr-3 pl-3.5 text-sub font-bold shadow-card"
         >
-          {gym.live && <span className="size-2 rounded-full bg-accent" />}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={gym.logo} alt="" width={22} height={22} className="-ml-1 size-[22px]" />
           {gym.name}
           <Icon name="down" />
         </button>
@@ -37,7 +38,7 @@ export default function Header({ gym }: { gym: Gym }) {
         <SheetSub>目前只有明德館開放路線紀錄</SheetSub>
         <div className="grid gap-2">
           {GYMS.map((g) => (
-            <GymRow key={g.id} name={g.name} live={g.live} selected={g.id === gym.id} onClick={() => pick(g)} />
+            <GymRow key={g.id} name={g.name} logo={g.logo} live={g.live} selected={g.id === gym.id} onClick={() => pick(g)} />
           ))}
         </div>
       </Sheet>

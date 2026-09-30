@@ -22,6 +22,7 @@ export default function GymPicker() {
           <GymRow
             key={g.id}
             name={g.name}
+            logo={g.logo}
             live={g.live}
             selected={false}
             onClick={() => {
