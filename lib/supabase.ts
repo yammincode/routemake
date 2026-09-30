@@ -11,7 +11,7 @@ export function supabase(): SupabaseClient {
   if (client) return client;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) throw new Error("缺少 NEXT_PUBLIC_SUPABASE_URL 或 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
+  if (!url || !key) throw new Error("網站還沒設定資料庫連線（Netlify 環境變數），請管理員設定後重新部署");
   client = createClient(url, key, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: "routemake-auth" },
   });
