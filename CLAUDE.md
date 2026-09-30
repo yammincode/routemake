@@ -12,7 +12,8 @@
 
 ## 技術規則
 - Next.js（App Router）+ TypeScript + Tailwind CSS，PWA
-- 後端只用 Supabase（Postgres、Auth 手機簡訊登入、Storage），部署到 Netlify
+- 後端只用 Supabase（Postgres、Auth 帳號名稱＋密碼登入、Storage），部署到 Netlify
+- 登入用「帳號名稱＋密碼」，不發簡訊、不寄信：帳號轉成 {帳號}@users.routemake.local 給 Supabase Auth（Confirm email 關閉）
 - 跟會員系統（Tupuser）完全分開：獨立的 Supabase 專案、帳號、資料表，不共用、不串接，也不引用會員系統的程式
 - 所有資料表變更都寫成 supabase/migrations 裡的 migration 檔
 - 每張表都要有 RLS，權限在資料庫擋，不能只靠前端隱藏

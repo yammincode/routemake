@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, Noto_Sans_TC } from "next/font/google";
+import { AuthProvider } from "@/components/AuthProvider";
 import TabBar from "@/components/TabBar";
 import { ToastProvider } from "@/components/ui/Toast";
 import UpdateWatcher from "@/components/UpdateWatcher";
@@ -53,8 +54,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="zh-Hant" className={`${noto.variable} ${barlow.variable}`}>
       <body className="font-sans">
         <ToastProvider>
-          <main className="mx-auto max-w-page px-4 pt-3 pb-28">{children}</main>
-          <TabBar />
+          <AuthProvider>
+            <main className="mx-auto max-w-page px-4 pt-3 pb-28">{children}</main>
+            <TabBar />
+          </AuthProvider>
           <UpdateWatcher />
         </ToastProvider>
       </body>

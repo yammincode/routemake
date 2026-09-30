@@ -24,7 +24,7 @@
 | PWA | Web App Manifest + Service Worker（`@serwist/next`） | 加到主畫面、App 圖示、快取靜態檔 |
 | 資料庫 | Supabase Postgres | 路線、紀錄、留言 |
 | 權限 | Supabase Row Level Security | 顧客只能改自己的資料，員工才能改路線 |
-| 登入 | 手機號碼 + 簡訊驗證碼（Supabase Phone Auth） | 顧客與員工登入；簡訊用 Twilio（Supabase 內建），或用 Send SMS Hook 接台灣簡訊商，每則簡訊需付費 |
+| 登入 | 帳號名稱 + 密碼（Supabase Auth，Confirm email 關閉） | 顧客與員工登入；不發簡訊、不寄信。帳號名稱 4–20 字（英文字母、數字、底線），App 轉成 {帳號}@users.routemake.local 存在 Supabase |
 | 照片 | Supabase Storage，bucket `zone-photos` | 區域照片、場館平面圖，上傳前在瀏覽器壓到寬 1600px、JPEG |
 | 部署 | Netlify，綁自家網域子網域 | 例如 route.自家網域 |
 | 開發環境 | Windows + Node.js LTS + Supabase CLI | 本機開發與資料表 migration |
@@ -40,7 +40,7 @@
 
 | 角色 | 誰 | 能做什麼 |
 | --- | --- | --- |
-| 顧客 | 任何用手機號碼登入的人 | 看路線、記錄自己的紀錄與心得、留言、刪自己的留言 |
+| 顧客 | 任何註冊帳號並登入的人 | 看路線、記錄自己的紀錄與心得、留言、刪自己的留言 |
 | 定線員 | 店長指派 | 顧客權限 + 在所屬場館新增／編輯／下架路線、上傳區域照片、設換線日、刪任何留言、開關單條路線留言 |
 | 店長 | 老闆指派 | 定線員權限 + 新增／改名區域、上傳平面圖、開關全館留言、指派定線員 |
 
@@ -120,7 +120,8 @@ comments (
 -- 使用者（對應 auth.users）
 profiles (
   id uuid primary key references auth.users,
-  phone text unique,              -- 手機號碼（登入用）
+  username text unique,           -- 帳號名稱（登入用，不公開）
+  phone text unique,              -- 手機號碼（保留，目前不用）
   line_user_id text unique,       -- 正式開放前加 LINE 登入後才會有值
   nickname text,                  -- 留言顯示名稱
   avatar_url text,
@@ -169,7 +170,7 @@ audit_log (
 - `private_note` 在 ascents 表內，其他人（包含員工）都讀不到
 - 留言開關要在資料庫檢查：路線 `comments_enabled` 和場館 `comments_enabled` 任一為 false，就拒絕新增
 - 已下架路線不能新增留言，但顧客仍可修改自己的紀錄和心得
-- `profiles.phone` 其他人讀不到
+- `profiles.phone`、`profiles.username` 其他人讀不到
 
 ## 頁面與功能
 
@@ -184,7 +185,7 @@ audit_log (
 | `/me` | 我的紀錄 | 月份切換；完攀、Flash、攀爬天數、最高難度；跟上個月比較；攀爬日月曆熱度；本月難度分布；本月完攀與心得列表；累計完攀；目前牆上各難度進度 |
 | `/admin` | 管理後台 | 全館留言開關；選區域；改區域名稱、換線日、上傳照片；新增區域；上傳場館平面圖 SVG（每個區域的圖形 id 用區域代碼，例如 A、B，app 自動對應到區域） |
 | `/admin/zone/[zoneId]` | 標路線 | 點照片空白處新增路線（顏色、V 級、風格複選、評語、留言開關）；點標記編輯、看並刪留言、下架；整區換線（二次確認） |
-| `/login` | 登入 | 輸入手機號碼，收簡訊驗證碼登入；首次登入要求填暱稱 |
+| `/login` | 登入 | 帳號名稱＋密碼登入或註冊；首次登入要求填暱稱（`/welcome`）；忘記密碼第一階段由管理者在 Supabase 重設 |
 
 **細節：**
 
@@ -218,13 +219,13 @@ audit_log (
 
 1. 建 Next.js 專案、Tailwind、PWA 設定（manifest、圖示、Service Worker），部署一個空殼到 Netlify
 2. 建 Supabase 專案，寫 migration：8 張表、RLS、`zone-photos` bucket；建六間店和明德館 5 個區域的初始資料
-3. 手機簡訊登入串接、首次登入填暱稱、員工角色判斷
+3. 帳號名稱＋密碼登入、首次登入填暱稱、員工角色判斷
 4. 管理後台：區域管理、照片與平面圖上傳、在照片上標路線、編輯與下架、整區換線
 5. 顧客端：首頁（含平面圖）、區域頁、路線卡片、記錄與心得
 6. 留言：送出、刪除、全館與單條開關、員工刪除
 7. 我的紀錄：月統計、月曆、難度分布、累計
 8. LINE 內建瀏覽器處理、加到主畫面教學、離線快取
-9. （測試結束、正式開放前）LINE 登入：用 Supabase Custom OAuth Provider 的 OAuth2 模式（不要用 OIDC 模式，LINE 網頁登入的 ID token 是 HS256，Supabase 只收 ES256），或用 Edge Function 自己換 token。第一次用 LINE 登入的人驗證手機號碼一次（只發這一次簡訊），綁到同一個 `profiles`；已用手機登入的人可在設定頁綁 LINE。之後都用 LINE 登入，不再發簡訊
+9. （測試結束、正式開放前）LINE 登入：用 Supabase Custom OAuth Provider 的 OAuth2 模式（不要用 OIDC 模式，LINE 網頁登入的 ID token 是 HS256，Supabase 只收 ES256），或用 Edge Function 自己換 token。已用帳號登入的人可在設定頁綁 LINE，綁到同一個 `profiles`；第一次就用 LINE 登入的人是否要另外驗證身分，屆時再決定
 
 **上線前檢查：**
 

@@ -1,0 +1,39 @@
+// 帳號名稱＋密碼登入：帳號轉成 {帳號}@users.routemake.local 給 Supabase Auth（不寄信、不發簡訊）
+
+export const USERNAME_RULE = "4–20 個字，英文字母、數字或底線";
+export const PASSWORD_MIN = 8;
+const AUTH_DOMAIN = "users.routemake.local";
+
+export const normalizeUsername = (u: string) => u.trim().toLowerCase();
+export const isValidUsername = (u: string) => /^[a-z0-9_]{4,20}$/.test(normalizeUsername(u));
+export const usernameToEmail = (u: string) => `${normalizeUsername(u)}@${AUTH_DOMAIN}`;
+
+export type Role = "setter" | "manager";
+export type Access = {
+  id: string;
+  username: string | null;
+  nickname: string | null;
+  avatar_url: string | null;
+  is_owner: boolean;
+  roles: { gym_id: string; role: Role }[];
+};
+
+export const isStaffOf = (a: Access | null, gym?: string) =>
+  !!a && (a.is_owner || a.roles.some((r) => !gym || r.gym_id === gym));
+
+export const roleLabel = (a: Access, gym: string) =>
+  a.is_owner ? "老闆" : a.roles.find((r) => r.gym_id === gym)?.role === "manager" ? "店長" : "定線員";
+
+// Supabase 錯誤訊息轉成中文
+export function authErrorMessage(err: unknown): string {
+  const e = err as { code?: string; message?: string; status?: number; name?: string };
+  const code = e?.code ?? "";
+  const msg = (e?.message ?? "").toLowerCase();
+  if (code === "invalid_credentials" || msg.includes("invalid login credentials")) return "帳號或密碼錯誤";
+  if (code === "user_already_exists" || msg.includes("already registered")) return "這個帳號名稱已經有人使用，請換一個";
+  if (code === "weak_password" || msg.includes("password should")) return `密碼太簡單，至少 ${PASSWORD_MIN} 碼`;
+  if (code === "over_request_rate_limit" || e?.status === 429) return "嘗試太多次，請稍後再試";
+  if (code === "email_provider_disabled" || code === "signup_disabled") return "目前暫停註冊，請洽櫃檯";
+  if (e?.name === "AuthRetryableFetchError" || msg.includes("fetch") || msg.includes("network")) return "連不上網路，請確認網路後再試";
+  return "發生錯誤，請稍後再試";
+}

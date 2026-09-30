@@ -16,6 +16,7 @@ grant usage on schema public, auth, storage to anon, authenticated, service_role
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
   phone text unique,
+  email text unique,
   created_at timestamptz default now()
 );
 
