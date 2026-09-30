@@ -92,12 +92,12 @@
 | `Chip.tsx` | `ChipRow`、`Chip` |
 | `Sheet.tsx` | `Sheet`、`SheetTitle`、`SheetSub`、`SheetSection` |
 | `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`、`Segmented`、`ColorPicker`、`GradePicker`、`TagPicker` |
-| `Route.tsx` | `Grade`、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`、`RouteRow`、`RouteList`、`CommentCount`、`SetterNote` |
+| `Route.tsx` | `Points`、`Grade`、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`、`RouteRow`、`RouteList`、`CommentCount`、`SetterNote` |
 | `Wall.tsx` | `WallPhoto`、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`、`ZoneList`、`ProgressBar`、`ResetList`、`NewRouteRow`、`NewRouteCard`、`GymRow`、`SoonBox`、`dueText` |
 | `FloorPlan.tsx` | `FloorPlan` |
 | `Comments.tsx` | `CommentItem`、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
-| `Stats.tsx` | `MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |
+| `Stats.tsx` | `DailyBars`、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |
 | `Toast.tsx` | `ToastProvider`、`useToast` |
 | `Icon.tsx` | `Icon`（flash、send、project、chat、lock、down） |
 

@@ -122,3 +122,61 @@ export function TotalRow({ label, value }: { label: string; value: ReactNode }) 
 export function SetBox({ children }: { children: ReactNode }) {
   return <div className="mb-3 rounded-card bg-surface px-3.5 pt-1 pb-3.5 shadow-card">{children}</div>;
 }
+
+// 每日積分直條圖：一天一條，點一下（或滑過）在上方顯示當天分數；0 分的日子只畫底線
+export function DailyBars({
+  year,
+  month,
+  points,
+  today,
+  selected,
+  onSelect,
+}: {
+  year: number;
+  month: number;
+  points: Record<number, number>;
+  today?: number;
+  selected: number | null;
+  onSelect: (day: number) => void;
+}) {
+  const days = new Date(year, month, 0).getDate();
+  const max = Math.max(1, ...Object.values(points));
+  const ticks = [1, 5, 10, 15, 20, 25, days];
+  return (
+    <div>
+      <div className="flex h-28 items-end border-b border-line" role="group" aria-label={`${month} 月每日積分`}>
+        {Array.from({ length: days }, (_, i) => {
+          const d = i + 1;
+          const v = points[d] ?? 0;
+          const on = selected === d;
+          return (
+            <button
+              key={d}
+              aria-label={`${month}/${d} ${v} 分`}
+              aria-pressed={on}
+              onClick={() => onSelect(d)}
+              onMouseEnter={() => onSelect(d)}
+              className="group flex h-full flex-1 items-end justify-center px-px"
+            >
+              <span
+                className={`block w-full max-w-6 rounded-t-[4px] ${v ? (on ? "bg-ink" : "bg-accent") : "h-0"}`}
+                style={v ? { height: `${Math.max(4, (v / max) * 100)}%` } : undefined}
+              />
+            </button>
+          );
+        })}
+      </div>
+      <div className="relative mt-1 h-4 text-tiny text-muted">
+        {ticks.map((d) => (
+          <span
+            key={d}
+            className={`absolute -translate-x-1/2 font-num ${d === today ? "font-bold text-ink" : ""}`}
+            style={{ left: `${((d - 0.5) / days) * 100}%` }}
+          >
+            {d}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}

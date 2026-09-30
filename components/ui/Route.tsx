@@ -142,3 +142,14 @@ export function CommentCount({ n }: { n: number }) {
 export function SetterNote({ children }: { children: ReactNode }) {
   return <div className="mt-2 rounded-field bg-sunk px-3 py-2 text-note">{children}</div>;
 }
+
+// 路線分數（路線列、路線卡片用）
+export function Points({ n, prefix = "" }: { n: number; prefix?: string }) {
+  return (
+    <span className="ml-1.5 inline-flex items-baseline gap-0.5 font-num text-[15px] leading-none font-semibold text-ink">
+      {prefix}
+      {n}
+      <small className="font-sans text-tiny font-normal text-muted">分</small>
+    </span>
+  );
+}

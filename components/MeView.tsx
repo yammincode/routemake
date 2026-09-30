@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import PointsPanel from "@/components/PointsPanel";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
 import { Empty, SectionTitle } from "@/components/ui/Card";
-import { RouteList, RouteRow } from "@/components/ui/Route";
+import { Points, RouteList, RouteRow } from "@/components/ui/Route";
 import { CalendarHeat, Delta, GradeBars, MonthSwitcher, StatGrid, StatTile, TotalRow } from "@/components/ui/Stats";
 import {
   getGym,
@@ -13,15 +14,19 @@ import {
   getMonthAscents,
   getMonthlyStats,
   getMyAscents,
+  getPointsSummary,
   type Ascent,
   type Gym,
   type MonthAscent,
   type MonthStats,
+  type PointsSummary,
   type Route,
 } from "@/lib/data";
 import { todayYmd } from "@/lib/date";
 import { FEEL, GRADE_FEEL } from "@/lib/design";
 import { overlayPending, withCache } from "@/lib/offline";
+import { ascentPoints } from "@/lib/scoring";
+import { useScoring } from "@/lib/useScoring";
 
 const thisMonth = () => {
   const t = todayYmd();
@@ -34,6 +39,8 @@ export default function MeView({ gymId }: { gymId: string }) {
   const now = thisMonth();
   const [ym, setYm] = useState({ y: now.y, m: now.m });
   const [stats, setStats] = useState<MonthStats | null>(null);
+  const [points, setPoints] = useState<PointsSummary | null>(null);
+  const rules = useScoring();
   const [list, setList] = useState<MonthAscent[]>([]);
   const [wall, setWall] = useState<{ routes: Route[]; mine: Record<string, Ascent> } | null>(null);
   const [gym, setGym] = useState<Gym | null>(null);
@@ -45,11 +52,12 @@ export default function MeView({ gymId }: { gymId: string }) {
     if (!uid) return;
     try {
       const { data } = await withCache(`me:${uid}:${ym.y}-${ym.m}`, async () => {
-        const [s, l] = await Promise.all([getMonthlyStats(ym.y, ym.m), getMonthAscents(ym.y, ym.m)]);
-        return { s, l };
+        const [s, l, p] = await Promise.all([getMonthlyStats(ym.y, ym.m), getMonthAscents(ym.y, ym.m), getPointsSummary(ym.y, ym.m)]);
+        return { s, l, p };
       });
       setStats(data.s);
       setList(data.l);
+      setPoints(data.p ?? null);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -116,6 +124,8 @@ export default function MeView({ gymId }: { gymId: string }) {
       </StatGrid>
       {stats && (stats.sends > 0 || stats.prev_sends > 0) && <Delta diff={stats.sends - stats.prev_sends} />}
 
+      <PointsPanel year={ym.y} month={ym.m} isNow={isNow} todayDay={now.d} summary={points} />
+
       <SectionTitle>攀爬日</SectionTitle>
       <CalendarHeat year={ym.y} month={ym.m} counts={counts} today={isNow ? now.d : undefined} />
 
@@ -140,6 +150,7 @@ export default function MeView({ gymId }: { gymId: string }) {
                   title={
                     <>
                       {a.route.zone_name} {a.route.hold_color}色 {feelEmoji(a.feel)}
+                      {rules && <Points prefix="+" n={ascentPoints(a.route.grade, a.route.style_tags, a.status, rules)} />}
                     </>
                   }
                   meta={`${+a.climbed_on.slice(5, 7)}/${+a.climbed_on.slice(8, 10)}${gf ? `，體感${gf}` : ""}${a.route.archived_at ? "，已下架" : ""}`}

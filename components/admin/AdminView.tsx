@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteEditor, { type EditTarget } from "@/components/admin/RouteEditor";
+import ScoringPanel from "@/components/admin/ScoringPanel";
 import ShareQr from "@/components/admin/ShareQr";
 import StaffPanel from "@/components/admin/StaffPanel";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Empty, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { Label, TextField, Toggle } from "@/components/ui/Form";
-import { CommentCount, RouteList, RouteRow, Tags } from "@/components/ui/Route";
+import { CommentCount, Points, RouteList, RouteRow, Tags } from "@/components/ui/Route";
 import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
@@ -32,6 +33,8 @@ import {
 } from "@/lib/data";
 import { ago } from "@/lib/date";
 import { LIVE_GYM } from "@/lib/gyms";
+import { routePoints } from "@/lib/scoring";
+import { useScoring } from "@/lib/useScoring";
 
 type Confirm = { kind: "photo"; file: File } | { kind: "reset" } | { kind: "zone" } | null;
 
@@ -39,6 +42,7 @@ type Confirm = { kind: "photo"; file: File } | { kind: "reset" } | { kind: "zone
 export default function AdminView() {
   const { access } = useAuth();
   const toast = useToast();
+  const rules = useScoring();
   const [gyms, setGyms] = useState<Gym[]>([]);
   const [gymId, setGymId] = useState<string | null>(null);
   const [zones, setZones] = useState<Zone[] | null>(null);
@@ -287,7 +291,12 @@ export default function AdminView() {
                   key={r.id}
                   color={r.hold_color}
                   grade={r.grade}
-                  title={`${r.hold_color}色 ${r.code}`}
+                  title={
+                    <>
+                      {r.hold_color}色 {r.code}
+                      {rules && <Points n={routePoints(r.grade, r.style_tags, rules)} />}
+                    </>
+                  }
                   meta={
                     <>
                       <Tags tags={r.style_tags} /> {ago(r.created_at)}
@@ -311,6 +320,7 @@ export default function AdminView() {
       )}
 
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
+      {access.is_owner && <ScoringPanel />}
       <ShareQr />
 
       <Sheet open={!!confirm} onClose={() => setConfirm(null)}>

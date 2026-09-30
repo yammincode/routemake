@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { BackLink, Empty } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { dueText } from "@/components/ui/Gym";
-import { CommentCount, RouteList, RouteRow, Tags } from "@/components/ui/Route";
+import { CommentCount, Points, RouteList, RouteRow, Tags } from "@/components/ui/Route";
 import { NoPhoto, Pin, WallPhoto } from "@/components/ui/Wall";
 import {
   getActiveRoutes,
@@ -25,6 +25,8 @@ import {
 import { ago, daysUntil, isNew } from "@/lib/date";
 import { STYLE_TAGS, type HoldColor } from "@/lib/design";
 import { overlayPending, withCache } from "@/lib/offline";
+import { routePoints } from "@/lib/scoring";
+import { useScoring } from "@/lib/useScoring";
 
 // 區域頁：照片＋起步點標記、難度／顏色／風格篩選、路線列表
 export default function ZoneView({ zoneId }: { zoneId: string }) {
@@ -40,6 +42,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
   const [color, setColor] = useState<HoldColor | null>(null);
   const [tag, setTag] = useState<string | null>(null);
   const [open, setOpen] = useState<Route | null>(null);
+  const rules = useScoring();
   const uid = session?.user.id;
 
   const load = useCallback(async () => {
@@ -176,7 +179,12 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
               key={r.id}
               color={r.hold_color}
               grade={r.grade}
-              title={`${r.hold_color}色 ${r.code}`}
+              title={
+                <>
+                  {r.hold_color}色 {r.code}
+                  {rules && <Points n={routePoints(r.grade, r.style_tags, rules)} />}
+                </>
+              }
               isNew={isNew(r.created_at)}
               status={status(r)}
               meta={

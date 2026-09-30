@@ -9,9 +9,9 @@ import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from
 import FloorPlan from "@/components/ui/FloorPlan";
 import { ColorPicker, GradePicker, Label, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
 import { NewRouteCard, NewRouteRow, ResetList, SoonBox, ZoneCard, ZoneList } from "@/components/ui/Gym";
-import { CommentCount, Grade, HoldDot, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
+import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
-import { CalendarHeat, Delta, GradeBars, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow } from "@/components/ui/Stats";
+import { CalendarHeat, DailyBars, Delta, GradeBars, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
 import { fakeWall } from "@/lib/demo";
@@ -94,6 +94,7 @@ export default function DesignShowcase() {
   const [toggle, setToggle] = useState(true);
   const [draft, setDraft] = useState("");
   const [month, setMonth] = useState(9);
+  const [pickDay, setPickDay] = useState<number | null>(23);
 
   const match = (r: DemoRoute) => (grade == null || r.grade === grade) && (color == null || r.color === color);
   const grades = [...new Set(routes.map((r) => r.grade))].sort((a, b) => a - b);
@@ -317,6 +318,26 @@ export default function DesignShowcase() {
             { grade: 6, ratio: 0.125, label: "1 條" },
           ]}
         />
+        <SectionTitle>每日積分</SectionTitle>
+        <div className="rounded-tile bg-surface px-3.5 pt-3 pb-2.5 shadow-card">
+          <p className="mt-0 mb-2 flex justify-between text-meta text-muted">
+            <span>每日積分</span>
+            <span>
+              {month}/{pickDay}　<b className="font-num text-[17px] text-ink">{pickDay ? ({ 2: 20, 5: 95, 9: 180, 12: 60, 16: 140, 19: 30, 23: 220, 26: 70, 29: 110 } as Record<number, number>)[pickDay] ?? 0 : 0}</b> 分
+            </span>
+          </p>
+          <DailyBars
+            year={2026}
+            month={month}
+            points={{ 2: 20, 5: 95, 9: 180, 12: 60, 16: 140, 19: 30, 23: 220, 26: 70, 29: 110 }}
+            today={month === 9 ? 30 : undefined}
+            selected={pickDay}
+            onSelect={setPickDay}
+          />
+        </div>
+        <p className="mt-3 text-meta text-muted">
+          路線分數：藍色 A-02<Points n={50} />　得分<Points prefix="+" n={60} />
+        </p>
         <TotalRow label="累計完攀" value={143} />
         <SectionTitle>目前牆上進度</SectionTitle>
         <GradeBars

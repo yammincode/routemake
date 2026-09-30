@@ -354,6 +354,57 @@ select tests.ok('未登入：看得到照片', (select count(*) from storage.obj
 reset role;
 
 -- ---------------------------------------------------------------------
+-- 路線分數與積分
+-- ---------------------------------------------------------------------
+select tests.ok('分數：V4 無風格 = 40', public.route_points(4, '{}') = 40);
+select tests.ok('分數：V4 動態＋指力 = 50', public.route_points(4, '{動態,指力}') = 50);
+select tests.ok('分數：風格加成最多 30%（V4 四種風格 = 52）', public.route_points(4, '{動態,指力,力量,耐力}') = 52);
+select tests.ok('得分：Flash ×1.2（V4 動態＋指力 = 60）', public.ascent_points(4, '{動態,指力}', 'flash') = 60);
+select tests.ok('得分：嘗試中 0 分', public.ascent_points(7, '{}', 'project') = 0);
+
+-- 顧客乙：準備幾筆不同日期的紀錄（管理者身分直接寫入，不受日期規則限制）
+insert into public.routes (zone_id, code, grade, hold_color, style_tags, pin_x, pin_y, created_at)
+select (select v from ids where k = 'zoneB'), 'B-9' || g, g, '紅', t, 1, 1, now() - interval '60 days'
+  from (values (2, '{}'::text[]), (4, '{動態,指力}'::text[]), (6, '{}'::text[])) v(g, t);
+insert into public.ascents (user_id, route_id, status, climbed_on)
+select :B, r.id, s, d from (values
+  ('B-92', 'send',  current_date),
+  ('B-94', 'flash', current_date - 1),
+  ('B-96', 'send',  current_date - 40)
+) v(code, s, d) join public.routes r on r.code = v.code;
+
+set role authenticated; select tests.login(:B);
+select tests.ok('積分：今天 20 分、累計 150 分、連續 2 天',
+  (select s ->> 'today' = '20' and s ->> 'total' = '150' and s ->> 'streak' = '2'
+     from public.points_summary(extract(year from current_date)::int, extract(month from current_date)::int) s),
+  public.points_summary(extract(year from current_date)::int, extract(month from current_date)::int)::text);
+select tests.ok('積分：最近 7 天平均（不含今天）= 60 / 7 ≈ 8.6',
+  (public.points_summary(extract(year from current_date)::int, extract(month from current_date)::int) ->> 'avg7')::numeric = 8.6);
+select tests.ok('顧客：改不了計分規則（0 筆）', tests.rows('update public.scoring_rules set flash_multiplier = 3') = 0);
+select tests.ok('顧客：改計分規則沒有效果', (select flash_multiplier from public.scoring_rules) = 1.2);
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.ok('顧客甲：積分只算自己', (public.points_summary(extract(year from current_date)::int, extract(month from current_date)::int) ->> 'total')::int
+  = (select coalesce(sum(public.ascent_points(r.grade, r.style_tags, a.status)), 0) from public.ascents a join public.routes r on r.id = a.route_id));
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.ok('店長：不能改計分規則（0 筆）', tests.rows('update public.scoring_rules set flash_multiplier = 2') = 0);
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.ok('老闆：可以改計分規則', tests.rows('update public.scoring_rules set flash_multiplier = 1.5, grade_points[5] = 50') = 1);
+select tests.throws('計分規則：不能用不存在的風格', $q$update public.scoring_rules set style_bonus = '{"飛天":10}'$q$);
+select tests.throws('計分規則：難度分數要 11 個', $q$update public.scoring_rules set grade_points = '{1,2,3}'$q$);
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.ok('改規則後分數自動重算（V4 Flash = 50×1.25×1.5 ≈ 94）', public.ascent_points(4, '{動態,指力}', 'flash') = 94);
+reset role;
+select tests.ok('改計分規則有寫操作紀錄', exists (select 1 from public.audit_log where action = 'scoring.update' and user_id = :OW));
+set role anon; select tests.login(null);
+select tests.ok('未登入：看得到計分規則', (select count(*) from public.scoring_rules) = 1);
+select tests.throws('未登入：不能查積分', 'select public.points_summary(2026, 1)');
+reset role;
+
+-- ---------------------------------------------------------------------
 -- 結果
 -- ---------------------------------------------------------------------
 \o

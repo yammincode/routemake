@@ -15,6 +15,8 @@ import { clearAscent, deleteComment, getComments, postComment, saveAscent, type 
 import { ago, todayYmd, ymd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, type Status } from "@/lib/design";
 import { isNetworkError, queueAscent } from "@/lib/offline";
+import { ascentPoints, routePoints } from "@/lib/scoring";
+import { useScoring } from "@/lib/useScoring";
 
 // 路線卡片（底部彈出）：路線資訊、我的紀錄與心得、公開留言
 export default function RouteSheet({
@@ -70,6 +72,7 @@ function RouteBody({
   onSaved: (a: Ascent | null) => void;
 }) {
   const { session, access } = useAuth();
+  const rules = useScoring();
   const router = useRouter();
   const toast = useToast();
   const [status, setStatus] = useState<Status | null>(ascent?.status ?? null);
@@ -107,7 +110,8 @@ function RouteBody({
       await saveAscent(session.user.id, r.id, a);
       onSaved({ id: ascent?.id ?? "", route_id: r.id, ...a });
       onClose();
-      toast(status === "flash" ? "Flash！漂亮" : "已儲存紀錄");
+      const pts = rules ? ascentPoints(r.grade, r.style_tags, status, rules) : 0;
+      toast(status === "flash" ? `Flash！漂亮 +${pts} 分` : status === "send" ? `完攀 +${pts} 分` : "已儲存紀錄");
     } catch (e) {
       if (isNetworkError(e)) {
         queueAscent({ userId: session.user.id, routeId: r.id, ascent: a });
@@ -172,6 +176,12 @@ function RouteBody({
       <SheetSub>
         {zoneName} {r.code}，{ago(r.created_at)}設定{r.archived_at ? "，已下架" : ""}
       </SheetSub>
+      {rules && (
+        <p className="mt-0 mb-2 text-note text-muted">
+          完攀 <b className="font-num text-[17px] text-ink">{routePoints(r.grade, r.style_tags, rules)}</b> 分・Flash{" "}
+          <b className="font-num text-[17px] text-ink">{ascentPoints(r.grade, r.style_tags, "flash", rules)}</b> 分
+        </p>
+      )}
       <Tags tags={r.style_tags} />
       {r.setter_note && <SetterNote>{r.setter_note}</SetterNote>}
 

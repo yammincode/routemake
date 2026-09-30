@@ -1,5 +1,6 @@
 // 讀寫 Supabase 的資料函式；權限一律由資料庫 RLS 擋，這裡只負責呼叫
 import type { HoldColor, Status } from "@/lib/design";
+import type { ScoringRules } from "@/lib/scoring";
 import { supabase } from "@/lib/supabase";
 
 export type Gym = { id: string; name: string; is_live: boolean; comments_enabled: boolean; sort: number };
@@ -265,4 +266,25 @@ export async function getGymActiveRoutes(gym: string): Promise<Route[]> {
     delete r.zones;
     return r;
   });
+}
+
+// ---------- 積分 ----------
+export type PointsSummary = {
+  by_day: Record<string, number>;
+  month_total: number;
+  prev_total: number;
+  today: number;
+  avg7: number;
+  best_day: { day: string; points: number } | null;
+  streak: number;
+  total: number;
+};
+export async function getScoringRules(): Promise<ScoringRules> {
+  return must(await supabase().from("scoring_rules").select("grade_points,style_bonus,max_style_bonus,flash_multiplier").eq("id", 1).single());
+}
+export async function updateScoringRules(r: ScoringRules) {
+  must(await supabase().from("scoring_rules").update(r).eq("id", 1));
+}
+export async function getPointsSummary(year: number, month: number): Promise<PointsSummary> {
+  return must(await supabase().rpc("points_summary", { p_year: year, p_month: month }));
 }
