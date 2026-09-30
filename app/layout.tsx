@@ -3,6 +3,8 @@ import { Barlow_Condensed, Noto_Sans_TC } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import TabBar from "@/components/TabBar";
 import { ToastProvider } from "@/components/ui/Toast";
+import InstallHelp from "@/components/InstallHelp";
+import SyncManager from "@/components/SyncManager";
 import UpdateWatcher from "@/components/UpdateWatcher";
 import "./globals.css";
 
@@ -55,10 +57,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="font-sans">
         <ToastProvider>
           <AuthProvider>
-            <main className="mx-auto max-w-page px-4 pt-3 pb-28">{children}</main>
+            <main className="mx-auto max-w-page px-4 pt-3 pb-28">
+              <SyncManager />
+              {children}
+            </main>
             <TabBar />
           </AuthProvider>
           <UpdateWatcher />
+          <InstallHelp />
         </ToastProvider>
       </body>
     </html>

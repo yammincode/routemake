@@ -24,6 +24,7 @@ import {
 } from "@/lib/data";
 import { ago, daysUntil, isNew } from "@/lib/date";
 import { STYLE_TAGS, type HoldColor } from "@/lib/design";
+import { overlayPending, withCache } from "@/lib/offline";
 
 // 區域頁：照片＋起步點標記、難度／顏色／風格篩選、路線列表
 export default function ZoneView({ zoneId }: { zoneId: string }) {
@@ -43,15 +44,18 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
 
   const load = useCallback(async () => {
     try {
-      const z = await getZone(zoneId);
-      const [g, rs] = await Promise.all([getGym(z.gym_id), getActiveRoutes(zoneId)]);
-      const ids = rs.map((r) => r.id);
-      const [as, cs] = await Promise.all([uid ? getMyAscents(ids) : Promise.resolve({}), getCommentCounts(ids)]);
-      setZone(z);
-      setGym(g);
-      setRoutes(rs);
-      setAscents(as);
-      setCounts(cs);
+      const { data } = await withCache(`zone:${zoneId}:${uid ?? "guest"}`, async () => {
+        const z = await getZone(zoneId);
+        const [g, rs] = await Promise.all([getGym(z.gym_id), getActiveRoutes(zoneId)]);
+        const ids = rs.map((r) => r.id);
+        const [as, cs] = await Promise.all([uid ? getMyAscents(ids) : Promise.resolve({} as Record<string, Ascent>), getCommentCounts(ids)]);
+        return { z, g, rs, as, cs };
+      });
+      setZone(data.z);
+      setGym(data.g);
+      setRoutes(data.rs);
+      setAscents(overlayPending(data.as, uid));
+      setCounts(data.cs);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -59,7 +63,14 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
   }, [zoneId, uid]);
 
   useEffect(() => {
-    if (ready) void Promise.resolve().then(load);
+    if (!ready) return;
+    void Promise.resolve().then(load);
+    window.addEventListener("online", load);
+    window.addEventListener("routemake:synced", load);
+    return () => {
+      window.removeEventListener("online", load);
+      window.removeEventListener("routemake:synced", load);
+    };
   }, [ready, load]);
 
   if (error && !zone)

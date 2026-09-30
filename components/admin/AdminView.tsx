@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteEditor, { type EditTarget } from "@/components/admin/RouteEditor";
+import ShareQr from "@/components/admin/ShareQr";
 import StaffPanel from "@/components/admin/StaffPanel";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Empty, Tip } from "@/components/ui/Card";
@@ -310,6 +311,7 @@ export default function AdminView() {
       )}
 
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
+      <ShareQr />
 
       <Sheet open={!!confirm} onClose={() => setConfirm(null)}>
         {confirm?.kind === "photo" && zone && (

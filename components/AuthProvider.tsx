@@ -4,6 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { authErrorMessage, usernameToEmail, type Access } from "@/lib/auth";
+import { clearCache } from "@/lib/offline";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 
 type AuthState = {
@@ -105,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await supabase().auth.signOut();
+    clearCache();
     setSession(null);
     setAccess(null);
     writeCache(null);

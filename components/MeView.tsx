@@ -21,6 +21,7 @@ import {
 } from "@/lib/data";
 import { todayYmd } from "@/lib/date";
 import { FEEL, GRADE_FEEL } from "@/lib/design";
+import { overlayPending, withCache } from "@/lib/offline";
 
 const thisMonth = () => {
   const t = todayYmd();
@@ -43,9 +44,12 @@ export default function MeView({ gymId }: { gymId: string }) {
   const loadMonth = useCallback(async () => {
     if (!uid) return;
     try {
-      const [s, l] = await Promise.all([getMonthlyStats(ym.y, ym.m), getMonthAscents(ym.y, ym.m)]);
-      setStats(s);
-      setList(l);
+      const { data } = await withCache(`me:${uid}:${ym.y}-${ym.m}`, async () => {
+        const [s, l] = await Promise.all([getMonthlyStats(ym.y, ym.m), getMonthAscents(ym.y, ym.m)]);
+        return { s, l };
+      });
+      setStats(data.s);
+      setList(data.l);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -55,16 +59,22 @@ export default function MeView({ gymId }: { gymId: string }) {
   const loadWall = useCallback(async () => {
     if (!uid) return;
     try {
-      const [g, routes] = await Promise.all([getGym(gymId), getGymActiveRoutes(gymId)]);
-      setGym(g);
-      setWall({ routes, mine: await getMyAscents(routes.map((r) => r.id)) });
+      const { data } = await withCache(`wall:${uid}:${gymId}`, async () => {
+        const [g, routes] = await Promise.all([getGym(gymId), getGymActiveRoutes(gymId)]);
+        return { g, routes, mine: await getMyAscents(routes.map((r) => r.id)) };
+      });
+      setGym(data.g);
+      setWall({ routes: data.routes, mine: overlayPending(data.mine, uid) });
     } catch (e) {
       setError((e as Error).message);
     }
   }, [uid, gymId]);
 
   useEffect(() => {
-    if (ready) void Promise.resolve().then(loadMonth);
+    if (!ready) return;
+    void Promise.resolve().then(loadMonth);
+    window.addEventListener("routemake:synced", loadMonth);
+    return () => window.removeEventListener("routemake:synced", loadMonth);
   }, [ready, loadMonth]);
   useEffect(() => {
     if (ready) void Promise.resolve().then(loadWall);

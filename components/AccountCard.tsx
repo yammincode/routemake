@@ -16,6 +16,9 @@ export default function AccountCard() {
   const toast = useToast();
 
   if (!ready) return null;
+  const installLink = (
+    <LinkButton onClick={() => window.dispatchEvent(new Event("routemake:install"))}>怎麼加到主畫面？</LinkButton>
+  );
 
   if (!session) {
     return (
@@ -25,6 +28,7 @@ export default function AccountCard() {
           登入
         </Button>
         <Button onClick={() => router.push("/login?mode=signup&next=/me")}>註冊帳號</Button>
+        {installLink}
       </SetBox>
     );
   }
@@ -56,6 +60,7 @@ export default function AccountCard() {
       >
         登出
       </LinkButton>
+      {installLink}
     </SetBox>
   );
 }

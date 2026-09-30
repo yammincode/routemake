@@ -13,6 +13,7 @@ import { isStaffOf } from "@/lib/auth";
 import { clearAscent, deleteComment, getComments, postComment, saveAscent, type Ascent, type Comment, type Route } from "@/lib/data";
 import { ago, todayYmd, ymd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, type Status } from "@/lib/design";
+import { isNetworkError, queueAscent } from "@/lib/offline";
 
 // 路線卡片（底部彈出）：路線資訊、我的紀錄與心得、公開留言
 export default function RouteSheet({
@@ -107,7 +108,12 @@ function RouteBody({
       onClose();
       toast(status === "flash" ? "Flash！漂亮" : "已儲存紀錄");
     } catch (e) {
-      toast((e as Error).message);
+      if (isNetworkError(e)) {
+        queueAscent({ userId: session.user.id, routeId: r.id, ascent: a });
+        onSaved({ id: ascent?.id ?? "", route_id: r.id, ...a });
+        onClose();
+        toast("目前沒有網路，連上後會自動送出");
+      } else toast((e as Error).message);
     }
     setBusy(false);
   };
@@ -120,7 +126,12 @@ function RouteBody({
       onClose();
       toast("已清除紀錄");
     } catch (e) {
-      toast((e as Error).message);
+      if (isNetworkError(e) && session) {
+        queueAscent({ userId: session.user.id, routeId: r.id, ascent: null });
+        onSaved(null);
+        onClose();
+        toast("目前沒有網路，連上後會自動清除");
+      } else toast((e as Error).message);
     }
     setBusy(false);
   };

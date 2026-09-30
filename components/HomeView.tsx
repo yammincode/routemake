@@ -11,6 +11,7 @@ import { NewRouteCard, NewRouteRow, ResetList, ZoneCard, ZoneList } from "@/comp
 import { getGym, getMyAscents, getNewRoutes, getZoneProgress, photoUrl, type Ascent, type Gym, type Route, type ZoneProgress } from "@/lib/data";
 import { ago, daysUntil, md } from "@/lib/date";
 import { MINGDE_PLAN } from "@/lib/floorplan";
+import { overlayPending, withCache } from "@/lib/offline";
 
 const PLACEHOLDER =
   "data:image/svg+xml," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'><rect width='4' height='3' fill='#D2D7D2'/></svg>");
@@ -29,11 +30,14 @@ export default function HomeView({ gymId }: { gymId: string }) {
 
   const load = useCallback(async () => {
     try {
-      const [g, z, n] = await Promise.all([getGym(gymId), getZoneProgress(gymId), getNewRoutes(gymId)]);
-      setGym(g);
-      setZones(z);
-      setFresh(n);
-      setAscents(uid ? await getMyAscents(n.map((r) => r.id)) : {});
+      const { data } = await withCache(`home:${gymId}:${uid ?? "guest"}`, async () => {
+        const [g, z, n] = await Promise.all([getGym(gymId), getZoneProgress(gymId), getNewRoutes(gymId)]);
+        return { g, z, n, a: uid ? await getMyAscents(n.map((r) => r.id)) : {} };
+      });
+      setGym(data.g);
+      setZones(data.z);
+      setFresh(data.n);
+      setAscents(overlayPending(data.a, uid));
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -41,7 +45,14 @@ export default function HomeView({ gymId }: { gymId: string }) {
   }, [gymId, uid]);
 
   useEffect(() => {
-    if (ready) void Promise.resolve().then(load);
+    if (!ready) return;
+    void Promise.resolve().then(load);
+    window.addEventListener("online", load);
+    window.addEventListener("routemake:synced", load);
+    return () => {
+      window.removeEventListener("online", load);
+      window.removeEventListener("routemake:synced", load);
+    };
   }, [ready, load]);
 
   if (error && !zones)
@@ -62,7 +73,7 @@ export default function HomeView({ gymId }: { gymId: string }) {
     .filter((z) => (daysUntil(z.next_reset_on) ?? -1) >= 0)
     .sort((a, b) => a.next_reset_on!.localeCompare(b.next_reset_on!))
     .slice(0, 3);
-  const goZone = (id: string) => router.push(`/zone/${id}`);
+  const goZone = (id: string) => router.push(`/zone?id=${id}`);
 
   return (
     <>
