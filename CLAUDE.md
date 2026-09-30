@@ -12,7 +12,8 @@
 
 ## 技術規則
 - Next.js（App Router）+ TypeScript + Tailwind CSS，PWA
-- 後端只用 Supabase（Postgres、Auth 手機簡訊登入、Storage），部署到 Vercel
+- 後端只用 Supabase（Postgres、Auth 手機簡訊登入、Storage），部署到 Netlify
+- 跟會員系統（Tupuser）完全分開：獨立的 Supabase 專案、帳號、資料表，不共用、不串接，也不引用會員系統的程式
 - 所有資料表變更都寫成 supabase/migrations 裡的 migration 檔
 - 每張表都要有 RLS，權限在資料庫擋，不能只靠前端隱藏
 - 私人心得（ascents.private_note）只有本人讀得到，員工也不行

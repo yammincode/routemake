@@ -16,7 +16,7 @@
 
 ## 技術架構
 
-前端用 Next.js 做成 PWA，後端全部交給 Supabase，部署在 Vercel。
+前端用 Next.js 做成 PWA，後端全部交給 Supabase，部署在 Netlify。
 
 | 項目 | 選擇 | 用途 |
 | --- | --- | --- |
@@ -26,7 +26,7 @@
 | 權限 | Supabase Row Level Security | 顧客只能改自己的資料，員工才能改路線 |
 | 登入 | 手機號碼 + 簡訊驗證碼（Supabase Phone Auth） | 顧客與員工登入；簡訊用 Twilio（Supabase 內建），或用 Send SMS Hook 接台灣簡訊商，每則簡訊需付費 |
 | 照片 | Supabase Storage，bucket `zone-photos` | 區域照片、場館平面圖，上傳前在瀏覽器壓到寬 1600px、JPEG |
-| 部署 | Vercel，綁自家網域子網域 | 例如 route.自家網域 |
+| 部署 | Netlify，綁自家網域子網域 | 例如 route.自家網域 |
 | 開發環境 | Windows + Node.js LTS + Supabase CLI | 本機開發與資料表 migration |
 
 **原則：**
@@ -120,7 +120,7 @@ comments (
 -- 使用者（對應 auth.users）
 profiles (
   id uuid primary key references auth.users,
-  phone text unique,              -- 手機號碼，跟櫃檯查會員用同一個（主帳號）
+  phone text unique,              -- 手機號碼（登入用）
   line_user_id text unique,       -- 正式開放前加 LINE 登入後才會有值
   nickname text,                  -- 留言顯示名稱
   avatar_url text,
@@ -204,19 +204,19 @@ audit_log (
 | 資料存在雲端 | 所有資料在 Supabase，換手機或清瀏覽器都不會掉 | 不把重要資料存在手機的 localStorage |
 | 岩館訊號不穩 | 沒網路時打不開 | Service Worker 快取頁面和區域照片；沒網路時可看路線，記錄等連線後再送出並提示 |
 
-## 與會員系統整合
+## 與會員系統的關係
 
-路線 PWA 和要取代 17FIT 的會員系統，應共用同一個 Supabase 專案和同一張 `profiles` 表。
+路線 PWA 是獨立的系統，跟會員系統（Tupuser）完全分開：
 
-- 同一套手機號碼登入，一個顧客只有一個帳號
-- 會員系統的會員資料（方案、剩餘次數）另開表，外鍵指向 `profiles.id`
-- 若會員系統已先建好使用者表，路線 PWA 改用那張表，不要另建一套
+- 使用獨立的 Supabase 專案，不共用資料庫、帳號或 `profiles` 表
+- 不串接會員資料（方案、剩餘次數、入場紀錄），兩邊的程式也不互相引用
+- 同一個顧客在兩個系統各自登入，帳號互不相通
 
 ## 開發順序與上線檢查
 
 一次做一步，每步做完先在手機上測，再進下一步。
 
-1. 建 Next.js 專案、Tailwind、PWA 設定（manifest、圖示、Service Worker），部署一個空殼到 Vercel
+1. 建 Next.js 專案、Tailwind、PWA 設定（manifest、圖示、Service Worker），部署一個空殼到 Netlify
 2. 建 Supabase 專案，寫 migration：8 張表、RLS、`zone-photos` bucket；建六間店和明德館 5 個區域的初始資料
 3. 手機簡訊登入串接、首次登入填暱稱、員工角色判斷
 4. 管理後台：區域管理、照片與平面圖上傳、在照片上標路線、編輯與下架、整區換線
