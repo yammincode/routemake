@@ -221,3 +221,48 @@ export async function assignStaff(username: string, gym: string, role: "setter" 
 export async function removeStaff(userId: string, gym: string) {
   must(await supabase().rpc("remove_staff", { p_user: userId, p_gym: gym }));
 }
+
+// ---------- 我的紀錄 ----------
+export type MonthStats = {
+  sends: number;
+  flashes: number;
+  days: number;
+  top_grade: number | null;
+  by_grade: Record<string, number>;
+  by_day: Record<string, number>;
+  prev_sends: number;
+  total_sends: number;
+};
+export async function getMonthlyStats(year: number, month: number): Promise<MonthStats> {
+  return must(await supabase().rpc("monthly_stats", { p_year: year, p_month: month }));
+}
+export type MonthAscent = Ascent & { route: Route & { zone_name: string; gym_id: string } };
+// 這個月的完攀（Flash＋完攀），含路線與區域
+export async function getMonthAscents(year: number, month: number): Promise<MonthAscent[]> {
+  const from = `${year}-${String(month).padStart(2, "0")}-01`;
+  const next = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  const rows = must(
+    await supabase()
+      .from("ascents")
+      .select(`id,route_id,status,climbed_on,feel,grade_feel,private_note,updated_at,routes(${ROUTE_COLS},zones(name,gym_id))`)
+      .in("status", ["flash", "send"])
+      .gte("climbed_on", from)
+      .lt("climbed_on", next)
+      .order("climbed_on", { ascending: false })
+      .order("updated_at", { ascending: false })
+  ) as unknown as (Ascent & { routes: Route & { zones: { name: string; gym_id: string } } })[];
+  return rows.map(({ routes, ...a }) => {
+    const { zones, ...r } = routes;
+    return { ...a, route: { ...r, zone_name: zones.name, gym_id: zones.gym_id } };
+  });
+}
+// 場館目前牆上所有路線（算各難度進度）
+export async function getGymActiveRoutes(gym: string): Promise<Route[]> {
+  const rows = must(
+    await supabase().from("routes").select(`${ROUTE_COLS},zones!inner(gym_id)`).eq("zones.gym_id", gym).is("archived_at", null)
+  ) as unknown as (Route & { zones?: unknown })[];
+  return rows.map((r) => {
+    delete r.zones;
+    return r;
+  });
+}

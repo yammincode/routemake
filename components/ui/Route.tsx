@@ -86,7 +86,7 @@ export function RouteRow({
   status,
   statusOld,
   ...rest
-}: ComponentProps<"button"> & {
+}: Omit<ComponentProps<"button">, "title"> & {
   color: HoldColor;
   grade: number;
   title: ReactNode;
