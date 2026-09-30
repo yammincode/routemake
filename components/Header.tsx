@@ -6,7 +6,7 @@ import Logo from "@/components/Logo";
 import { GymRow } from "@/components/ui/Gym";
 import Icon from "@/components/ui/Icon";
 import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
-import { GYMS, type Gym } from "@/lib/gyms";
+import { GYMS, gymPath, saveLastGym, type Gym } from "@/lib/gyms";
 
 // 頁首：左上 Logo，右上場館切換（原型 .hd）
 export default function Header({ gym }: { gym: Gym }) {
@@ -15,7 +15,8 @@ export default function Header({ gym }: { gym: Gym }) {
 
   const pick = (g: Gym) => {
     setOpen(false);
-    router.push(g.live ? "/" : `/gym/${g.id}`);
+    saveLastGym(g.id);
+    router.push(gymPath(g.id));
   };
 
   return (

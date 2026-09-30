@@ -2,9 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { SoonBox } from "@/components/ui/Gym";
-import { LIVE_GYM } from "@/lib/gyms";
+import { DEFAULT_GYM_PATH, LIVE_GYM, saveLastGym } from "@/lib/gyms";
 
 export default function SoonView({ name }: { name: string }) {
   const router = useRouter();
-  return <SoonBox name={name} backLabel={`看${LIVE_GYM.name}`} onBack={() => router.push("/")} />;
+  return (
+    <SoonBox
+      name={name}
+      backLabel={`看${LIVE_GYM.name}`}
+      onBack={() => {
+        saveLastGym(LIVE_GYM.id);
+        router.push(DEFAULT_GYM_PATH);
+      }}
+    />
+  );
 }

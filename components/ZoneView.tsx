@@ -24,6 +24,7 @@ import {
 } from "@/lib/data";
 import { ago, daysUntil, isNew } from "@/lib/date";
 import { STYLE_TAGS, type HoldColor } from "@/lib/design";
+import { backOr } from "@/lib/nav";
 import { overlayPending, withCache } from "@/lib/offline";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
@@ -79,7 +80,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
   if (error && !zone)
     return (
       <>
-        <BackLink onClick={() => router.push("/")}>返回</BackLink>
+        <BackLink onClick={() => backOr(router, "/gyms")}>返回</BackLink>
         <Empty>{error}</Empty>
         <div className="mt-3">
           <Button onClick={load}>重新整理</Button>
@@ -101,7 +102,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
 
   return (
     <>
-      <BackLink onClick={() => router.push("/")}>{gym.name}</BackLink>
+      <BackLink onClick={() => backOr(router, `/gym/${zone.gym_id}`)}>{gym.name}</BackLink>
       <h1 className="mt-1 mb-1.5 text-title font-black">{zone.name}</h1>
       <p className="mt-0 mb-[18px] text-sub text-muted">
         {routes.length} 條路線{session ? `，完成 ${done} 條` : ""}
