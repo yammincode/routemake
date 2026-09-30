@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>原岩攀岩館 路線</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E6E8E4;--surface:#FAFBF9;--sunk:#EEF0EC;--ink:#15201B;--muted:#5E6A64;--line:#D2D7D2;
+  --accent:#6B2D3C;--accent-soft:rgba(107,45,60,.14);--blush:#F6E3DF;--warn:#B4471F;
+  --flash:#F5B700;--flash-ink:#2B2100;
+  --num:"Barlow Condensed","Arial Narrow",sans-serif;
+  --shadow:0 1px 2px rgba(20,32,27,.06),0 4px 14px rgba(20,32,27,.06);
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0F1412;--surface:#19201D;--sunk:#141A17;--ink:#E7ECE9;--muted:#98A59F;--line:#2A3430;--accent:#E09AA8;--accent-soft:rgba(224,154,168,.18);--blush:#2A1C1F;--warn:#F08A5D;--shadow:none}}
+:root[data-theme="dark"]{--bg:#0F1412;--surface:#19201D;--sunk:#141A17;--ink:#E7ECE9;--muted:#98A59F;--line:#2A3430;--accent:#E09AA8;--accent-soft:rgba(224,154,168,.18);--blush:#2A1C1F;--warn:#F08A5D;--shadow:none}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:16px/1.6 "Noto Sans TC",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer;padding:0}
+button:disabled{cursor:default}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:1em;height:1em;fill:currentColor;vertical-align:-.12em;flex:none}
+main{max-width:560px;margin:0 auto;padding:12px 16px 112px}
+h1{font-size:30px;line-height:1.15;margin:4px 0 6px;font-weight:900;letter-spacing:.01em}
+h3{font-size:17px;margin:30px 0 12px}
+.sub{color:var(--muted);margin:0 0 18px;font-size:15px}
+.back{display:inline-flex;gap:6px;color:var(--muted);padding:6px 0;font-size:15px}
+/* header */
+.hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.brand{font-size:14px;color:var(--muted);font-weight:500}
+.gympick{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 12px 5px 14px;font-weight:700;font-size:15px;box-shadow:var(--shadow)}
+.gympick .live{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.gymlist{display:grid;gap:8px}
+.gymrow{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-radius:12px;background:var(--sunk);text-align:left;width:100%;font-weight:500}
+.gymrow[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--ink)}
+.gymrow small{font-size:13px;color:var(--muted);font-weight:400}
+.gymrow small.on{color:var(--accent);font-weight:700}
+.soon-box{background:var(--surface);border-radius:18px;padding:40px 24px;text-align:center;box-shadow:var(--shadow)}
+.soon-box strong{display:block;font-size:22px;margin-bottom:6px}
+.soon-box p{color:var(--muted);margin:0 0 20px}
+/* zone cards */
+.plan{background:var(--surface);border-radius:18px;padding:10px 8px 6px;box-shadow:var(--shadow);margin-bottom:8px}
+.plan svg{display:block;width:100%;height:auto}
+.plan .z{cursor:pointer}
+.plan .z:focus{outline:none}
+.plan .z:focus .zp,.plan .z:hover .zp{stroke:var(--ink);stroke-width:4}
+.plan .lb{font-weight:900;fill:var(--ink)}
+.plan .ct{font-family:"Barlow Condensed",sans-serif;font-weight:700;fill:var(--ink)}
+.plan .dd{font-weight:700;fill:var(--warn)}
+.plan-key{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);padding:2px 8px 4px}
+.plan-key span{display:inline-flex;align-items:center;gap:5px}
+.plan-key i{display:inline-block;width:22px;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--blush),var(--accent))}
+.plan-key b{display:inline-block;width:14px;height:0;border-top:2px dashed var(--warn)}
+.zlist{display:grid;gap:10px}
+.zcard{display:flex;gap:14px;align-items:center;background:var(--surface);border-radius:16px;padding:10px;text-align:left;width:100%;box-shadow:var(--shadow)}
+.zcard img{width:96px;height:72px;object-fit:cover;border-radius:10px;flex:none;background:var(--line)}
+.zcard .info{flex:1;min-width:0;display:grid;gap:2px}
+.zcard .nm{font-weight:700;font-size:17px}
+.zcard .pr{display:flex;align-items:center;gap:8px;font:600 16px/1.3 var(--num);color:var(--muted)}
+.bar{height:5px;background:var(--line);border-radius:3px;overflow:hidden;flex:1;max-width:100px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.due{font-size:13px;color:var(--muted)}
+.due.soon{color:var(--warn);font-weight:700}
+.resets{display:grid;gap:1px;background:var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+.reset{display:flex;justify-content:space-between;align-items:center;background:var(--surface);padding:12px 16px}
+.reset .d{font-family:var(--num);font-size:26px;font-weight:700}
+.reset.soon .d{color:var(--warn)}
+.reset small{color:var(--muted);font-size:13px}
+.newrow{display:flex;gap:10px;overflow-x:auto;margin:0 -16px;padding:2px 16px 8px;scrollbar-width:none}
+.newcard{flex:none;width:118px;background:var(--surface);border-radius:14px;padding:12px;text-align:left;box-shadow:var(--shadow)}
+.newcard .g{font:700 28px/1 var(--num);display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.dot{width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);flex:none}
+.newcard small{display:block;color:var(--muted);font-size:13px;line-height:1.4}
+/* wall */
+.wall{position:relative;border-radius:14px;overflow:hidden;background:var(--line);margin-bottom:14px;touch-action:manipulation;box-shadow:var(--shadow)}
+.wall img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none}
+.wall.setter{cursor:crosshair;outline:2px dashed var(--accent);outline-offset:-2px}
+.pin{position:absolute;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:700 15px/1 var(--num);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);transition:opacity .15s}
+.pin.dim{opacity:.16}
+.pin.done::after{content:"";position:absolute;inset:-6px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px var(--accent)}
+.pin.fl::after{box-shadow:0 0 0 2px var(--flash)}
+.pin.temp{animation:pop .25s ease-out}
+@keyframes pop{from{transform:translate(-50%,-50%) scale(.3)}}
+.chips{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:2px 16px 10px;scrollbar-width:none}
+.chip{flex:none;border:1px solid var(--line);border-radius:999px;padding:3px 14px;font:600 17px/1.6 var(--num);background:var(--surface)}
+.chip.zh{font:500 14px/1.9 "Noto Sans TC",sans-serif}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+/* route rows */
+.routes{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.route{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--surface);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);position:relative}
+.route.done::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+.route.fl::before{background:var(--flash)}
+.tape{width:12px;height:42px;border-radius:3px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
+.grade{font:700 32px/1 var(--num);width:50px}
+.meta{flex:1;min-width:0;font-size:13px;color:var(--muted);line-height:1.5}
+.meta b{color:var(--ink);font-weight:500;font-size:15px}
+.meta .q{color:var(--ink);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.new{font-size:11px;color:var(--surface);background:var(--accent);font-weight:700;margin-left:6px;padding:1px 6px;border-radius:4px;vertical-align:1px}
+.tags{display:inline-flex;flex-wrap:wrap;gap:4px;vertical-align:middle}
+.tags span{font-size:12px;line-height:1.5;padding:0 8px;border-radius:999px;background:var(--sunk);color:var(--ink);border:1px solid var(--line)}
+.cc{display:inline-flex;align-items:center;gap:3px;margin-left:6px}
+/* status badges */
+.st{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;padding:3px 10px;border-radius:999px;flex:none}
+.st.flash{background:var(--flash);color:var(--flash-ink);font:700 15px/1.3 var(--num);letter-spacing:.04em;font-style:italic}
+.st.send{background:var(--accent-soft);color:var(--accent)}
+.st.proj{border:1px dashed var(--muted);color:var(--muted)}
+.st.old{opacity:.55}
+/* tabs */
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:4px;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));z-index:5}
+.tabs button{flex:1;max-width:180px;padding:8px 4px;border-radius:12px;color:var(--muted);font-weight:500;font-size:15px}
+.tabs button[aria-current="page"]{color:var(--ink);background:var(--bg);font-weight:700}
+/* sheet */
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.42);display:none;align-items:flex-end;justify-content:center;z-index:10}
+.sheet-bg.open{display:flex}
+.sheet{background:var(--surface);width:100%;max-width:560px;max-height:90vh;overflow-y:auto;border-radius:22px 22px 0 0;padding:10px 20px calc(20px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
+.sheet::before{content:"";display:block;width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 14px}
+@keyframes up{from{transform:translateY(28px);opacity:0}}
+@media (prefers-reduced-motion:reduce){.pin.temp,.sheet{animation:none}}
+.sheet h2{margin:0;font-size:22px;display:flex;align-items:center;gap:12px}
+.sheet h2 .grade{width:auto;font-size:36px}
+.sheet > p{margin:4px 0 12px;color:var(--muted);font-size:14px}
+.sec{border-top:1px solid var(--line);margin-top:20px;padding-top:4px}
+.sec h4{font-size:15px;margin:14px 0 10px;display:flex;justify-content:space-between;align-items:center}
+.sec h4 small{font-weight:400;color:var(--muted);font-size:13px}
+.note{font-size:14px;background:var(--sunk);border-radius:10px;padding:8px 12px;margin:8px 0 0}
+/* status picker */
+.acts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.act{border:1.5px solid var(--line);border-radius:14px;padding:12px 4px 10px;display:grid;justify-items:center;gap:2px;font-weight:700;font-size:15px;transition:transform .1s}
+.act svg{width:22px;height:22px;fill:currentColor}
+.act:active{transform:scale(.97)}
+.act.flash{font:700 18px/1.2 var(--num);font-style:italic;letter-spacing:.05em}
+.act.flash[aria-pressed="true"]{background:var(--flash);border-color:var(--flash);color:var(--flash-ink)}
+.act.send[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.act.proj[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.seg button{border:1px solid var(--line);border-radius:10px;padding:8px 2px;font-size:14px;display:grid;justify-items:center;gap:0}
+.seg button span{font-size:20px;line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.btn{border:1px solid var(--line);border-radius:12px;padding:13px 6px;font-weight:700;text-align:center;display:block;width:100%}
+.btn.pri{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.btn.danger{color:var(--warn);border-color:var(--warn)}
+.btn+.btn{margin-top:8px}
+.link{margin-top:8px;width:100%;padding:10px;color:var(--muted);font-size:14px}
+label.f{display:block;font-size:14px;color:var(--muted);margin:14px 0 6px}
+input.t,textarea.t{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sunk)}
+textarea.t{resize:vertical;min-height:76px;line-height:1.5}
+.private{font-size:12px;color:var(--muted);margin-top:4px}
+/* comments */
+.cmts{display:grid;gap:10px;margin-bottom:12px}
+.cmt{background:var(--sunk);border-radius:12px;padding:10px 12px}
+.cmt .who{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted)}
+.cmt .who b{color:var(--ink);font-weight:700;margin-right:6px}
+.cmt p{margin:2px 0 0;font-size:15px;line-height:1.5;word-break:break-word}
+.cmt .del{color:var(--warn);font-size:13px;padding:2px 4px}
+.cform{display:flex;gap:8px;align-items:flex-end}
+.cform textarea{min-height:44px;flex:1}
+.cform button{flex:none;background:var(--ink);color:var(--surface);border-radius:10px;padding:10px 14px;font-weight:700}
+.closed{font-size:14px;color:var(--muted);background:var(--sunk);border-radius:10px;padding:10px 12px;display:flex;gap:8px;align-items:center}
+/* toggles */
+.tgl{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0}
+.tgl span small{display:block;color:var(--muted);font-size:13px}
+.sw2{position:relative;width:48px;height:28px;border-radius:14px;background:var(--line);flex:none;transition:background .15s}
+.sw2::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.sw2[aria-checked="true"]{background:var(--accent)}
+.sw2[aria-checked="true"]::after{transform:translateX(20px)}
+/* forms */
+.swatches{display:grid;grid-template-columns:repeat(9,1fr);gap:6px}
+.sw{aspect-ratio:1;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+.sw[aria-pressed="true"]{outline:3px solid var(--ink);outline-offset:2px}
+.grades{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.grades button{border:1px solid var(--line);border-radius:8px;padding:6px 0;font:600 18px/1.3 var(--num)}
+.grades button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.tagpick{display:flex;flex-wrap:wrap;gap:6px}
+.tagpick button{border:1px solid var(--line);border-radius:999px;padding:5px 14px;font-size:15px}
+.tagpick button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+/* me */
+.month{display:flex;align-items:center;justify-content:space-between;margin:6px 0 14px}
+.month button{width:40px;height:40px;border-radius:50%;font-size:24px;color:var(--muted);background:var(--surface);box-shadow:var(--shadow)}
+.month button:disabled{opacity:.3}
+.month strong{font-size:20px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:var(--surface);border-radius:14px;padding:12px 10px;font-size:13px;color:var(--muted);box-shadow:var(--shadow)}
+.stat strong{display:block;font:700 34px/1 var(--num);color:var(--ink);margin-bottom:4px}
+.stat.fl strong{color:var(--ink)}
+.stat.fl{background:var(--flash);color:var(--flash-ink)}
+.stat.fl strong{color:var(--flash-ink)}
+.delta{font-size:14px;color:var(--muted);margin:10px 0 0}
+.delta b{color:var(--accent)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal .h{font-size:12px;color:var(--muted)}
+.cal .d{aspect-ratio:1;border-radius:8px;display:grid;place-items:center;font:600 15px/1 var(--num);background:var(--surface);color:var(--muted)}
+.cal .d.l1{background:var(--accent-soft);color:var(--ink)}
+.cal .d.l2{background:color-mix(in srgb,var(--accent) 60%,transparent);color:var(--ink)}
+.cal .d.l3{background:var(--accent);color:var(--surface)}
+.cal .d.today{box-shadow:inset 0 0 0 2px var(--ink)}
+.legend{display:flex;gap:6px;align-items:center;justify-content:flex-end;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.gbars{display:grid;gap:10px}
+.gb{display:grid;grid-template-columns:40px 1fr 56px;align-items:center;gap:10px}
+.gb .g{font:700 20px/1 var(--num)}
+.gb .t{height:12px;background:var(--line);border-radius:6px;overflow:hidden}
+.gb .t i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.gb .v{font:600 17px/1 var(--num);text-align:right;color:var(--muted)}
+.total{background:var(--surface);border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:28px;box-shadow:var(--shadow)}
+.total strong{font:700 34px/1 var(--num)}
+.empty{color:var(--muted);background:var(--surface);border-radius:14px;padding:16px;font-size:15px;margin:0}
+/* setter */
+.setbox{background:var(--surface);border-radius:16px;padding:4px 14px 14px;margin-bottom:12px;box-shadow:var(--shadow)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.upl{display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:10px;padding:11px;background:var(--sunk);font-weight:500;cursor:pointer;width:100%}
+.tip{font-size:14px;color:var(--muted);margin:4px 0 10px}
+.toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 18px;border-radius:999px;font-size:14px;z-index:20;display:none;white-space:nowrap}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<nav class="tabs">
+  <button data-tab="gym">館內路線</button>
+  <button data-tab="me">我的紀錄</button>
+  <button data-tab="setter">管理後台</button>
+</nav>
+<div class="sheet-bg" id="sheetBg"><div class="sheet" role="dialog" aria-modal="true" id="sheet"></div></div>
+<div class="toast" id="toast" role="status"></div>
+<input type="file" id="fileIn" accept="image/*" hidden>
+<script>
+/* ===== 設定 ===== */
+// 六間店：之後把名字換成正式館名，live:true 代表已上線
+const GYMS=[
+  {id:'mingde',name:'明德館',live:true},
+  {id:'g2',name:'第二館'},{id:'g3',name:'第三館'},{id:'g4',name:'第四館'},{id:'g5',name:'第五館'},{id:'g6',name:'第六館'}
+];
+const COLORS={紅:'#D7263D',橙:'#F28A1E',黃:'#F4D03F',綠:'#2E9E5B',藍:'#2F6FD6',紫:'#7B3FB5',粉:'#F07BB5',黑:'#1A1A1A',白:'#FAFAFA'};
+const LIGHT=['黃','白','粉'];
+const TAGS=['力量','指力','技巧','平衡','腳法','動態','協調','柔軟','耐力'];
+const FEEL=[{v:1,e:'😌',t:'輕鬆'},{v:2,e:'🙂',t:'剛好'},{v:3,e:'😤',t:'吃力'}];
+const GFEEL=[{v:-1,e:'⬇',t:'偏軟'},{v:0,e:'＝',t:'剛好'},{v:1,e:'⬆',t:'偏硬'}];
+const LABEL={flash:'Flash',send:'完攀',proj:'嘗試中'};
+const ICON={
+  flash:'<svg class="i" viewBox="0 0 24 24"><path d="M13.5 2 4 13.5h6.5L9.5 22 20 9.5h-6.8z"/></svg>',
+  send:'<svg class="i" viewBox="0 0 24 24"><path d="M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6L20.6 7.9l-1.4-1.4z"/></svg>',
+  proj:'<svg class="i" viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 0 8 8h-2a6 6 0 1 1-6-6z"/></svg>',
+  chat:'<svg class="i" viewBox="0 0 24 24"><path d="M4 4h16v12H8l-4 4z"/></svg>',
+  lock:'<svg class="i" viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2h1v11H6V10zm2 0h6V8a3 3 0 0 0-6 0z"/></svg>',
+  down:'<svg class="i" viewBox="0 0 24 24"><path d="m7 9 5 5 5-5z"/></svg>'
+};
+const DAY=864e5,NOW=Date.now(),GRADES=[...Array(11).keys()];
+function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const cn=Object.keys(COLORS);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ===== 示範資料 ===== */
+function fakeWall(seed){
+  const R=rng(seed);let s=`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'><rect width='400' height='300' fill='#CBAE82'/>`;
+  for(let x=100;x<400;x+=100)s+=`<line x1='${x}' y1='0' x2='${x}' y2='300' stroke='#A9895D' stroke-width='1.5'/>`;
+  s+=`<line x1='0' y1='150' x2='400' y2='150' stroke='#A9895D' stroke-width='1.5'/>`;
+  for(let x=10;x<400;x+=20)for(let y=10;y<300;y+=20)s+=`<circle cx='${x}' cy='${y}' r='1.3' fill='#7A5E3A' opacity='.5'/>`;
+  const holds=[];
+  for(let i=0;i<46;i++){const x=20+R()*360,y=30+R()*250,c=cn[Math.floor(R()*cn.length)],rx=5+R()*9,ry=4+R()*7,rot=R()*180;
+    holds.push({x:x/4,y:y/3,c});s+=`<ellipse cx='${x.toFixed(1)}' cy='${y.toFixed(1)}' rx='${rx.toFixed(1)}' ry='${ry.toFixed(1)}' transform='rotate(${rot.toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})' fill='${COLORS[c]}' stroke='rgba(0,0,0,.35)'/>`}
+  return{uri:'data:image/svg+xml,'+encodeURIComponent(s+'</svg>'),holds};
+}
+const ZDEF=[
+  {id:'A',name:'A 區',n:20,g:[0,7],reset:5},{id:'W',name:'比賽牆',n:10,g:[3,9],reset:24},
+  {id:'B',name:'B 區',n:16,g:[0,7],reset:12},{id:'C',name:'C 區',n:14,g:[0,6],reset:33},
+  {id:'K',name:'兒童區',n:10,g:[0,2],reset:48}
+];
+const NOTES=['起步不好抓','最後一手要果斷','腳點很小','適合練重心轉移','',''];
+const CNAMES=['小安','Leo','阿哲','Yuki','Chen','Mandy'];
+const CTEXT=['第三手好遠，矮個子加油','腳踩對就很簡單','這條好好玩！','起步那顆有點滑','最後一步跳過去超爽','比標的難度硬一點','重心放低就過了'];
+const FAKE={};ZDEF.forEach((z,zi)=>FAKE[z.id]=fakeWall(100+zi).uri);
+function seed(){
+  const S={zones:[],routes:[],seq:{},comments:[],commentsOn:true};
+  ZDEF.forEach((z,zi)=>{
+    const R=rng(900+zi),w=fakeWall(100+zi);
+    S.zones.push({id:z.id,name:z.name,photo:null,nextReset:new Date(NOW+z.reset*DAY).toISOString().slice(0,10)});
+    const span=z.g[1]-z.g[0]+1,prev=NOW-(28+zi*4)*DAY,m=Math.round(z.n*.8);let k=0;
+    const add=(h,created,archived)=>{k++;S.routes.push({id:z.id+'-'+String(k).padStart(2,'0'),zone:z.id,grade:z.g[0]+Math.floor(Math.pow(R(),1.4)*span),color:h.c,
+      tags:[...new Set([TAGS[Math.floor(R()*TAGS.length)],...(R()<.5?[TAGS[Math.floor(R()*TAGS.length)]]:[])])],note:NOTES[Math.floor(R()*NOTES.length)],x:h.x,y:h.y,created,archived,commentsOn:true})};
+    for(let i=0;i<m;i++)add(w.holds[(z.n+i)%w.holds.length],prev-(8+R()*34)*DAY,prev);
+    for(let i=0;i<z.n;i++)add(w.holds[i],NOW-R()*(NOW-prev),null);
+    S.seq[z.id]=k;
+  });
+  const R=rng(77);let c=0;
+  S.routes.filter(r=>!r.archived&&r.zone!=='K').forEach(r=>{const n=R()<.45?Math.floor(R()*3)+1:0;for(let i=0;i<n;i++)S.comments.push({id:'c'+(++c),route:r.id,name:CNAMES[Math.floor(R()*CNAMES.length)],text:CTEXT[Math.floor(R()*CTEXT.length)],t:Math.round(r.created+R()*(NOW-r.created)),mine:false})});
+  return S;
+}
+function seedLogs(S){
+  const L={},R=rng(4242);
+  S.routes.forEach(r=>{if(r.zone==='K')return;const p=r.grade<=3?.55:r.grade<=5?.3:.08,end=r.archived||NOW,x=R(),t=Math.round(r.created+R()*(end-r.created));
+    if(x<p){L[r.id]={s:R()<.3?'flash':'send',t,feel:1+Math.floor(R()*3),gfeel:Math.floor(R()*3)-1,note:R()<.25?['今天手感不錯','終於送了！','腳法還要再練','第二趟才抓到節奏'][Math.floor(R()*4)]:''}}
+    else if(!r.archived&&x<p+.06)L[r.id]={s:'proj',t,note:''}});
+  return L;
+}
+
+/* ===== 儲存 ===== */
+const KS='origin-mingde-state-v5',KL='origin-mingde-logs-v5',KM='origin-me-v5';
+let S,logs,me;
+try{S=JSON.parse(localStorage.getItem(KS))}catch(e){}
+if(!S)S=seed();
+try{logs=JSON.parse(localStorage.getItem(KL))}catch(e){}
+if(!logs)logs=seedLogs(S);
+try{me=JSON.parse(localStorage.getItem(KM))}catch(e){}
+if(!me)me={nick:'',gym:'mingde'};
+function save(){try{localStorage.setItem(KS,JSON.stringify(S));localStorage.setItem(KL,JSON.stringify(logs));localStorage.setItem(KM,JSON.stringify(me));return true}catch(e){toast('儲存空間不足，照片可能太大');return false}}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2200)}
+
+/* ===== 工具 ===== */
+const gym=()=>GYMS.find(g=>g.id===me.gym)||GYMS[0];
+const active=()=>S.routes.filter(r=>!r.archived);
+const Z=id=>S.zones.find(z=>z.id===id);
+const photo=z=>z.photo||FAKE[z.id]||fakeWall(7).uri;
+const done=r=>logs[r.id]&&logs[r.id].s!=='proj';
+const daysTo=d=>Math.ceil((new Date(d+'T23:59:59')-NOW)/DAY);
+const ago=t=>{const d=Math.floor((Date.now()-t)/DAY);return d<=0?'今天':d+' 天前'};
+const isNew=r=>NOW-r.created<7*DAY;
+const cmtsOf=id=>S.comments.filter(c=>c.route===id).sort((a,b)=>a.t-b.t);
+const canCmt=r=>S.commentsOn&&r.commentsOn!==false;
+function ymd(t){const d=new Date(t);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function zs(z){const rs=active().filter(r=>r.zone===z.id);return{t:rs.length,d:rs.filter(done).length}}
+function dueText(z){if(!z.nextReset)return'';const d=daysTo(z.nextReset);return d<0?'換線日已過':d===0?'今天換線':d+' 天後換線'}
+const tagHTML=r=>(r.tags&&r.tags.length)?`<span class="tags">${r.tags.map(t=>`<span>${t}</span>`).join('')}</span>`:'';
+const badge=(s,old)=>`<span class="st ${s} ${old?'old':''}">${s==='flash'?ICON.flash:''}${LABEL[s]}</span>`;
+function pinHTML(r,cls=''){return`<button class="pin ${cls}" data-pin="${r.id}" style="left:${r.x}%;top:${r.y}%;background:${COLORS[r.color]};color:${LIGHT.includes(r.color)?'#17201C':'#fff'}" aria-label="V${r.grade} ${r.color}色 ${r.id}">${r.grade}</button>`}
+function header(){const g=gym();return`<div class="hd"><span class="brand">原岩攀岩館</span><button class="gympick" id="gp">${g.live?'<span class="live"></span>':''}${g.name}${ICON.down}</button></div>`}
+function bindHeader(){const b=document.getElementById('gp');if(b)b.onclick=openGyms}
+
+/* 明德館平面圖（依原岩換線公告圖描出，座標單位同原圖） */
+const PLAN={
+  outline:'755,38 928,38 928,548 1170,548 1170,685 1095,752 415,752 85,590 85,363 755,363',
+  fixtures:[[858,550,152,58],[858,697,132,52]],
+  zones:{
+    A:{polys:['880,195 926,195 926,468 890,458 878,400 893,330 878,262 888,225','757,38 926,38 926,195 886,195 884,95 862,80 800,85 795,103 757,103'],lx:822,ly:262},
+    W:{polys:['360,363 755,363 755,552 718,552 714,470 695,420 640,402 560,406 470,396 400,406 378,396'],lx:545,ly:470},
+    B:{polys:['472,688 495,700 520,718 650,718 690,690 710,640 718,600 755,593 755,752 472,752'],lx:612,ly:652},
+    C:{polys:['280,650 345,618 390,640 405,700 395,742 280,690','230,400 255,400 270,420 270,555 262,570 230,570'],lx:352,ly:572},
+    K:{polys:['87,400 112,400 112,482 120,482 120,590 140,620 180,640 180,656 87,606'],lx:176,ly:512}
+  }
+};
+function planSVG(){
+  let s=`<svg viewBox="60 20 1130 750" role="img" aria-label="${gym().name}平面圖"><polygon points="${PLAN.outline}" fill="var(--sunk)" stroke="var(--line)" stroke-width="3"/>`;
+  PLAN.fixtures.forEach(([x,y,w,h])=>s+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="var(--line)" stroke-width="3"/>`);
+  s+=`<text x="1090" y="538" font-size="26" fill="var(--muted)" text-anchor="middle">入口</text>`;
+  S.zones.forEach(z=>{const P=PLAN.zones[z.id];if(!P)return;const st=zs(z),p=st.t?st.d/st.t:0,dd=z.nextReset?daysTo(z.nextReset):99,soon=dd>=0&&dd<=7;
+    const fill=`color-mix(in srgb,var(--accent) ${Math.round(18+p*72)}%,var(--blush))`;
+    s+=`<g class="z" tabindex="0" role="button" data-zone="${z.id}" aria-label="${esc(z.name)}，完成 ${st.d} / ${st.t}${soon?'，'+dueText(z):''}">`+
+      P.polys.map(pt=>`<polygon class="zp" points="${pt}" fill="${fill}" stroke="${soon?'var(--warn)':'var(--surface)'}" stroke-width="${soon?4:2}" ${soon?'stroke-dasharray="10 7"':''}/>`).join('')+
+      `<text class="lb" x="${P.lx}" y="${P.ly}" font-size="40" text-anchor="middle">${esc(z.name.replace(' 區',''))}</text>`+
+      `<text class="ct" x="${P.lx}" y="${P.ly+36}" font-size="32" text-anchor="middle">${st.d}/${st.t}</text>`+
+      (soon?`<text class="dd" x="${P.lx}" y="${P.ly+68}" font-size="24" text-anchor="middle">${dd===0?'今天換線':dd+' 天後換線'}</text>`:'')+`</g>`});
+  return s+'</svg>';
+}
+const app=document.getElementById('app');
+let view={tab:'gym',zone:null,grade:null,color:null,tag:null,sz:S.zones[0].id,y:new Date().getFullYear(),m:new Date().getMonth()};
+
+/* ===== 選館 ===== */
+function openGyms(){
+  sheet(`<h2>選擇場館</h2><p>目前只有明德館開放路線紀錄</p><div class="gymlist">${GYMS.map(g=>`<button class="gymrow" data-gym="${g.id}" aria-pressed="${g.id===me.gym}"><span>${g.name}</span><small class="${g.live?'on':''}">${g.live?'已上線':'即將上線'}</small></button>`).join('')}</div>`);
+  sh.querySelectorAll('[data-gym]').forEach(b=>b.onclick=()=>{me.gym=b.dataset.gym;view.zone=null;save();closeSheet();render()});
+}
+function renderSoon(){
+  const g=gym();
+  app.innerHTML=header()+`<div class="soon-box"><strong>${g.name}即將上線</strong><p>路線資料建置中，完成後就能在這裡看路線、記錄完攀。</p><button class="btn pri" id="toM" style="max-width:220px;margin:0 auto">看明德館</button></div>`;
+  bindHeader();document.getElementById('toM').onclick=()=>{me.gym='mingde';save();render()};
+}
+
+/* ===== 館內路線 ===== */
+function renderGym(){
+  const a=active(),d=a.filter(done).length;
+  const up=[...S.zones].filter(z=>z.nextReset&&daysTo(z.nextReset)>=0).sort((x,y)=>x.nextReset.localeCompare(y.nextReset)).slice(0,3);
+  const fresh=a.filter(isNew).sort((x,y)=>y.created-x.created);
+  app.innerHTML=header()+`<h1>今天爬哪一區？</h1><p class="sub">牆上 ${a.length} 條路線，你完成了 ${d} 條</p>
+  <div class="plan">${planSVG()}<div class="plan-key"><span>完成度 少<i></i>多</span><span><b></b>7 天內換線</span></div></div>
+  <h3>所有區域</h3><div class="zlist">${S.zones.map(z=>{const s=zs(z),dd=z.nextReset?daysTo(z.nextReset):99;return`<button class="zcard" data-zone="${z.id}"><img src="${photo(z)}" alt=""><span class="info"><span class="nm">${esc(z.name)}</span><span class="pr"><span class="bar"><i style="width:${s.t?s.d/s.t*100:0}%"></i></span>${s.d} / ${s.t}</span><span class="due ${dd<=7?'soon':''}">${dueText(z)}</span></span></button>`}).join('')}</div>
+  <h3>即將換線</h3>
+  ${up.length?`<div class="resets">${up.map(z=>{const dd=daysTo(z.nextReset),left=a.filter(r=>r.zone===z.id&&!done(r)).length;return`<div class="reset ${dd<=7?'soon':''}"><span>${esc(z.name)}<br><small>${z.nextReset.slice(5).replace('-','/')} 換線，還有 ${left} 條沒完攀</small></span><span class="d">${dd===0?'今天':dd+' 天'}</span></div>`}).join('')}</div>`:'<p class="empty">目前沒有排定換線日。</p>'}
+  <h3>最新路線</h3>
+  ${fresh.length?`<div class="newrow">${fresh.map(r=>`<button class="newcard" data-r="${r.id}"><span class="g"><span class="dot" style="background:${COLORS[r.color]}"></span>V${r.grade}</span><small>${esc(Z(r.zone).name)}<br>${ago(r.created)}設定</small></button>`).join('')}</div>`:'<p class="empty">這週還沒有新路線。</p>'}`;
+  bindHeader();
+  app.querySelectorAll('[data-zone]').forEach(el=>{const go=()=>{view.zone=el.dataset.zone;view.grade=view.color=view.tag=null;render();scrollTo(0,0)};el.onclick=go;el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}}});
+  app.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>openRoute(b.dataset.r));
+}
+function routeRow(r){const l=logs[r.id],n=cmtsOf(r.id).length;return`<li><button class="route ${done(r)?'done':''} ${l&&l.s==='flash'?'fl':''}" data-r="${r.id}"><span class="tape" style="background:${COLORS[r.color]}"></span><span class="grade">V${r.grade}</span><span class="meta"><b>${r.color}色 ${r.id}</b>${isNew(r)?'<span class="new">NEW</span>':''}<br>${tagHTML(r)} ${ago(r.created)}${n&&canCmt(r)?`<span class="cc">${ICON.chat}${n}</span>`:''}</span>${l?badge(l.s):''}</button></li>`}
+function renderZone(){
+  const z=Z(view.zone),rs=active().filter(r=>r.zone===z.id).sort((a,b)=>a.grade-b.grade||a.id.localeCompare(b.id));
+  const grades=[...new Set(rs.map(r=>r.grade))].sort((a,b)=>a-b),colors=[...new Set(rs.map(r=>r.color))],tags=TAGS.filter(t=>rs.some(r=>(r.tags||[]).includes(t)));
+  const match=r=>(view.grade==null||r.grade===view.grade)&&(view.color==null||r.color===view.color)&&(view.tag==null||(r.tags||[]).includes(view.tag));
+  const s=zs(z),dd=z.nextReset?daysTo(z.nextReset):99;
+  app.innerHTML=`<button class="back" id="back">‹ ${gym().name}</button><h1>${esc(z.name)}</h1>
+  <p class="sub">${s.t} 條路線，完成 ${s.d} 條${z.nextReset?`，<span class="due ${dd<=7?'soon':''}">${dueText(z)}</span>`:''}</p>
+  <div class="wall"><img src="${photo(z)}" alt="${esc(z.name)}照片">${rs.map(r=>pinHTML(r,(match(r)?'':'dim ')+(done(r)?'done ':'')+(logs[r.id]&&logs[r.id].s==='flash'?'fl':''))).join('')}</div>
+  <div class="chips"><button class="chip" aria-pressed="${view.grade==null}" data-g="">全部</button>${grades.map(g=>`<button class="chip" aria-pressed="${view.grade===g}" data-g="${g}">V${g}</button>`).join('')}</div>
+  <div class="chips"><button class="chip zh" aria-pressed="${view.color==null}" data-c="">所有顏色</button>${colors.map(c=>`<button class="chip zh" aria-pressed="${view.color===c}" data-c="${c}">${c}</button>`).join('')}</div>
+  <div class="chips"><button class="chip zh" aria-pressed="${view.tag==null}" data-t="">所有風格</button>${tags.map(t=>`<button class="chip zh" aria-pressed="${view.tag===t}" data-t="${t}">${t}</button>`).join('')}</div>
+  <ul class="routes">${rs.filter(match).map(routeRow).join('')||'<p class="empty">沒有符合的路線。</p>'}</ul>`;
+  document.getElementById('back').onclick=()=>{view.zone=null;render()};
+  app.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{view.grade=b.dataset.g===''?null:+b.dataset.g;render()});
+  app.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{view.color=b.dataset.c||null;render()});
+  app.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{view.tag=b.dataset.t||null;render()});
+  app.querySelectorAll('[data-r],[data-pin]').forEach(b=>b.onclick=()=>openRoute(b.dataset.r||b.dataset.pin));
+}
+
+/* ===== 路線卡片：紀錄＋心得＋留言 ===== */
+function openRoute(id){
+  const r=S.routes.find(x=>x.id===id),z=Z(r.zone),L=logs[id];
+  const f={s:L?L.s:null,date:ymd(L?L.t:Date.now()),feel:L?L.feel||null:null,gfeel:L&&L.gfeel!=null?L.gfeel:null,note:L?L.note||'':''};
+  let draft='';
+  const keep=()=>{const n=document.getElementById('lnote');if(n)f.note=n.value;const d=document.getElementById('ldate');if(d)f.date=d.value;const c=document.getElementById('ctext');if(c)draft=c.value};
+  const draw=()=>{
+    const cs=cmtsOf(id),open=canCmt(r);
+    sheet(`<h2><span class="tape" style="background:${COLORS[r.color]};height:34px"></span><span class="grade">V${r.grade}</span>${r.color}色</h2>
+    <p>${esc(z.name)} ${r.id}，${ago(r.created)}設定${r.archived?'，已下架':''}</p>${tagHTML(r)}${r.note?`<div class="note">${esc(r.note)}</div>`:''}
+    <div class="sec"><h4>我的紀錄</h4>
+      <div class="acts">${['flash','send','proj'].map(k=>`<button class="act ${k}" data-s="${k}" aria-pressed="${f.s===k}">${ICON[k]}${LABEL[k]}</button>`).join('')}</div>
+      ${f.s?`
+      <label class="f" for="ldate">日期</label><input class="t" type="date" id="ldate" value="${f.date}" min="${ymd(r.created)}" max="${ymd(Date.now())}">
+      ${f.s!=='proj'?`<label class="f">爬起來的感覺</label><div class="seg">${FEEL.map(o=>`<button data-feel="${o.v}" aria-pressed="${f.feel===o.v}"><span>${o.e}</span>${o.t}</button>`).join('')}</div>
+      <label class="f">難度體感</label><div class="seg">${GFEEL.map(o=>`<button data-gf="${o.v}" aria-pressed="${f.gfeel===o.v}"><span>${o.e}</span>${o.t}</button>`).join('')}</div>`:''}
+      <label class="f" for="lnote">心得</label><textarea class="t" id="lnote" maxlength="300" placeholder="${f.s==='proj'?'卡在哪一手？下次想怎麼試？':'這條路線哪裡最有感？'}">${esc(f.note)}</textarea>
+      <div class="private">${ICON.lock} 只有你自己看得到</div>
+      <button class="btn pri" id="saveLog" style="margin-top:14px">儲存紀錄</button>
+      ${L?'<button class="link" id="clrLog">清除紀錄</button>':''}`:''}
+    </div>
+    <div class="sec"><h4>留言 <small>${open?cs.length+' 則':''}</small></h4>
+      ${open?`${cs.length?`<div class="cmts">${cs.map(c=>`<div class="cmt"><div class="who"><span><b>${esc(c.name)}</b>${ago(c.t)}</span>${c.mine?`<button class="del" data-del="${c.id}">刪除</button>`:''}</div><p>${esc(c.text)}</p></div>`).join('')}</div>`:'<p class="tip">還沒有人留言，分享你的 beta 吧。</p>'}
+      ${r.archived?'':`${me.nick?'':`<input class="t" id="nick" maxlength="16" placeholder="你的暱稱" style="margin-bottom:8px">`}<div class="cform"><textarea class="t" id="ctext" maxlength="200" placeholder="公開留言，大家都看得到">${esc(draft)}</textarea><button id="post">送出</button></div>`}`
+      :`<div class="closed">${ICON.lock}這條路線的留言已關閉</div>`}
+    </div>`);
+    sh.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{keep();f.s=b.dataset.s;draw()});
+    sh.querySelectorAll('[data-feel]').forEach(b=>b.onclick=()=>{keep();f.feel=+b.dataset.feel;draw()});
+    sh.querySelectorAll('[data-gf]').forEach(b=>b.onclick=()=>{keep();f.gfeel=+b.dataset.gf;draw()});
+    const sv=document.getElementById('saveLog');if(sv)sv.onclick=()=>{keep();const today=ymd(Date.now());
+      const t=!f.date||f.date===today?(L&&ymd(L.t)===today?L.t:Date.now()):new Date(f.date+'T12:00:00').getTime();
+      logs[id]={s:f.s,t,note:f.note.trim(),...(f.s!=='proj'?{feel:f.feel,gfeel:f.gfeel}:{})};save();closeSheet();render();toast(f.s==='flash'?'Flash！漂亮':'已儲存紀錄')};
+    const cl=document.getElementById('clrLog');if(cl)cl.onclick=()=>{delete logs[id];save();closeSheet();render();toast('已清除紀錄')};
+    sh.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{keep();S.comments=S.comments.filter(c=>c.id!==b.dataset.del);save();draw();toast('已刪除留言')});
+    const po=document.getElementById('post');if(po)po.onclick=()=>{keep();const nk=document.getElementById('nick');if(nk){if(!nk.value.trim()){toast('請先填暱稱');nk.focus();return}me.nick=nk.value.trim()}
+      if(!draft.trim()){toast('留言不能是空的');return}
+      S.comments.push({id:'c'+Date.now(),route:id,name:me.nick,text:draft.trim(),t:Date.now(),mine:true});draft='';save();draw();render();toast('已送出留言')};
+  };
+  draw();
+}
+
+/* ===== 我的紀錄 ===== */
+function sendsIn(y,m){return Object.entries(logs).filter(([id,l])=>{if(l.s==='proj')return false;const d=new Date(l.t);return d.getFullYear()===y&&d.getMonth()===m}).map(([id,l])=>({r:S.routes.find(x=>x.id===id),l})).filter(x=>x.r)}
+function renderMe(){
+  const {y,m}=view,now=new Date(),isNow=y===now.getFullYear()&&m===now.getMonth();
+  const cur=sendsIn(y,m),pm=m===0?[y-1,11]:[y,m-1],prev=sendsIn(...pm);
+  const fl=cur.filter(x=>x.l.s==='flash').length,byDay={};cur.forEach(x=>{const d=new Date(x.l.t).getDate();byDay[d]=(byDay[d]||0)+1});
+  const days=Object.keys(byDay).length,top=cur.length?Math.max(...cur.map(x=>x.r.grade)):null,diff=cur.length-prev.length;
+  const deltaTxt=!prev.length&&!cur.length?'':diff>0?`比上個月多 <b>${diff}</b> 條`:diff<0?`比上個月少 ${-diff} 條`:'跟上個月一樣';
+  const first=new Date(y,m,1).getDay(),dim=new Date(y,m+1,0).getDate();
+  let cal='<div class="cal">'+'日一二三四五六'.split('').map(c=>`<span class="h">${c}</span>`).join('')+'<span></span>'.repeat(first);
+  for(let d=1;d<=dim;d++){const c=byDay[d]||0,lv=c>=5?3:c>=3?2:c>=1?1:0;cal+=`<span class="d ${lv?'l'+lv:''} ${isNow&&d===now.getDate()?'today':''}" ${c?`aria-label="${m+1}/${d} 完攀 ${c} 條"`:''}>${d}</span>`}
+  cal+='</div><div class="legend">少<i style="background:var(--accent-soft)"></i><i style="background:color-mix(in srgb,var(--accent) 60%,transparent)"></i><i style="background:var(--accent)"></i>多</div>';
+  const gc={};cur.forEach(x=>gc[x.r.grade]=(gc[x.r.grade]||0)+1);const gs=Object.keys(gc).map(Number).sort((a,b)=>a-b),mx=Math.max(1,...Object.values(gc));
+  const all=Object.values(logs).filter(l=>l.s!=='proj').length;
+  const list=[...cur].sort((a,b)=>b.l.t-a.l.t);
+  const a=active(),sent=a.filter(done),wg=[...new Set(a.map(r=>r.grade))].sort((p,q)=>p-q);
+  const fe=v=>(FEEL.find(o=>o.v===v)||{}).e||'',ge=v=>(GFEEL.find(o=>o.v===v)||{}).t||'';
+  app.innerHTML=header()+`<h1>我的紀錄</h1>
+  <div class="month"><button id="pm" aria-label="上個月">‹</button><strong>${y} 年 ${m+1} 月</strong><button id="nm" aria-label="下個月" ${isNow?'disabled':''}>›</button></div>
+  <div class="stats"><div class="stat"><strong>${cur.length}</strong>完攀</div><div class="stat fl"><strong>${fl}</strong>Flash</div><div class="stat"><strong>${days}</strong>攀爬天數</div><div class="stat"><strong>${top==null?'–':'V'+top}</strong>最高難度</div></div>
+  ${deltaTxt?`<p class="delta">${deltaTxt}</p>`:''}
+  <h3>攀爬日</h3>${cal}
+  <h3>本月難度分布</h3>${gs.length?`<div class="gbars">${gs.map(g=>`<div class="gb"><span class="g">V${g}</span><span class="t"><i style="width:${gc[g]/mx*100}%"></i></span><span class="v">${gc[g]} 條</span></div>`).join('')}</div>`:'<p class="empty">這個月還沒有完攀紀錄。</p>'}
+  ${list.length?`<h3>本月完攀與心得</h3><ul class="routes">${list.map(({r,l})=>`<li><button class="route done ${l.s==='flash'?'fl':''}" data-r="${r.id}"><span class="tape" style="background:${COLORS[r.color]}"></span><span class="grade">V${r.grade}</span><span class="meta"><b>${esc((Z(r.zone)||{}).name||'')} ${r.color}色</b> ${fe(l.feel)}<br>${new Date(l.t).toLocaleDateString('zh-TW',{month:'numeric',day:'numeric'})}${l.gfeel!=null?'，體感'+ge(l.gfeel):''}${r.archived?'，已下架':''}${l.note?`<span class="q">「${esc(l.note)}」</span>`:''}</span>${badge(l.s,r.archived)}</button></li>`).join('')}</ul>`:''}
+  <div class="total"><span>累計完攀</span><strong>${all}</strong></div>
+  <h3>目前牆上進度</h3><div class="gbars">${wg.map(g=>{const t=a.filter(r=>r.grade===g).length,d=sent.filter(r=>r.grade===g).length;return`<div class="gb"><span class="g">V${g}</span><span class="t"><i style="width:${d/t*100}%"></i></span><span class="v">${d}/${t}</span></div>`}).join('')}</div>`;
+  bindHeader();
+  document.getElementById('pm').onclick=()=>{if(view.m===0){view.m=11;view.y--}else view.m--;render()};
+  document.getElementById('nm').onclick=()=>{if(view.m===11){view.m=0;view.y++}else view.m++;render()};
+  app.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>openRoute(b.dataset.r));
+}
+
+/* ===== 管理後台 ===== */
+function renderSetter(){
+  const z=Z(view.sz)||S.zones[0];view.sz=z.id;
+  const rs=active().filter(r=>r.zone===z.id).sort((a,b)=>a.grade-b.grade);
+  app.innerHTML=header()+`<h1>管理後台</h1><p class="sub">選區域，點照片上的起步點新增路線</p>
+  <div class="setbox"><div class="tgl"><span>開放顧客留言<small>關閉後全館路線都不能留言</small></span><button class="sw2" role="switch" id="gcm" aria-checked="${S.commentsOn}" aria-label="開放顧客留言"></button></div></div>
+  <div class="chips">${S.zones.map(x=>`<button class="chip zh" aria-pressed="${x.id===z.id}" data-sz="${x.id}">${esc(x.name)}</button>`).join('')}<button class="chip zh" id="addZone">＋ 新增區域</button></div>
+  <div class="setbox">
+    <label class="f" for="zname">區域名稱</label><input class="t" id="zname" value="${esc(z.name)}">
+    <div class="row2"><div><label class="f" for="zreset">下次換線日</label><input class="t" type="date" id="zreset" value="${z.nextReset||''}"></div>
+    <div><label class="f">區域照片</label><button class="upl" id="upl">${z.photo?'更換照片':'上傳照片'}</button></div></div>
+  </div>
+  <div class="wall setter" id="wall"><img src="${photo(z)}" alt="${esc(z.name)}照片" draggable="false">${rs.map(r=>pinHTML(r)).join('')}</div>
+  <p class="tip">${z.photo?'':'目前是示意圖，上傳真實照片後再標路線。'}點空白處新增，點標記編輯、管理留言或下架。</p>
+  <ul class="routes">${rs.map(r=>{const n=cmtsOf(r.id).length;return`<li><button class="route" data-pin="${r.id}"><span class="tape" style="background:${COLORS[r.color]}"></span><span class="grade">V${r.grade}</span><span class="meta"><b>${r.color}色 ${r.id}</b><br>${tagHTML(r)} ${ago(r.created)}<span class="cc">${r.commentsOn===false?ICON.lock+'留言關閉':ICON.chat+n}</span></span></button></li>`}).join('')||'<p class="empty">這區還沒有路線，點照片新增第一條。</p>'}</ul>
+  <button class="btn danger" id="resetAll" style="margin-top:14px" ${rs.length?'':'disabled'}>整區換線（下架全部 ${rs.length} 條）</button>`;
+  bindHeader();
+  document.getElementById('gcm').onclick=()=>{S.commentsOn=!S.commentsOn;save();render();toast(S.commentsOn?'已開放留言':'已關閉全館留言')};
+  app.querySelectorAll('[data-sz]').forEach(b=>b.onclick=()=>{view.sz=b.dataset.sz;render()});
+  document.getElementById('addZone').onclick=()=>{const id='Z'+Date.now().toString(36);S.zones.push({id,name:'新區域',photo:null,nextReset:''});S.seq[id]=0;save();view.sz=id;render()};
+  document.getElementById('zname').onchange=e=>{z.name=e.target.value.trim()||z.name;save();render();toast('已更新區域名稱')};
+  document.getElementById('zreset').onchange=e=>{z.nextReset=e.target.value;save();toast('已更新換線日')};
+  document.getElementById('upl').onclick=()=>{const f=document.getElementById('fileIn');f.value='';f.onchange=async()=>{if(!f.files[0])return;try{const old=z.photo;z.photo=await shrink(f.files[0]);if(!save())z.photo=old;else toast('照片已更新');render()}catch(e){toast('照片讀取失敗，換一張試試')}};f.click()};
+  const wall=document.getElementById('wall');
+  wall.onclick=e=>{if(e.target.closest('.pin'))return;const b=wall.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*100,y=(e.clientY-b.top)/b.height*100;
+    wall.insertAdjacentHTML('beforeend',`<span class="pin temp" style="left:${x}%;top:${y}%;background:var(--ink);color:var(--surface)">＋</span>`);openEdit(null,z,x,y)};
+  app.querySelectorAll('[data-pin]').forEach(b=>b.onclick=e=>{e.stopPropagation();openEdit(S.routes.find(r=>r.id===b.dataset.pin),z)});
+  document.getElementById('resetAll').onclick=()=>{
+    sheet(`<h2>${esc(z.name)} 整區換線</h2><p>${rs.length} 條路線會下架，顧客的紀錄和心得都會保留。下架後記得上傳新照片、設定下次換線日。</p><button class="btn danger" id="ok">確認下架</button><button class="link" id="no">取消</button>`);
+    document.getElementById('ok').onclick=()=>{rs.forEach(r=>r.archived=Date.now());z.nextReset='';save();closeSheet();render();toast('已下架 '+rs.length+' 條')};
+    document.getElementById('no').onclick=closeSheet;
+  };
+}
+function shrink(file){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const s=Math.min(1,1400/img.width),c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);res(c.toDataURL('image/jpeg',.72))};img.onerror=rej;img.src=URL.createObjectURL(file)})}
+function openEdit(r,z,x,y){
+  const f={color:r?r.color:'紅',grade:r?r.grade:3,tags:r?[...(r.tags||[])]:[],note:r?(r.note||''):'',cm:r?r.commentsOn!==false:true};
+  const keep=()=>{f.note=document.getElementById('rnote').value};
+  const draw=()=>{
+    const cs=r?cmtsOf(r.id):[];
+    sheet(`<h2>${r?'編輯 '+r.id:'新增路線'}</h2><p>${esc(z.name)}${r?'，'+ago(r.created)+'設定':''}</p>
+    <label class="f">岩點顏色</label><div class="swatches">${cn.map(c=>`<button class="sw" data-col="${c}" aria-label="${c}" aria-pressed="${f.color===c}" style="background:${COLORS[c]}"></button>`).join('')}</div>
+    <label class="f">難度</label><div class="grades">${GRADES.map(g=>`<button data-gr="${g}" aria-pressed="${f.grade===g}">V${g}</button>`).join('')}</div>
+    <label class="f">路線風格（可複選）</label><div class="tagpick">${TAGS.map(t=>`<button data-tag="${t}" aria-pressed="${f.tags.includes(t)}">${t}</button>`).join('')}</div>
+    <label class="f" for="rnote">評語（選填）</label><input class="t" id="rnote" maxlength="40" value="${esc(f.note)}" placeholder="例如：最後一手要果斷">
+    <div class="tgl"><span>開放這條路線留言</span><button class="sw2" role="switch" id="rcm" aria-checked="${f.cm}" aria-label="開放這條路線留言"></button></div>
+    <button class="btn pri" id="ok">${r?'儲存變更':'新增路線'}</button>
+    ${r?`<div class="sec"><h4>顧客留言 <small>${cs.length} 則</small></h4>${cs.length?`<div class="cmts">${cs.map(c=>`<div class="cmt"><div class="who"><span><b>${esc(c.name)}</b>${ago(c.t)}</span><button class="del" data-del="${c.id}">刪除</button></div><p>${esc(c.text)}</p></div>`).join('')}</div>`:'<p class="tip">沒有留言。</p>'}</div>
+    <button class="btn danger" id="del" style="margin-top:16px">下架這條路線</button>`:''}<button class="link" id="no">取消</button>`,()=>render());
+    sh.querySelectorAll('[data-col]').forEach(b=>b.onclick=()=>{keep();f.color=b.dataset.col;draw()});
+    sh.querySelectorAll('[data-gr]').forEach(b=>b.onclick=()=>{keep();f.grade=+b.dataset.gr;draw()});
+    sh.querySelectorAll('[data-tag]').forEach(b=>b.onclick=()=>{keep();const t=b.dataset.tag;f.tags=f.tags.includes(t)?f.tags.filter(v=>v!==t):[...f.tags,t];draw()});
+    document.getElementById('rcm').onclick=()=>{keep();f.cm=!f.cm;draw()};
+    sh.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{keep();S.comments=S.comments.filter(c=>c.id!==b.dataset.del);save();draw();toast('已刪除留言')});
+    document.getElementById('ok').onclick=()=>{keep();const tags=TAGS.filter(t=>f.tags.includes(t)),note=f.note.trim();
+      if(r){Object.assign(r,{color:f.color,grade:f.grade,tags,note,commentsOn:f.cm});toast('已儲存')}
+      else{S.seq[z.id]=(S.seq[z.id]||0)+1;const id=z.id.slice(0,3)+'-'+String(S.seq[z.id]).padStart(2,'0');S.routes.push({id,zone:z.id,grade:f.grade,color:f.color,tags,note,x,y,created:Date.now(),archived:null,commentsOn:f.cm});toast('已新增 V'+f.grade+' '+f.color+'色')}
+      save();closeSheet();render()};
+    if(r)document.getElementById('del').onclick=()=>{r.archived=Date.now();save();closeSheet();render();toast('已下架 '+r.id)};
+    document.getElementById('no').onclick=()=>{closeSheet();render()};
+  };
+  draw();
+}
+
+/* ===== sheet / 導覽 ===== */
+const bg=document.getElementById('sheetBg'),sh=document.getElementById('sheet');let onDismiss=null;
+function sheet(html,dismiss){const top=bg.classList.contains('open')?sh.scrollTop:0;sh.innerHTML=html;onDismiss=dismiss||null;if(!bg.classList.contains('open')){bg.classList.add('open');sh.scrollTop=0}else sh.scrollTop=top}
+function closeSheet(){bg.classList.remove('open');onDismiss=null}
+bg.onclick=e=>{if(e.target===bg){const d=onDismiss;closeSheet();if(d)d()}};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&bg.classList.contains('open')){const d=onDismiss;closeSheet();if(d)d()}});
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{view.tab=b.dataset.tab;view.zone=null;if(b.dataset.tab==='me'){const n=new Date();view.y=n.getFullYear();view.m=n.getMonth()}render();scrollTo(0,0)});
+function render(){
+  document.querySelectorAll('.tabs button').forEach(b=>{b.removeAttribute('aria-current');if(b.dataset.tab===view.tab)b.setAttribute('aria-current','page')});
+  if(!gym().live&&view.tab!=='me')return renderSoon();
+  view.tab==='me'?renderMe():view.tab==='setter'?renderSetter():view.zone?renderZone():renderGym();
+}
+render();
+</script>
+</body>
+</html>
