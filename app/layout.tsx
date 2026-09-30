@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, Noto_Sans_TC } from "next/font/google";
 import TabBar from "@/components/TabBar";
 import { ToastProvider } from "@/components/ui/Toast";
+import UpdateWatcher from "@/components/UpdateWatcher";
 import "./globals.css";
 
 const noto = Noto_Sans_TC({
@@ -54,6 +55,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ToastProvider>
           <main className="mx-auto max-w-page px-4 pt-3 pb-28">{children}</main>
           <TabBar />
+          <UpdateWatcher />
         </ToastProvider>
       </body>
     </html>
