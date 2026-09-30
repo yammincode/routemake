@@ -1,6 +1,8 @@
 [build]
   command = "npm run build"
   publish = ".next"
+  # 只有 main 分支（正式版）才建置部署；開發分支推上來會被略過，不花 Netlify 額度
+  ignore = "if [ \"$BRANCH\" = \"main\" ]; then exit 1; else exit 0; fi"
 
 [build.environment]
   NODE_VERSION = "22"

@@ -9,6 +9,11 @@
 - 每個步驟完成後用 git commit，訊息用繁體中文
 - 需要我提供的帳號、金鑰、檔案，直接列清單告訴我，不要自己編假的值
 - 金鑰只放在 .env.local，不能 commit
+- 試用版與正式版分開（說明在 docs/試用與上線.md）：
+  - 平常只 push 到開發分支 claude/happy-goldberg-szmqwa，Netlify 不會部署（netlify.toml 的 ignore 只建置 main）
+  - 修改集中做完再 push，不要一個小改動就 push
+  - 使用者在自己電腦用 scripts/trial.ps1 跑試用版確認
+  - 使用者說「更新正式版」時，才把開發分支合併到 main 並 push（這是唯一會部署的動作）
 
 ## 技術規則
 - Next.js（App Router）+ TypeScript + Tailwind CSS，PWA

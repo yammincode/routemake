@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:db": "scripts/test-db.sh",
-    "bundle:sql": "scripts/bundle-sql.sh"
+    "bundle:sql": "scripts/bundle-sql.sh",
+    "trial": "next dev -H 0.0.0.0"
   },
   "dependencies": {
     "@serwist/next": "^9.5.12",
