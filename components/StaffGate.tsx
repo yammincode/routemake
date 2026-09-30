@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Empty } from "@/components/ui/Card";
 import { isStaffOf } from "@/lib/auth";
 
-// 只有員工（定線員、店長、老闆）才顯示內容；真正的權限由資料庫 RLS 擋
+// 只有員工（定線長、店長、老闆）才顯示內容；真正的權限由資料庫 RLS 擋
 export default function StaffGate({ children }: { children: ReactNode }) {
   const { ready, session, access } = useAuth();
   const router = useRouter();
@@ -25,6 +25,6 @@ export default function StaffGate({ children }: { children: ReactNode }) {
       </>
     );
   }
-  if (!isStaffOf(access)) return <Empty>只有定線員和店長可以使用管理後台。需要權限請洽店長。</Empty>;
+  if (!isStaffOf(access)) return <Empty>只有定線長和店長可以使用管理後台。需要權限請洽店長。</Empty>;
   return <>{children}</>;
 }

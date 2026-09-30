@@ -79,3 +79,12 @@ export function WallPhoto({
     </div>
   );
 }
+
+// 區域還沒有照片時的佔位框（同岩牆照片比例 4:3）
+export function NoPhoto({ children }: { children: ReactNode }) {
+  return (
+    <div className="mb-3.5 grid aspect-[4/3] place-items-center rounded-tile bg-sunk p-6 text-center text-sub text-muted shadow-card">
+      <span>{children}</span>
+    </div>
+  );
+}

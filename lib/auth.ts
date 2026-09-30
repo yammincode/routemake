@@ -21,8 +21,17 @@ export type Access = {
 export const isStaffOf = (a: Access | null, gym?: string) =>
   !!a && (a.is_owner || a.roles.some((r) => !gym || r.gym_id === gym));
 
+// 角色名稱：setter＝定線長、manager＝店長；老闆管所有場館
+export const ROLE_NAME: Record<Role, string> = { setter: "定線長", manager: "店長" };
+
 export const roleLabel = (a: Access, gym: string) =>
-  a.is_owner ? "老闆" : a.roles.find((r) => r.gym_id === gym)?.role === "manager" ? "店長" : "定線員";
+  a.is_owner ? "老闆" : ROLE_NAME[a.roles.find((r) => r.gym_id === gym)?.role ?? "setter"];
+
+export const isManagerOf = (a: Access | null, gym: string) =>
+  !!a && (a.is_owner || a.roles.some((r) => r.gym_id === gym && r.role === "manager"));
+
+// 可以管理的場館
+export const staffGyms = (a: Access | null) => (a?.is_owner ? null : (a?.roles.map((r) => r.gym_id) ?? []));
 
 // Supabase 錯誤訊息轉成中文
 export function authErrorMessage(err: unknown): string {
