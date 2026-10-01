@@ -15,6 +15,7 @@
 | `setup/step6-security-audit.sql` | migration 0010：留言頻率限制、操作紀錄顯示暱稱與看得懂的內容 | 待套用 |
 | `setup/step7-route-videos.sql` | migration 0011：顧客分享影片（route_videos、route-videos 空間、下架自動刪除、每日上限） | 待套用 |
 | `setup/step8-zone-order.sql` | migration 0012：店長拖曳整理區域順序（reorder_zones） | 待套用 |
+| `setup/step9-gym-zones.sql` | migration 0013：萬華、中和、南港、新店開放並建立區域；明德比賽牆分四段、新增 Spray Wall；10 月換線日 | 待套用 |
 
 ## 規則摘要
 

@@ -16,7 +16,7 @@ export default function GymPicker() {
         <BackLink onClick={() => backOr(router, "/")}>返回</BackLink>
         <Logo />
       </div>
-      <PageTitle sub="目前明德館已開放路線紀錄，其他館陸續上線">選擇攀岩館</PageTitle>
+      <PageTitle sub={GYMS.every((g) => g.live) ? "選擇你要去的館" : `${GYMS.filter((g) => !g.live).map((g) => g.name).join("、")}即將開放`}>選擇攀岩館</PageTitle>
       <div className="grid gap-2">
         {GYMS.map((g) => (
           <GymRow

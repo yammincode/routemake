@@ -38,7 +38,7 @@ import {
   type Zone,
 } from "@/lib/data";
 import { ago, daysUntil } from "@/lib/date";
-import { MINGDE_PLAN } from "@/lib/floorplan";
+import { PLANS } from "@/lib/floorplan";
 import { LIVE_GYM } from "@/lib/gyms";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
@@ -111,7 +111,7 @@ export default function AdminView() {
   const zone = zones?.find((z) => z.id === zoneId) ?? null;
   const manager = isManagerOf(access, gymId);
   // 有平面圖的館：點圖選區域；圖上沒畫到的區域（例如新增的）放在下面的按鈕
-  const plan = gymId === LIVE_GYM.id ? MINGDE_PLAN : null;
+  const plan = PLANS[gymId] ?? null;
   const offPlan = (zones ?? []).filter((z) => !plan?.zones[z.code]);
 
   const run = async (fn: () => Promise<void>) => {

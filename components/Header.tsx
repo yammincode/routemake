@@ -35,7 +35,7 @@ export default function Header({ gym }: { gym: Gym }) {
       </div>
       <Sheet open={open} onClose={() => setOpen(false)}>
         <SheetTitle>選擇場館</SheetTitle>
-        <SheetSub>目前只有明德館開放路線紀錄</SheetSub>
+        <SheetSub>{GYMS.every((g) => g.live) ? "選擇你要去的館" : `${GYMS.filter((g) => !g.live).map((g) => g.name).join("、")}即將開放`}</SheetSub>
         <div className="grid gap-2">
           {GYMS.map((g) => (
             <GymRow key={g.id} name={g.name} logo={g.logo} live={g.live} selected={g.id === gym.id} onClick={() => pick(g)} />

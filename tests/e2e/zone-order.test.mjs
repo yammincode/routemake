@@ -13,7 +13,7 @@ const order = (mock) => mock.db.zones.filter((z) => z.gym_id === "mingde").sort(
 test("後台點平面圖切換區域；圖上沒有的區域用按鈕", async () => {
   const mock = createMock();
   mock.addUser("boss", "password1", { nickname: "老闆", is_owner: true });
-  mock.db.zones.push({ id: crypto.randomUUID(), gym_id: "mingde", code: "W2", name: "比賽牆02", sort: 6, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0 });
+  mock.db.zones.push({ id: crypto.randomUUID(), gym_id: "mingde", code: "X", name: "臨時牆", sort: 6, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0 });
   mock.addRoute(mock.db.zones.find((z) => z.code === "B"), 3, "紅");
   const B = await phone(browser, mock);
   const b = B.page;
@@ -27,9 +27,9 @@ test("後台點平面圖切換區域；圖上沒有的區域用按鈕", async ()
   assert.equal(await b.inputValue("#zname"), "B 區", "點平面圖切換區域");
   assert.equal(await b.locator("main ul li").count(), 1, "顯示 B 區的路線");
   assert.equal(await b.locator('main button:text-is("A 區")').count(), 0, "圖上有的區域不再重複放按鈕");
-  await b.click('main button:text-is("比賽牆02")');
+  await b.click('main button:text-is("臨時牆")');
   await b.waitForTimeout(400);
-  assert.equal(await b.inputValue("#zname"), "比賽牆02", "圖上沒有的區域用按鈕選");
+  assert.equal(await b.inputValue("#zname"), "臨時牆", "圖上沒有的區域用按鈕選");
   assert.deepEqual(B.errors, []);
 });
 

@@ -3,10 +3,10 @@ export type Gym = { id: string; name: string; live: boolean; logo: string };
 
 export const GYMS: Gym[] = [
   { id: "mingde", name: "明德館", live: true, logo: "/logos/mingde.svg" },
-  { id: "g2", name: "萬華館", live: false, logo: "/logos/wanhua.svg" },
-  { id: "g3", name: "中和館", live: false, logo: "/logos/zhonghe.svg" },
-  { id: "g4", name: "南港館", live: false, logo: "/logos/nangang.svg" },
-  { id: "g5", name: "新店館", live: false, logo: "/logos/xindian.svg" },
+  { id: "g2", name: "萬華館", live: true, logo: "/logos/wanhua.svg" },
+  { id: "g3", name: "中和館", live: true, logo: "/logos/zhonghe.svg" },
+  { id: "g4", name: "南港館", live: true, logo: "/logos/nangang.svg" },
+  { id: "g5", name: "新店館", live: true, logo: "/logos/xindian.svg" },
   { id: "g6", name: "中壢館", live: false, logo: "/logos/zhongli.svg" },
 ];
 
@@ -27,6 +27,14 @@ export function saveLastGym(id: string) {
   try {
     localStorage.setItem(LAST_KEY, id);
   } catch {}
+}
+// 上次選的館（已開放的才算），沒有就是明德館
+export function lastLiveGym(): Gym {
+  try {
+    const g = findGym(localStorage.getItem(LAST_KEY) ?? "");
+    if (g?.live) return g;
+  } catch {}
+  return LIVE_GYM;
 }
 export function lastGymPath() {
   try {

@@ -10,7 +10,7 @@ import FloorPlan from "@/components/ui/FloorPlan";
 import { NewRouteCard, NewRouteRow, ResetList, ZoneCard, ZoneList } from "@/components/ui/Gym";
 import { getGym, getMyAscents, getNewRoutes, getZoneProgress, photoUrl, type Ascent, type Gym, type Route, type ZoneProgress } from "@/lib/data";
 import { ago, daysUntil, md } from "@/lib/date";
-import { MINGDE_PLAN } from "@/lib/floorplan";
+import { PLANS } from "@/lib/floorplan";
 import { overlayPending, withCache } from "@/lib/offline";
 
 const PLACEHOLDER =
@@ -78,15 +78,17 @@ export default function HomeView({ gymId }: { gymId: string }) {
   return (
     <>
       <PageTitle sub={session ? `牆上 ${total} 條路線，你完成了 ${done} 條` : `牆上 ${total} 條路線，登入後就能記錄完攀`}>今天爬哪一區？</PageTitle>
-      <FloorPlan
-        shape={MINGDE_PLAN}
-        gymName={gym?.name ?? ""}
-        zones={zones.map((z) => ({ code: z.code, name: z.name, done: z.done_count, total: z.route_count, resetDays: daysUntil(z.next_reset_on) }))}
-        onSelect={(code) => {
-          const z = zones.find((x) => x.code === code);
-          if (z) goZone(z.zone_id);
-        }}
-      />
+      {PLANS[gymId] && (
+        <FloorPlan
+          shape={PLANS[gymId]}
+          gymName={gym?.name ?? ""}
+          zones={zones.map((z) => ({ code: z.code, name: z.name, done: z.done_count, total: z.route_count, resetDays: daysUntil(z.next_reset_on) }))}
+          onSelect={(code) => {
+            const z = zones.find((x) => x.code === code);
+            if (z) goZone(z.zone_id);
+          }}
+        />
+      )}
 
       <SectionTitle>所有區域</SectionTitle>
       <ZoneList>

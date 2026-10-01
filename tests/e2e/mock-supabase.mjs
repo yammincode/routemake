@@ -17,10 +17,10 @@ export function createMock() {
     staff_roles: [],
     gyms: [
       ["mingde", "明德館", true],
-      ["g2", "萬華館", false],
-      ["g3", "中和館", false],
-      ["g4", "南港館", false],
-      ["g5", "新店館", false],
+      ["g2", "萬華館", true],
+      ["g3", "中和館", true],
+      ["g4", "南港館", true],
+      ["g5", "新店館", true],
       ["g6", "中壢館", false],
     ].map(([id, name, is_live], i) => ({ id, name, is_live, comments_enabled: true, sort: i + 1 })),
     zones: [
@@ -29,7 +29,16 @@ export function createMock() {
       ["B", "B 區"],
       ["C", "C 區"],
       ["D", "D 區"],
-    ].map(([code, name], i) => ({ id: uuid(), gym_id: "mingde", code, name, sort: i + 1, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0 })),
+    ].map(([code, name], i) => ({ id: uuid(), gym_id: "mingde", code, name, sort: i + 1, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0 }))
+      .concat(
+        // 其他館的區域（同 migration 0013）
+        Object.entries({
+          g2: [["A", "A 區"], ["B", "B 區"], ["C", "C 區"], ["D", "D 區"], ["TR", "訓練區"], ["SL", "教學區 Slab"]],
+          g3: [["A", "A 區"], ["AB", "Auto-Belay"], ["B", "B 區"], ["C", "C 區"], ["D", "D 區"], ["SP", "速度牆"], ["BO", "抱石區"]],
+          g4: [["A", "A 區"], ["B", "B 區"], ["C", "C 區"]],
+          g5: [["A", "抱石 A 區"], ["B", "抱石 B 區"], ["C", "C 區"], ["D", "D 區"], ["E", "上攀 E 區"]],
+        }).flatMap(([gym_id, zs]) => zs.map(([code, name], i) => ({ id: uuid(), gym_id, code, name, sort: i + 1, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0 })))
+      ),
     routes: [],
     ascents: [],
     comments: [],

@@ -1,0 +1,66 @@
+-- =====================================================================
+-- 萬華、中和、南港、新店開放；依 10 月換線公告建立各館區域、填入換線日
+-- - 明德館：比賽牆分成四段（W、W2、W3、W4），新增 Spray Wall（S）
+--   之前在後台自己新增的「比賽牆02」，如果代碼不是 W2，會改成 W2（沿用原本的照片與路線）
+-- - 換線日填「拆點」那天
+-- =====================================================================
+update public.gyms set is_live = true where id in ('g2', 'g3', 'g4', 'g5');
+
+-- 明德館：比賽牆02 改用代碼 W2
+update public.zones z set code = 'W2'
+ where z.gym_id = 'mingde' and z.name = '比賽牆02' and z.code <> 'W2'
+   and not exists (select 1 from public.zones x where x.gym_id = 'mingde' and x.code = 'W2');
+
+update public.zones set name = '比賽牆 1' where gym_id = 'mingde' and code = 'W' and name = '比賽牆';
+update public.zones set name = '比賽牆 2' where gym_id = 'mingde' and code = 'W2' and name = '比賽牆02';
+
+insert into public.zones (gym_id, code, name, sort) values
+  ('mingde', 'W2', '比賽牆 2', 3),
+  ('mingde', 'W3', '比賽牆 3', 4),
+  ('mingde', 'W4', '比賽牆 4', 5),
+  ('mingde', 'S', 'Spray Wall', 9),
+  -- 萬華館
+  ('g2', 'A', 'A 區', 1),
+  ('g2', 'B', 'B 區', 2),
+  ('g2', 'C', 'C 區', 3),
+  ('g2', 'D', 'D 區', 4),
+  ('g2', 'TR', '訓練區', 5),
+  ('g2', 'SL', '教學區 Slab', 6),
+  -- 中和館
+  ('g3', 'A', 'A 區', 1),
+  ('g3', 'AB', 'Auto-Belay', 2),
+  ('g3', 'B', 'B 區', 3),
+  ('g3', 'C', 'C 區', 4),
+  ('g3', 'D', 'D 區', 5),
+  ('g3', 'SP', '速度牆', 6),
+  ('g3', 'BO', '抱石區', 7),
+  -- 南港館
+  ('g4', 'A', 'A 區', 1),
+  ('g4', 'B', 'B 區', 2),
+  ('g4', 'C', 'C 區', 3),
+  -- 新店館
+  ('g5', 'A', '抱石 A 區', 1),
+  ('g5', 'B', '抱石 B 區', 2),
+  ('g5', 'C', 'C 區', 3),
+  ('g5', 'D', 'D 區', 4),
+  ('g5', 'E', '上攀 E 區', 5)
+on conflict (gym_id, code) do nothing;
+
+-- 明德館排序：A、比賽牆 1–4、B、C、D、Spray Wall，其他自己新增的排在後面
+update public.zones z set sort = o.n
+  from (values ('A', 1), ('W', 2), ('W2', 3), ('W3', 4), ('W4', 5), ('B', 6), ('C', 7), ('D', 8), ('S', 9)) as o(code, n)
+ where z.gym_id = 'mingde' and z.code = o.code;
+update public.zones set sort = sort + 100 where gym_id = 'mingde' and code not in ('A', 'W', 'W2', 'W3', 'W4', 'B', 'C', 'D', 'S');
+
+-- 10 月換線日（拆點日）
+update public.zones z set next_reset_on = d.day::date
+  from (values
+    ('mingde', 'A', '2026-09-30'), ('mingde', 'W', '2026-10-06'), ('mingde', 'W2', '2026-10-06'),
+    ('mingde', 'W3', '2026-10-06'), ('mingde', 'W4', '2026-10-06'), ('mingde', 'D', '2026-10-11'),
+    ('mingde', 'B', '2026-10-14'), ('mingde', 'C', '2026-10-21'), ('mingde', 'S', '2026-10-28'),
+    ('g2', 'C', '2026-10-11'), ('g2', 'SL', '2026-10-20'), ('g2', 'D', '2026-10-26'),
+    ('g3', 'AB', '2026-10-04'),
+    ('g4', 'B', '2026-10-04'), ('g4', 'C', '2026-10-18'),
+    ('g5', 'A', '2026-10-11'), ('g5', 'E', '2026-10-18'), ('g5', 'B', '2026-10-26')
+  ) as d(gym, code, day)
+ where z.gym_id = d.gym and z.code = d.code;

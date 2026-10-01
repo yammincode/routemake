@@ -62,7 +62,7 @@ insert into public.staff_roles (user_id, gym_id, role) values
   ('00000000-0000-0000-0000-0000000000a1', 'mingde', 'setter'),
   ('00000000-0000-0000-0000-0000000000a2', 'mingde', 'manager'),
   ('00000000-0000-0000-0000-0000000000b1', 'g2', 'setter');
-insert into public.zones (gym_id, code, name, sort) values ('g2', 'A', '二館 A 區', 1);
+-- 二館的 A 區由 migration 0013 建立
 
 \set A   '''00000000-0000-0000-0000-00000000000a'''
 \set B   '''00000000-0000-0000-0000-00000000000b'''
@@ -78,9 +78,18 @@ insert into ids select 'zoneA', id from public.zones where gym_id = 'mingde' and
 insert into ids select 'zoneB', id from public.zones where gym_id = 'mingde' and code = 'B';
 insert into ids select 'zoneG2', id from public.zones where gym_id = 'g2' and code = 'A';
 
-select tests.ok('初始資料：六間店、明德館 5 區', (select count(*) from public.gyms) = 6
-  and (select count(*) from public.zones where gym_id = 'mingde') = 5
+select tests.ok('初始資料：六間店、明德館 9 區（比賽牆分四段＋Spray Wall）', (select count(*) from public.gyms) = 6
+  and (select count(*) from public.zones where gym_id = 'mingde') = 9
   and (select count(*) from public.zones where gym_id = 'mingde' and plan_shape is not null) = 5);
+select tests.ok('開放館：明德、萬華、中和、南港、新店（中壢還沒）',
+  (select array_agg(id order by id) from public.gyms where is_live) = '{g2,g3,g4,g5,mingde}');
+select tests.ok('各館區域數：萬華 6、中和 7、南港 3、新店 5',
+  (select array_agg(n order by gym_id) from (select gym_id, count(*) n from public.zones where gym_id <> 'mingde' group by gym_id) x) = '{6,7,3,5}');
+select tests.ok('明德館區域順序：A、比賽牆 1–4、B、C、D、Spray Wall',
+  (select string_agg(name, '、' order by sort) from public.zones where gym_id = 'mingde') = 'A 區、比賽牆 1、比賽牆 2、比賽牆 3、比賽牆 4、B 區、C 區、D 區、Spray Wall');
+select tests.ok('換線日：比賽牆四段都是 10/6、新店上攀 E 區 10/18',
+  (select bool_and(next_reset_on = '2026-10-06') from public.zones where gym_id = 'mingde' and code like 'W%')
+  and (select next_reset_on from public.zones where gym_id = 'g5' and code = 'E') = '2026-10-18');
 select tests.ok('新使用者自動建立 profiles 並存帳號名稱（轉小寫）',
   (select username from public.profiles where id = :A) = 'climber_a'
   and (select username from public.profiles where id = :B) = 'climber_b');
@@ -89,7 +98,7 @@ select tests.ok('新使用者自動建立 profiles 並存帳號名稱（轉小�
 -- 未登入的人
 -- ---------------------------------------------------------------------
 set role anon; select tests.login(null);
-select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 6);
+select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 30);
 select tests.ok('未登入：可以看暱稱', (select nickname from public.profiles where id = :A) = '甲');
 select tests.throws('未登入：讀不到手機號碼', 'select phone from public.profiles');
 select tests.throws('未登入：讀不到帳號名稱', 'select username from public.profiles');

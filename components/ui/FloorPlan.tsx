@@ -26,8 +26,14 @@ export default function FloorPlan({
     <div className="mb-2 rounded-plan bg-surface px-2 pt-2.5 pb-1.5 shadow-card">
       <svg viewBox={shape.viewBox} role="img" aria-label={`${gymName}平面圖`} className="block h-auto w-full">
         <polygon points={shape.outline} fill="var(--sunk)" stroke="var(--line)" strokeWidth={3} />
+        {shape.walls?.map((w, i) => <polyline key={i} points={w} fill="none" stroke="var(--line)" strokeWidth={3} />)}
         {shape.fixtures.map(([x, y, w, h], i) => (
           <rect key={i} x={x} y={y} width={w} height={h} fill="none" stroke="var(--line)" strokeWidth={3} />
+        ))}
+        {shape.texts?.map((t, i) => (
+          <text key={i} x={t.x} y={t.y} fontSize={26} fill="var(--muted)" textAnchor="middle">
+            {t.t}
+          </text>
         ))}
         {shape.entrance && (
           <text x={shape.entrance.x} y={shape.entrance.y} fontSize={26} fill="var(--muted)" textAnchor="middle">
@@ -71,7 +77,7 @@ export default function FloorPlan({
                 />
               ))}
               <text x={P.lx} y={P.ly} fontSize={40} textAnchor="middle" className="fill-ink font-black">
-                {z.name.replace(" 區", "")}
+                {P.t ?? z.name.replace(" 區", "")}
               </text>
               <text x={P.lx} y={P.ly + 36} fontSize={32} textAnchor="middle" className="fill-ink font-num font-bold">
                 {admin ? `${z.total} 條` : `${z.done}/${z.total}`}

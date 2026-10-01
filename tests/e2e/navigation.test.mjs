@@ -37,10 +37,22 @@ test("入口頁、選館、返回都照順序", async () => {
   await page.goto(BASE + "/gyms", { waitUntil: "networkidle" });
   await page.click('main button:has-text("中和館")');
   await page.waitForURL("**/gym/g3");
-  assert.match(await page.textContent("main strong"), /中和館即將上線/);
+  await page.waitForTimeout(600);
+  assert.equal(await page.textContent("main h1"), "今天爬哪一區？", "中和館已開放");
+  assert.ok(await page.isVisible('svg[role=img][aria-label="中和館平面圖"]'), "中和館有平面圖");
+  await page.locator('svg[role=img] g[aria-label^="速度牆"]').click();
+  await page.waitForURL("**/zone?id=**");
+  await page.waitForTimeout(400);
+  assert.equal(await page.textContent("main h1"), "速度牆", "點平面圖進到速度牆");
+
+  await page.goto(BASE + "/gym/g6", { waitUntil: "networkidle" });
+  assert.match(await page.textContent("main strong"), /中壢館即將上線/);
+  await page.goto(BASE + "/gym/g3", { waitUntil: "networkidle" });
 
   await page.goto(BASE + "/me", { waitUntil: "networkidle" });
   assert.equal(await page.getAttribute('nav a:has-text("館內路線")', "href"), "/gym/g3", "館內路線分頁記住上次選的館");
+  await page.waitForTimeout(400);
+  assert.ok((await page.textContent("main")).includes("中和館"), "我的紀錄頁首顯示上次選的館");
   assert.deepEqual(await page.locator("nav a").allTextContents(), ["館內路線", "我的紀錄", "管理後台"], "管理後台分頁一直顯示");
   assert.deepEqual(errors, []);
 });
