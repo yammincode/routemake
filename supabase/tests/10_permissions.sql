@@ -419,10 +419,13 @@ reset role;
 update public.gyms set comments_enabled = true;
 insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y, created_at)
 values ((select v from ids where k = 'zoneB'), 'B-80', 1, '綠', 1, 1, now() - interval '1 day');
+-- 每條路線只能留一則，所以頻率限制用 6 條不同的路線測
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y, created_at)
+select (select v from ids where k = 'zoneB'), 'B-8' || i, 1, '綠', 1, 1, now() - interval '1 day' from generate_series(1, 5) i;
 set role authenticated; select tests.login(:NN);
 update public.profiles set nickname = '洗版' where id = :NN;
-select tests.lives('留言：1 分鐘內 5 則可以', $q$do $$ begin for i in 1..5 loop insert into public.comments (route_id, body) select id, '第' || i || '則' from public.routes where code = 'B-80'; end loop; end $$$q$);
-select tests.throws('留言：1 分鐘內第 6 則被擋', $q$insert into public.comments (route_id, body) select id, '第六則' from public.routes where code = 'B-80'$q$);
+select tests.lives('留言：1 分鐘內 5 則可以', $q$do $$ begin for i in 0..4 loop insert into public.comments (route_id, body) select id, '第' || i || '則' from public.routes where code = 'B-8' || i; end loop; end $$$q$);
+select tests.throws('留言：1 分鐘內第 6 則被擋', $q$insert into public.comments (route_id, body) select id, '第六則' from public.routes where code = 'B-85'$q$);
 reset role;
 select tests.ok('操作紀錄：指派員工記下暱稱與帳號', exists (select 1 from public.audit_log where action = 'staff.assign' and detail ->> 'username' = 'climber_b' and detail ? 'nickname'));
 select tests.ok('操作紀錄：整區換線記下區域名稱', exists (select 1 from public.audit_log where action = 'zone.archive_all' and detail ->> 'zone' = 'A 區'));
@@ -609,6 +612,42 @@ select tests.login(null);
 update public.comments set deleted_at = now() where id = (select v from ids where k = 'likeC');
 set role authenticated; select tests.login(:A);
 select tests.throws('按讚：已刪除的留言不能按', format('insert into public.comment_likes (comment_id) values (%L)', (select v from ids where k = 'likeC')));
+reset role;
+
+-- ---------------------------------------------------------------------
+-- 每人每條路線一則留言、編輯留言
+-- ---------------------------------------------------------------------
+select tests.login(null);
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y)
+values ((select v from ids where k = 'zoneB'), 'B-60', 2, '白', 1, 1);
+insert into ids select 'oneR', id from public.routes where code = 'B-60';
+set role authenticated; select tests.login(:A);
+select tests.lives('一則留言：第一則可以', format('insert into public.comments (route_id, body) values (%L, ''第一次留言'')', (select v from ids where k = 'oneR')));
+select tests.throws('一則留言：同一條路線第二則被擋', format('insert into public.comments (route_id, body) values (%L, ''第二則'')', (select v from ids where k = 'oneR')));
+select tests.lives('編輯：可以改自己的留言', format('select public.edit_comment(%L, ''  改過的內容  '')', (select id from public.comments where route_id = (select v from ids where k = 'oneR') and deleted_at is null)));
+reset role;
+select tests.ok('編輯：內容已更新、記下編輯時間', (select body = '改過的內容' and edited_at is not null from public.comments where route_id = (select v from ids where k = 'oneR') and deleted_at is null));
+set role authenticated; select tests.login(:A);
+select tests.throws('編輯：空白不行', format('select public.edit_comment(%L, ''   '')', (select id from public.comments where route_id = (select v from ids where k = 'oneR') and deleted_at is null)));
+select tests.throws('編輯：超過 200 字不行', format('select public.edit_comment(%L, repeat(''字'', 201))', (select id from public.comments where route_id = (select v from ids where k = 'oneR') and deleted_at is null)));
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.throws('編輯：店長也不能改別人的留言', format('select public.edit_comment(%L, ''改'')', (select id from public.comments where route_id = (select v from ids where k = 'oneR') and deleted_at is null)));
+reset role;
+set role anon; select tests.login(null);
+select tests.throws('編輯：未登入不能改', format('select public.edit_comment(%L, ''改'')', (select id from public.comments where route_id = (select v from ids where k = 'oneR') and deleted_at is null)));
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.lives('一則留言：刪除後可以再留', format('select public.delete_comment(%L)', (select id from public.comments where route_id = (select v from ids where k = 'oneR') and deleted_at is null)));
+select tests.lives('一則留言：刪除後再留一則', format('insert into public.comments (route_id, body) values (%L, ''重新留言'')', (select v from ids where k = 'oneR')));
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.lives('一則留言：別人也可以留', format('insert into public.comments (route_id, body) values (%L, ''我也來'')', (select v from ids where k = 'oneR')));
+reset role;
+select tests.login(null);
+update public.routes set comments_enabled = false where code = 'B-60';
+set role authenticated; select tests.login(:A);
+select tests.throws('編輯：路線關閉留言後不能改', format('select public.edit_comment(%L, ''改'')', (select id from public.comments where route_id = (select v from ids where k = 'oneR') and user_id = :A and deleted_at is null)));
 reset role;
 
 -- ---------------------------------------------------------------------

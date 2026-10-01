@@ -13,7 +13,7 @@ import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { Tabs } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
 import { isStaffOf } from "@/lib/auth";
-import { clearAscent, deleteComment, getComments, likeComment, postComment, saveAscent, unlikeComment, type Ascent, type Comment, type Route } from "@/lib/data";
+import { clearAscent, deleteComment, editComment, getComments, likeComment, postComment, saveAscent, unlikeComment, type Ascent, type Comment, type Route } from "@/lib/data";
 import { ago, md, todayYmd, ymd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, STATUS_LABEL, type Status } from "@/lib/design";
 import { isNetworkError, queueAscent } from "@/lib/offline";
@@ -88,6 +88,7 @@ function RouteBody({
   const [tab, setTab] = useState<"log" | "video" | "comment" | null>(null);
   const [details, setDetails] = useState(!!(ascent && (ascent.feel != null || ascent.grade_feel != null || ascent.private_note)));
   const [videoCount, setVideoCount] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
   const onVideoCount = useCallback((n: number) => setVideoCount(n), []);
 
   const commentsOpen = gymCommentsOn && r.comments_enabled;
@@ -176,9 +177,24 @@ function RouteBody({
     }
   };
 
+  const saveEdit = async (id: string) => {
+    const body = draft.trim();
+    if (!body) return toast("留言不能是空的");
+    try {
+      await editComment(id, body);
+      setDraft("");
+      setEditing(false);
+      setComments(await getComments(r.id));
+      toast("已更新留言");
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
+
   const remove = async (id: string) => {
     try {
       await deleteComment(id);
+      setEditing(false);
       setComments((cs) => cs?.filter((c) => c.id !== id) ?? null);
       toast("已刪除留言");
     } catch (e) {
@@ -204,6 +220,12 @@ function RouteBody({
 
   const toLogin = () => router.push(`/login?next=${encodeURIComponent(location.pathname)}`);
 
+  // 自己的留言排第一，其他依讚數、新到舊；每人每條路線只能一則
+  const uid = session?.user.id;
+  const mine = comments?.find((c) => c.user_id === uid) ?? null;
+  const sorted = [...(comments ?? [])].sort(
+    (a, b) => Number(b.user_id === uid) - Number(a.user_id === uid) || b.likers.length - a.likers.length || b.created_at.localeCompare(a.created_at)
+  );
   const shownTab = tab ?? (videoCount ? "video" : comments?.length ? "comment" : "log");
 
   return (
@@ -304,33 +326,49 @@ function RouteBody({
         ) : (
           <>
             {comments && comments.length > 0 ? (
-              <CommentList>
-                {comments.map((c) => (
-                  <CommentItem
-                    key={c.id}
-                    name={c.nickname}
-                    ago={ago(c.created_at)}
-                    body={c.body}
-                    likes={c.likers.length}
-                    liked={!!session && c.likers.includes(session.user.id)}
-                    onLike={() => void toggleLike(c)}
-                    onDelete={session && (c.user_id === session.user.id || staff) ? () => remove(c.id) : undefined}
-                  />
-                ))}
-              </CommentList>
+              <>
+                <CommentList scroll={comments.length >= 3}>
+                  {sorted.map((c) => (
+                    <CommentItem
+                      key={c.id}
+                      name={c.nickname}
+                      ago={ago(c.created_at)}
+                      body={c.body}
+                      edited={!!c.edited_at}
+                      likes={c.likers.length}
+                      liked={!!uid && c.likers.includes(uid)}
+                      onLike={() => void toggleLike(c)}
+                      onEdit={c.user_id === uid && !r.archived_at ? () => (setDraft(c.body), setEditing(true)) : undefined}
+                      onDelete={session && (c.user_id === uid || staff) ? () => remove(c.id) : undefined}
+                    />
+                  ))}
+                </CommentList>
+                {comments.length >= 3 && <p className="-mt-1.5 mb-2.5 text-tiny text-muted">共 {comments.length} 則，左右滑動看更多</p>}
+              </>
             ) : (
               <p className="mt-1 mb-2.5 text-note text-muted">{comments ? "還沒有人留言，分享你的 beta 吧。" : "讀取中…"}</p>
             )}
             {!r.archived_at &&
-              (session ? (
-                <>
-                  <CommentForm value={draft} onChange={setDraft} onSubmit={post} />
-                  <p className="mt-1.5 mb-0 text-tiny text-muted">
-                    留言前請看<Link href="/rules" className="underline">留言與影片規範</Link>
-                  </p>
-                </>
-              ) : (
+              (!session ? (
                 <Button onClick={toLogin}>登入後留言</Button>
+              ) : mine && !editing ? (
+                <p className="my-1 text-tiny text-muted">每條路線只能留一則留言，可以按「編輯」修改，或刪除後再留。</p>
+              ) : (
+                <>
+                  <CommentForm
+                    value={draft}
+                    onChange={setDraft}
+                    onSubmit={mine ? () => void saveEdit(mine.id) : post}
+                    submitLabel={mine ? "儲存" : "送出"}
+                  />
+                  {mine ? (
+                    <LinkButton onClick={() => (setEditing(false), setDraft(""))}>取消編輯</LinkButton>
+                  ) : (
+                    <p className="mt-1.5 mb-0 text-tiny text-muted">
+                      每條路線只能留一則，留言前請看<Link href="/rules" className="underline">留言與影片規範</Link>
+                    </p>
+                  )}
+                </>
               ))}
           </>
         )}

@@ -386,6 +386,15 @@ export default function DesignShowcase() {
         <Segmented small options={FEEL} value={feel} onChange={setFeel} />
       </Block>
 
+      <Block title="留言很多時：左右滑動">
+        <CommentList scroll>
+          <CommentItem name="我" ago="今天" body="腳踩對就很簡單" edited onEdit={() => toast("編輯")} onDelete={() => toast("已刪除留言")} likes={2} />
+          <CommentItem name="小安" ago="2 天前" body="第三手好遠，矮個子加油" likes={5} onLike={() => toast("👍")} />
+          <CommentItem name="阿明" ago="3 天前" body="起步右腳踩高一點" likes={1} onLike={() => toast("👍")} />
+        </CommentList>
+        <p className="-mt-1.5 mb-0 text-tiny text-muted">共 3 則，左右滑動看更多</p>
+      </Block>
+
       <Block title="拖曳排序">
         <SortList items={order.map((n) => ({ id: n, label: n }))} onChange={setOrder} />
       </Block>

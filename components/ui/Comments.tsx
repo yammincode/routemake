@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
 import Icon from "./Icon";
 
-// 留言（原型 .cmt）；likes／liked／onLike：👍 按讚（沒有 onLike 時只顯示讚數）
+// 留言（原型 .cmt）；likes／liked／onLike：👍 按讚（沒有 onLike 時只顯示讚數）；edited：顯示「已編輯」
 export function CommentItem({
   name,
   ago,
   body,
   onDelete,
+  onEdit,
+  edited = false,
   likes = 0,
   liked = false,
   onLike,
@@ -15,22 +17,32 @@ export function CommentItem({
   ago: string;
   body: string;
   onDelete?: () => void;
+  onEdit?: () => void;
+  edited?: boolean;
   likes?: number;
   liked?: boolean;
   onLike?: () => void;
 }) {
   return (
-    <div className="rounded-btn bg-sunk px-3 py-2.5">
+    <div className="h-full rounded-btn bg-sunk px-3 py-2.5">
       <div className="flex items-center justify-between text-meta text-muted">
         <span>
           <b className="mr-1.5 font-bold text-ink">{name}</b>
           {ago}
+          {edited && <span className="ml-1">・已編輯</span>}
         </span>
-        {onDelete && (
-          <button onClick={onDelete} className="px-1 py-0.5 text-meta text-warn">
-            刪除
-          </button>
-        )}
+        <span className="flex-none">
+          {onEdit && (
+            <button onClick={onEdit} className="px-1 py-0.5 text-meta text-accent">
+              編輯
+            </button>
+          )}
+          {onDelete && (
+            <button onClick={onDelete} className="px-1 py-0.5 text-meta text-warn">
+              刪除
+            </button>
+          )}
+        </span>
       </div>
       <p className="mt-0.5 mb-0 text-sub leading-normal break-words">{body}</p>
       {(onLike || likes > 0) && (
@@ -51,12 +63,28 @@ export function CommentItem({
   );
 }
 
-export function CommentList({ children }: { children: ReactNode }) {
-  return <div className="mb-3 grid gap-2.5">{children}</div>;
+// scroll：留言多時改成左右滑動的一排卡片（每張約八成寬，露出下一張提示可以滑）
+export function CommentList({ children, scroll = false }: { children: ReactNode; scroll?: boolean }) {
+  if (!scroll) return <div className="mb-3 grid gap-2.5">{children}</div>;
+  return (
+    <div className="no-scrollbar -mx-5 mb-3 flex snap-x gap-2.5 overflow-x-auto px-5 pb-1 [&>*]:w-[80%] [&>*]:flex-none [&>*]:snap-start">
+      {children}
+    </div>
+  );
 }
 
 // 留言輸入列（原型 .cform）
-export function CommentForm({ value, onChange, onSubmit }: { value: string; onChange: (v: string) => void; onSubmit: () => void }) {
+export function CommentForm({
+  value,
+  onChange,
+  onSubmit,
+  submitLabel = "送出",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  submitLabel?: string;
+}) {
   return (
     <div className="flex items-end gap-2">
       <textarea
@@ -67,7 +95,7 @@ export function CommentForm({ value, onChange, onSubmit }: { value: string; onCh
         className="min-h-11 flex-1 resize-y rounded-field border border-line bg-sunk px-3 py-[11px] leading-normal"
       />
       <button onClick={onSubmit} className="flex-none rounded-field bg-ink px-3.5 py-2.5 font-bold text-surface">
-        送出
+        {submitLabel}
       </button>
     </div>
   );

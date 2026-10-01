@@ -16,7 +16,8 @@
 | `setup/step7-route-videos.sql` | migration 0011：顧客分享影片（route_videos、route-videos 空間、下架自動刪除、每日上限） | 已套用 |
 | `setup/step8-zone-order.sql` | migration 0012：店長拖曳整理區域順序（reorder_zones） | 已套用 |
 | `setup/step9-gym-zones.sql` | migration 0013：萬華、中和、南港、新店開放並建立區域；明德比賽牆分四段、新增 Spray Wall；10 月換線日 | 已套用 |
-| `setup/step10-comment-likes.sql` | migration 0014：留言按讚 👍（comment_likes） | 待套用 |
+| `setup/step10-comment-likes.sql` | migration 0014：留言按讚 👍（comment_likes） | 已套用 |
+| `setup/step11-one-comment.sql` | migration 0015：每人每條路線一則留言（重複的保留最新一則）、edit_comment() 編輯留言 | 待套用 |
 
 ## 規則摘要
 
@@ -26,7 +27,7 @@
 | zones | 所有人 | 員工；定線長只能改照片和換線日，其他欄位只有店長 | 店長，且區域沒有任何路線 |
 | routes | 所有人 | 該館員工；編號自動產生、不能改 | 不開放，用 `archived_at` 下架 |
 | ascents | 只有本人 | 只有本人 | 只有本人 |
-| comments | 所有人（未刪除） | 登入且有暱稱；路線未下架、路線與場館留言都開啟；1 分鐘最多 5 則、24 小時最多 100 則 | `delete_comment()`：本人或該館員工（軟刪除） |
+| comments | 所有人（未刪除） | 登入且有暱稱；路線未下架、路線與場館留言都開啟；每人每條路線一則；1 分鐘最多 5 則、24 小時最多 100 則；本人可用 `edit_comment()` 修改 | `delete_comment()`：本人或該館員工（軟刪除） |
 | profiles | 所有人只能讀 id、暱稱、頭像（帳號名稱、手機不公開） | 本人只能改暱稱、頭像 | 不開放 |
 | staff_roles | 本人、該館店長 | 店長只能指派定線長，店長由老闆指派（`lookup_user()` 先確認暱稱，再 `assign_staff(帳號, 館, 角色)`） | 同左（`remove_staff()`） |
 | audit_log | 該館店長、老闆 | 只能由函式寫入 | 不開放 |

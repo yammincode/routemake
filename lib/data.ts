@@ -56,6 +56,7 @@ export type Comment = {
   created_at: string;
   nickname: string;
   likers: string[]; // 按讚的人（user id）
+  edited_at: string | null;
 };
 export type Staff = { user_id: string; gym_id: string; role: "setter" | "manager"; nickname: string | null };
 
@@ -131,7 +132,7 @@ export async function getComments(routeId: string): Promise<Comment[]> {
   const rows = must(
     await supabase()
       .from("comments")
-      .select("id,route_id,user_id,body,created_at,profiles!comments_user_id_fkey(nickname),comment_likes(user_id)")
+      .select("id,route_id,user_id,body,created_at,edited_at,profiles!comments_user_id_fkey(nickname),comment_likes(user_id)")
       .eq("route_id", routeId)
       .order("created_at")
   ) as unknown as (Omit<Comment, "nickname" | "likers"> & {
@@ -161,8 +162,14 @@ export async function saveAscent(userId: string, routeId: string, a: Omit<Ascent
 export async function clearAscent(routeId: string) {
   must(await supabase().from("ascents").delete().eq("route_id", routeId));
 }
+// 每人每條路線只能留一則（資料庫擋），重複時提示改用編輯
 export async function postComment(routeId: string, body: string) {
-  must(await supabase().from("comments").insert({ route_id: routeId, body }));
+  const r = await supabase().from("comments").insert({ route_id: routeId, body });
+  if (r.error?.code === "23505") throw new Error("每條路線只能留一則留言，可以編輯或刪除後再留");
+  must(r);
+}
+export async function editComment(id: string, body: string) {
+  must(await supabase().rpc("edit_comment", { p_comment: id, p_body: body }));
 }
 // 留言按讚 👍／收回
 export async function likeComment(id: string) {

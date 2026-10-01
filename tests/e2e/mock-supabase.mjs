@@ -249,6 +249,13 @@ export function createMock() {
       audit(uid, a.p_gym, "zone.reorder", null, { zones: a.p_zones.map((id) => zoneOf(id).name) });
       return J(route, 200, null);
     }
+    if (fn === "edit_comment") {
+      const c = db.comments.find((x) => x.id === a.p_comment && !x.deleted_at);
+      if (!c || c.user_id !== uid) return J(route, 403, { code: "42501", message: "只能編輯自己的留言" });
+      c.body = a.p_body.trim();
+      c.edited_at = now();
+      return J(route, 200, null);
+    }
     if (fn === "lookup_user") {
       const p = db.profiles.find((x) => x.username === a.p_username.toLowerCase());
       return p ? J(route, 200, { id: p.id, nickname: p.nickname }) : J(route, 404, { code: "P0002", message: "找不到這個帳號，請對方先註冊" });
@@ -410,7 +417,8 @@ export function createMock() {
         const r = db.routes.find((x) => x.id === body.route_id);
         const g = db.gyms.find((x) => x.id === zoneOf(r.zone_id).gym_id);
         if (!uid || r.archived_at || !r.comments_enabled || !g.comments_enabled || !prof(uid).nickname) return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "comments"' });
-        db.comments.push({ id: uuid(), route_id: body.route_id, user_id: uid, body: body.body.trim(), created_at: now(), deleted_at: null });
+        if (db.comments.some((c) => c.route_id === r.id && c.user_id === uid && !c.deleted_at)) return J(route, 409, { code: "23505", message: 'duplicate key value violates unique constraint "comments_one_per_user"' });
+        db.comments.push({ id: uuid(), route_id: body.route_id, user_id: uid, body: body.body.trim(), created_at: now(), edited_at: null, deleted_at: null });
         return empty(route, 201);
       }
     }
