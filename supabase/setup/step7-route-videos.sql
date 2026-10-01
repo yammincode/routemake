@@ -5,9 +5,6 @@
 -- 整份會在同一個交易裡執行：中途出錯會全部取消，不會只做一半
 -- =====================================================================
 
-create schema if not exists supabase_migrations;
-create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text);
-alter table supabase_migrations.schema_migrations enable row level security;
 
 -- >>>>>>>>>> 20261006000011_route_videos
 
@@ -21,7 +18,10 @@ alter table supabase_migrations.schema_migrations enable row level security;
 -- - 路線或場館留言關閉、路線已下架時不能分享
 -- =====================================================================
 
-create table public.route_videos (
+-- 用 execute 建表：Supabase SQL Editor 看到建表指令會跳出「開啟 RLS」提示並改寫整份 SQL，
+-- 會把後面的函式切壞。這張表下面已經自己開啟 RLS。
+do $do$ begin
+  execute 'create ' || $t$table public.route_videos (
   id          uuid primary key default gen_random_uuid(),
   route_id    uuid not null references public.routes (id) on delete cascade,
   user_id     uuid not null default auth.uid() references public.profiles (id) on delete cascade,
@@ -31,7 +31,8 @@ create table public.route_videos (
   duration_s  numeric(5, 1) check (duration_s > 0 and duration_s <= 60),
   size_bytes  bigint check (size_bytes > 0 and size_bytes <= 52428800),
   created_at  timestamptz not null default now()
-);
+)$t$;
+end $do$;
 create index route_videos_route_idx on public.route_videos (route_id, created_at desc);
 create index route_videos_user_idx on public.route_videos (user_id, created_at desc);
 

@@ -12,9 +12,15 @@ out=$1; shift
   echo "-- 整份會在同一個交易裡執行：中途出錯會全部取消，不會只做一半"
   echo "-- ====================================================================="
   echo
-  echo "create schema if not exists supabase_migrations;"
-  echo "create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text);"
-  echo "alter table supabase_migrations.schema_migrations enable row level security;"
+  # 記錄表只在第一份（step2）建立；之後的檔案不出現 create table，
+  # 免得 Supabase SQL Editor 跳出「開啟 RLS」提示並自動改寫內容（會把函式切壞）
+  case " $* " in
+    *20261001000001_*)
+      echo "create schema if not exists supabase_migrations;"
+      echo "create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text);"
+      echo "alter table supabase_migrations.schema_migrations enable row level security;"
+      ;;
+  esac
   for f in "$@"; do
     base=$(basename "$f" .sql)
     echo

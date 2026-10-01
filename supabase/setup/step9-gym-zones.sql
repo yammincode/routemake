@@ -5,9 +5,6 @@
 -- 整份會在同一個交易裡執行：中途出錯會全部取消，不會只做一半
 -- =====================================================================
 
-create schema if not exists supabase_migrations;
-create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text);
-alter table supabase_migrations.schema_migrations enable row level security;
 
 -- >>>>>>>>>> 20261008000013_gym_zones
 
