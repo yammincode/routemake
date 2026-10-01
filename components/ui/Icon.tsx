@@ -6,6 +6,7 @@ const PATHS = {
   chat: "M4 4h16v12H8l-4 4z",
   lock: "M7 10V8a5 5 0 0 1 10 0v2h1v11H6V10zm2 0h6V8a3 3 0 0 0-6 0z",
   down: "m7 9 5 5 5-5z",
+  video: "M3 6h12v12H3zm13 4.5 5-3v9l-5-3z",
 };
 
 export type IconName = keyof typeof PATHS;

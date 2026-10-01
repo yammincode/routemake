@@ -423,6 +423,120 @@ select tests.ok('操作紀錄：店長可以連同暱稱一起讀（profiles 關
 reset role;
 
 -- ---------------------------------------------------------------------
+-- 顧客分享影片（顧客乙前面已被指派為明德館員工，這裡用「洗版」當第二位顧客）
+-- ---------------------------------------------------------------------
+select tests.login(null);
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y)
+values ((select v from ids where k = 'zoneB'), 'B-70', 3, '藍', 1, 1),
+       ((select v from ids where k = 'zoneB'), 'B-71', 3, '藍', 1, 1);
+insert into ids select 'v70', id from public.routes where code = 'B-70';
+insert into ids select 'v71', id from public.routes where code = 'B-71';
+create temp table vp (k text primary key, v text);
+grant all on vp to anon, authenticated;
+insert into vp select 'a1', format('mingde/%s/%s/a1.mp4', (select v from ids where k = 'v70'), :A);
+insert into vp select 'a2', format('mingde/%s/%s/a2.mp4', (select v from ids where k = 'v70'), :A);
+insert into vp select 'b1', format('mingde/%s/%s/b1.mp4', (select v from ids where k = 'v71'), :NN);
+
+set role authenticated; select tests.login(:A);
+select tests.lives('影片：顧客可以上傳到自己的資料夾', format('insert into storage.objects (bucket_id, name, metadata) values (''route-videos'', %L, ''{"size":1000}'')', (select v from vp where k = 'a1')));
+select tests.lives('影片：顧客可以新增影片資料', format('insert into public.route_videos (route_id, path, caption, status, duration_s, size_bytes) values (%L, %L, ''第一次完攀'', ''send'', 12.5, 1000)', (select v from ids where k = 'v70'), (select v from vp where k = 'a1')));
+select tests.ok('影片：上傳者自動設為本人', (select user_id from public.route_videos where path = (select v from vp where k = 'a1')) = :A);
+select tests.throws('影片：不能上傳到別人的資料夾', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/%s/%s/x.mp4'')', (select v from ids where k = 'v70'), :B));
+select tests.throws('影片：路徑的場館要對', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''g2/%s/%s/x.mp4'')', (select v from ids where k = 'v70'), :A));
+select tests.throws('影片：路徑不能少一層', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/%s/x.mp4'')', (select v from ids where k = 'v70')));
+select tests.throws('影片：路徑不是路線 id 被擋', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/abc/%s/x.mp4'')', :A));
+select tests.throws('影片：資料路徑要是自己的', format('insert into public.route_videos (route_id, path) values (%L, ''mingde/%s/%s/y.mp4'')', (select v from ids where k = 'v70'), (select v from ids where k = 'v70'), :B));
+select tests.throws('影片：資料路徑和路線要相符', format('insert into public.route_videos (route_id, path) values (%L, %L)', (select v from ids where k = 'v71'), (select v from vp where k = 'a2')));
+select tests.throws('影片：超過 60 秒被擋', format('insert into public.route_videos (route_id, path, duration_s) values (%L, %L, 61)', (select v from ids where k = 'v70'), (select v from vp where k = 'a2')));
+select tests.throws('影片：說明超過 40 字被擋', format('insert into public.route_videos (route_id, path, caption) values (%L, %L, repeat(''字'', 41))', (select v from ids where k = 'v70'), (select v from vp where k = 'a2')));
+select tests.throws('影片：顧客改不了影片資料', 'update public.route_videos set caption = ''改''');
+select tests.throws('影片：顧客不能直接刪影片資料（要用 delete_video）', 'delete from public.route_videos');
+reset role;
+select tests.ok('影片：改資料真的沒有效果', (select caption from public.route_videos where path = (select v from vp where k = 'a1')) = '第一次完攀');
+
+select tests.login(null);
+update public.profiles set nickname = null where id = :NN;
+set role authenticated; select tests.login(:NN);
+select tests.throws('影片：沒有暱稱不能上傳', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/%s/%s/n.mp4'')', (select v from ids where k = 'v70'), :NN));
+reset role;
+select tests.login(null);
+update public.profiles set nickname = '洗版' where id = :NN;
+update public.routes set comments_enabled = false where code = 'B-71';
+set role authenticated; select tests.login(:NN);
+select tests.throws('影片：路線關閉留言時不能上傳', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from vp where k = 'b1')));
+reset role;
+select tests.login(null);
+update public.routes set comments_enabled = true where code = 'B-71';
+set role authenticated; select tests.login(:NN);
+select tests.lives('影片：另一位顧客上傳到另一條路線', format('insert into storage.objects (bucket_id, name, metadata) values (''route-videos'', %L, ''{"size":2000}'')', (select v from vp where k = 'b1')));
+select tests.lives('影片：另一位顧客新增影片資料', format('insert into public.route_videos (route_id, path, status) values (%L, %L, ''project'')', (select v from ids where k = 'v71'), (select v from vp where k = 'b1')));
+select tests.throws('影片：不能刪別人的影片', format('select public.delete_video(%L)', (select id from public.route_videos where path = (select v from vp where k = 'a1'))));
+select tests.ok('影片：不能刪別人的影片檔（0 筆）', tests.rows(format('delete from storage.objects where name = %L', (select v from vp where k = 'a1'))) = 0);
+reset role;
+
+set role anon; select tests.login(null);
+select tests.ok('影片：未登入看得到影片清單', (select count(*) from public.route_videos) = 2);
+select tests.throws('影片：未登入不能上傳', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from vp where k = 'a2')));
+select tests.throws('影片：未登入不能刪除', format('select public.delete_video(%L)', (select id from public.route_videos limit 1)));
+reset role;
+
+-- 每人 24 小時最多 10 支：先放 9 支，第 10 支可以，第 11 支被擋
+insert into storage.objects (bucket_id, name, owner)
+select 'route-videos', format('mingde/%s/%s/old%s.mp4', (select v from ids where k = 'v70'), :A, i), :A from generate_series(1, 8) i;
+set role authenticated; select tests.login(:A);
+select tests.lives('影片：24 小時內第 10 支可以', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from vp where k = 'a2')));
+select tests.throws('影片：24 小時內第 11 支被擋', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/%s/%s/a3.mp4'')', (select v from ids where k = 'v70'), :A));
+reset role;
+delete from storage.objects where name like '%/old%.mp4' or name = (select v from vp where k = 'a2');
+
+set role authenticated; select tests.login(:ST2);
+select tests.throws('影片：別館員工不能刪', format('select public.delete_video(%L)', (select id from public.route_videos where path = (select v from vp where k = 'a1'))));
+select tests.ok('影片：別館員工看不到用量', public.video_usage('mingde') is null);
+select tests.ok('影片：別館員工拿不到下架影片路徑', cardinality(public.video_paths_for_routes(array[(select v from ids where k = 'v70')])) = 0);
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.ok('影片：員工看得到用量（2 支、3000 bytes）', public.video_usage('mingde') = '{"count": 2, "bytes": 3000}'::jsonb, public.video_usage('mingde')::text);
+select tests.ok('影片：員工拿得到下架影片路徑', public.video_paths_for_routes(array[(select v from ids where k = 'v70')]) = array[(select v from vp where k = 'a1')]);
+select tests.ok('影片：員工刪除影片回傳檔案路徑', public.delete_video((select id from public.route_videos where path = (select v from vp where k = 'b1'))) = (select v from vp where k = 'b1'));
+select tests.ok('影片：員工可以刪別人的影片檔', tests.rows(format('delete from storage.objects where name = %L', (select v from vp where k = 'b1'))) = 1);
+reset role;
+select tests.ok('影片：員工刪影片有寫操作紀錄', exists (select 1 from public.audit_log where action = 'video.delete' and user_id = :ST and detail ->> 'author_nickname' = '洗版' and detail ->> 'code' = 'B-71'));
+
+set role authenticated; select tests.login(:A);
+select tests.ok('影片：顧客看不到用量', public.video_usage('mingde') is null);
+select tests.ok('影片：顧客拿不到下架影片路徑', cardinality(public.video_paths_for_routes(array[(select v from ids where k = 'v70')])) = 0);
+reset role;
+
+-- 漏刪的檔案：超過 1 小時、沒有對應資料
+insert into storage.objects (bucket_id, name, owner, created_at) values
+  ('route-videos', format('mingde/%s/%s/lost.mp4', (select v from ids where k = 'v70'), :A), :A, now() - interval '2 hours'),
+  ('route-videos', format('mingde/%s/%s/new.mp4', (select v from ids where k = 'v70'), :A), :A, now());
+set role authenticated; select tests.login(:MG);
+select tests.ok('影片：找得到漏刪的檔案（不含剛上傳的）', public.orphan_video_paths('mingde') = array[format('mingde/%s/%s/lost.mp4', (select v from ids where k = 'v70'), :A)], public.orphan_video_paths('mingde')::text);
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.ok('影片：顧客拿不到漏刪清單', cardinality(public.orphan_video_paths('mingde')) = 0);
+reset role;
+
+set role authenticated; select tests.login(:ST);
+select tests.lives('影片：員工下架路線', format('update public.routes set archived_at = now() where id = %L', (select v from ids where k = 'v70')));
+reset role;
+select tests.ok('影片：路線下架後影片資料自動刪除', not exists (select 1 from public.route_videos where route_id = (select v from ids where k = 'v70')));
+set role authenticated; select tests.login(:A);
+select tests.throws('影片：已下架的路線不能上傳', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/%s/%s/late.mp4'')', (select v from ids where k = 'v70'), :A));
+reset role;
+
+-- 本人刪除自己的影片（不寫操作紀錄）
+select tests.login(null);
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y)
+values ((select v from ids where k = 'zoneB'), 'B-72', 3, '藍', 1, 1);
+set role authenticated; select tests.login(:A);
+select tests.lives('影片：顧客分享第二支', format('insert into public.route_videos (route_id, path) select id, format(''mingde/%%s/%%s/z.mp4'', id, %L) from public.routes where code = ''B-72''', :A));
+select tests.ok('影片：顧客可以刪自己的影片', public.delete_video((select id from public.route_videos where path like '%/z.mp4')) like '%/z.mp4');
+reset role;
+select tests.ok('影片：本人刪除不寫操作紀錄', (select count(*) from public.audit_log where action = 'video.delete') = 1);
+
+-- ---------------------------------------------------------------------
 -- 結果
 -- ---------------------------------------------------------------------
 \o

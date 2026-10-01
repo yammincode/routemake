@@ -21,6 +21,7 @@ export default function PrivacyPage() {
           <li>攀爬紀錄：你記錄的 Flash／完攀／嘗試中、日期、感覺、難度體感。</li>
           <li>私人心得：你在紀錄裡寫的心得。</li>
           <li>公開留言：你在路線下的留言與發表時間。</li>
+          <li>分享的影片：你上傳的攀爬影片、說明文字、上傳時間與檔案大小。影片可能拍到你的長相與聲音。</li>
           <li>使用紀錄：登入時間等系統自動產生的技術紀錄，用於維護安全。</li>
         </ul>
         <p className="m-0">我們不會要求你提供真實姓名、手機號碼、Email 或付款資料。</p>
@@ -29,7 +30,7 @@ export default function PrivacyPage() {
       <DocSection title="誰看得到你的資料">
         <ul>
           <li>私人心得與攀爬紀錄：只有你自己看得到，原岩員工也看不到。</li>
-          <li>暱稱與公開留言：所有使用者都看得到。</li>
+          <li>暱稱、公開留言與分享的影片：所有人都看得到（影片不用登入也能播放）。</li>
           <li>帳號名稱：其他使用者看不到；店長指派員工時可以用帳號名稱查詢暱稱。</li>
         </ul>
       </DocSection>
@@ -37,8 +38,8 @@ export default function PrivacyPage() {
       <DocSection title="使用目的">
         <ul>
           <li>讓你記錄與查看自己的攀爬紀錄、每月統計。</li>
-          <li>提供路線資訊與留言交流。</li>
-          <li>維護服務安全、處理違反留言規範的內容。</li>
+          <li>提供路線資訊、留言與影片交流。</li>
+          <li>維護服務安全、處理違反留言與影片規範的內容。</li>
         </ul>
         <p className="m-0">我們不會將你的資料出售或提供給第三方做行銷使用。</p>
       </DocSection>
@@ -51,12 +52,12 @@ export default function PrivacyPage() {
 
       <DocSection title="你的權利">
         <p className="m-0">
-          你可以隨時查看、修改或刪除自己的紀錄與留言。如果想查詢、停止使用或刪除整個帳號，請洽原岩櫃檯，我們會在確認是本人後處理。
+          你可以隨時查看、修改或刪除自己的紀錄、留言與影片。路線下架或整區換線時，那條路線的影片會自動刪除。如果想查詢、停止使用或刪除整個帳號，請洽原岩櫃檯，我們會在確認是本人後處理。
         </p>
       </DocSection>
 
       <DocSection title="政策修改">
-        <p className="m-0">本政策修改時會在此頁公告。相關的留言規則請見<Link href="/rules" className="text-accent underline">留言規範</Link>。</p>
+        <p className="m-0">本政策修改時會在此頁公告。相關規則請見<Link href="/rules" className="text-accent underline">留言與影片規範</Link>。</p>
       </DocSection>
 
       <DocSection title="聯絡我們">

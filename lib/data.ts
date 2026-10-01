@@ -176,11 +176,18 @@ export async function createRoute(zoneId: string, input: RouteInput, x: number, 
 export async function updateRoute(id: string, input: RouteInput) {
   must(await supabase().from("routes").update(input).eq("id", id));
 }
+// 下架時資料庫會刪掉影片資料，App 再刪 Storage 的檔案（先取得路徑）
 export async function archiveRoute(id: string) {
+  const paths = await videoPathsFor([id]);
   must(await supabase().from("routes").update({ archived_at: new Date().toISOString() }).eq("id", id));
+  await removeVideoFiles(paths);
 }
 export async function archiveZone(zoneId: string): Promise<number> {
-  return must(await supabase().rpc("archive_zone", { p_zone: zoneId }));
+  const ids = (must(await supabase().from("routes").select("id").eq("zone_id", zoneId).is("archived_at", null)) as { id: string }[]).map((r) => r.id);
+  const paths = await videoPathsFor(ids);
+  const n = must(await supabase().rpc("archive_zone", { p_zone: zoneId })) as number;
+  await removeVideoFiles(paths);
+  return n;
 }
 
 // 照片：瀏覽器先壓到寬 1600px 的 JPEG 再上傳
@@ -311,4 +318,137 @@ export async function getAuditLog(gym: string, opts: { before?: number; actions?
   if (opts.actions?.length) q = q.in("action", opts.actions);
   const rows = must(await q) as unknown as (Omit<AuditEntry, "nickname"> & { profiles: { nickname: string | null } | null })[];
   return rows.map(({ profiles, ...a }) => ({ ...a, nickname: profiles?.nickname ?? null }));
+}
+
+// ---------- 顧客分享影片 ----------
+export const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+export const VIDEO_MAX_SECONDS = 60;
+export const VIDEO_DAILY_LIMIT = 10;
+const VIDEO_TYPES: Record<string, string> = { mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm" };
+
+export type Video = {
+  id: string;
+  route_id: string;
+  user_id: string;
+  path: string;
+  caption: string | null;
+  status: Status | null;
+  duration_s: number | null;
+  created_at: string;
+  nickname: string;
+};
+export type GymVideo = Video & { route_code: string; zone_name: string };
+const VIDEO_COLS = "id,route_id,user_id,path,caption,status,duration_s,created_at,profiles!route_videos_user_id_fkey(nickname)";
+type VideoRow = Omit<Video, "nickname"> & { profiles: { nickname: string | null } | null };
+const toVideo = ({ profiles, ...v }: VideoRow): Video => ({ ...v, nickname: profiles?.nickname ?? "攀岩者" });
+
+export const videoUrl = (path: string) => supabase().storage.from("route-videos").getPublicUrl(path).data.publicUrl;
+
+export async function getVideos(routeId: string): Promise<Video[]> {
+  const rows = must(
+    await supabase().from("route_videos").select(VIDEO_COLS).eq("route_id", routeId).order("created_at", { ascending: false })
+  ) as unknown as VideoRow[];
+  return rows.map(toVideo);
+}
+
+// 讀影片長度（秒）；讀不到回傳 null
+function videoDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    const done = (d: number | null) => {
+      URL.revokeObjectURL(url);
+      resolve(d);
+    };
+    v.preload = "metadata";
+    v.muted = true;
+    v.onloadedmetadata = () => done(Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null);
+    v.onerror = () => done(null);
+    setTimeout(() => done(null), 8000);
+    v.src = url;
+  });
+}
+
+// 上傳前檢查：格式、大小、長度；回傳要用的副檔名、格式與長度
+export async function checkVideo(file: File): Promise<{ ext: string; type: string; duration: number | null }> {
+  const fromName = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const ext = VIDEO_TYPES[fromName] ? fromName : Object.keys(VIDEO_TYPES).find((k) => VIDEO_TYPES[k] === file.type);
+  if (!ext) throw new Error("只能分享 MP4、MOV 或 WebM 影片");
+  if (file.size > VIDEO_MAX_BYTES) throw new Error(`影片 ${Math.ceil(file.size / 1048576)} MB，超過 50 MB，請先剪短再分享`);
+  const duration = await videoDuration(file);
+  if (duration != null && duration > VIDEO_MAX_SECONDS + 0.5) throw new Error(`影片 ${Math.round(duration)} 秒，最長 60 秒，請先剪短再分享`);
+  return { ext, type: VIDEO_TYPES[ext], duration };
+}
+
+export async function uploadVideo(
+  userId: string,
+  gymId: string,
+  routeId: string,
+  file: File,
+  info: { caption: string | null; status: Status | null }
+) {
+  const { ext, type, duration } = await checkVideo(file);
+  const since = new Date(Date.now() - 86400000).toISOString();
+  const recent = await supabase().from("route_videos").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", since);
+  if ((recent.count ?? 0) >= VIDEO_DAILY_LIMIT) throw new Error(`每人 24 小時內最多分享 ${VIDEO_DAILY_LIMIT} 支影片，明天再來`);
+  const path = `${gymId}/${routeId}/${userId}/${crypto.randomUUID()}.${ext}`;
+  const up = await supabase().storage.from("route-videos").upload(path, file, { contentType: type, cacheControl: "31536000" });
+  if (up.error) {
+    const m = up.error.message ?? "";
+    if (m.includes("row-level") || m.includes("Unauthorized")) throw new Error("沒辦法分享：這條路線可能已下架或關閉留言，或今天已分享太多支");
+    if (m.toLowerCase().includes("size") || m.includes("413")) throw new Error("影片超過 50 MB，請先剪短再分享");
+    if (m.toLowerCase().includes("mime")) throw new Error("只能分享 MP4、MOV 或 WebM 影片");
+    throw new Error("影片上傳失敗，請確認網路後再試");
+  }
+  const ins = await supabase().from("route_videos").insert({
+    route_id: routeId,
+    path,
+    caption: info.caption,
+    status: info.status,
+    duration_s: duration == null ? null : Math.min(VIDEO_MAX_SECONDS, Math.round(duration * 10) / 10),
+    size_bytes: file.size,
+  });
+  if (ins.error) {
+    await supabase().storage.from("route-videos").remove([path]);
+    throw new Error(dbError(ins.error));
+  }
+}
+
+// 刪除影片：資料庫先刪資料（本人或員工），再刪檔案
+export async function deleteVideo(id: string) {
+  const path = must(await supabase().rpc("delete_video", { p_video: id })) as string;
+  await removeVideoFiles([path]);
+}
+
+// 刪 Storage 檔案；失敗不擋流程（之後用「清理」找出來）
+export async function removeVideoFiles(paths: string[]) {
+  for (let i = 0; i < paths.length; i += 100) {
+    await supabase().storage.from("route-videos").remove(paths.slice(i, i + 100));
+  }
+}
+async function videoPathsFor(routeIds: string[]): Promise<string[]> {
+  if (!routeIds.length) return [];
+  return must(await supabase().rpc("video_paths_for_routes", { p_routes: routeIds })) as string[];
+}
+
+// ---------- 管理後台：影片 ----------
+export async function getVideoUsage(gym: string): Promise<{ count: number; bytes: number }> {
+  return must(await supabase().rpc("video_usage", { p_gym: gym }));
+}
+export async function getGymVideos(gym: string, limit = 20): Promise<GymVideo[]> {
+  const rows = must(
+    await supabase()
+      .from("route_videos")
+      .select(`${VIDEO_COLS},routes!inner(code,zones!inner(gym_id,name))`)
+      .eq("routes.zones.gym_id", gym)
+      .order("created_at", { ascending: false })
+      .limit(limit)
+  ) as unknown as (VideoRow & { routes: { code: string; zones: { name: string } } })[];
+  return rows.map(({ routes, ...v }) => ({ ...toVideo(v), route_code: routes.code, zone_name: routes.zones.name }));
+}
+// 清理漏刪的影片檔，回傳刪了幾個
+export async function cleanOrphanVideos(gym: string): Promise<number> {
+  const paths = must(await supabase().rpc("orphan_video_paths", { p_gym: gym })) as string[];
+  await removeVideoFiles(paths);
+  return paths.length;
 }

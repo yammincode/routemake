@@ -122,3 +122,13 @@ export function TagPicker({ value, onChange }: { value: string[]; onChange: (tag
     </div>
   );
 }
+
+// 勾選框，例如「影片裡其他人同意入鏡」
+export function Check({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
+  return (
+    <label className="mt-3 flex items-start gap-2.5 text-sub leading-normal">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-[3px] size-[18px] flex-none accent-accent" />
+      <span>{children}</span>
+    </label>
+  );
+}

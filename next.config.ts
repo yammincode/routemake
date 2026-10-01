@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       `img-src 'self' data: blob: ${supabase}`,
+      `media-src 'self' blob: ${supabase}`,
       "font-src 'self'",
       `connect-src 'self' ${supabase}`,
       "worker-src 'self'",

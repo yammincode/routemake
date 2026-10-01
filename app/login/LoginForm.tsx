@@ -112,7 +112,7 @@ export default function LoginForm() {
         <Tip>
           註冊即表示你同意
           <Link href="/privacy" className="text-accent underline">隱私權政策</Link>和
-          <Link href="/rules" className="text-accent underline">留言規範</Link>。
+          <Link href="/rules" className="text-accent underline">留言與影片規範</Link>。
         </Tip>
       )}
     </>

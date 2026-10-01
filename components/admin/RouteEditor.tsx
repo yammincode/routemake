@@ -97,7 +97,7 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
       <TagPicker value={tags} onChange={setTags} />
       <Label htmlFor="rnote">評語（選填，40 字內）</Label>
       <TextField id="rnote" maxLength={40} value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如：最後一手要果斷" />
-      <Toggle checked={cm} onChange={setCm} label="開放這條路線留言" />
+      <Toggle checked={cm} onChange={setCm} label="開放這條路線留言" hint="關閉後也不能分享影片" />
       <Button variant="primary" disabled={busy} onClick={save}>
         {r ? "儲存變更" : "新增路線"}
       </Button>
@@ -115,7 +115,7 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
             )}
           </SheetSection>
           <Button variant="danger" className="mt-4" disabled={busy} onClick={archive}>
-            {confirmArchive ? `確定下架 ${r.code}？再按一次` : "下架這條路線"}
+            {confirmArchive ? `確定下架 ${r.code}？影片會一起刪除，再按一次` : "下架這條路線"}
           </Button>
         </>
       )}

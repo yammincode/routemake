@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-// 說明文件頁（隱私權政策、留言規範）的段落樣式
+// 說明文件頁（隱私權政策、留言與影片規範）的段落樣式
 export function DocSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="mt-6">

@@ -17,7 +17,7 @@ export default function MePage() {
       <p className="mt-4 text-center text-meta text-muted">
         <Link href="/privacy" className="underline">隱私權政策</Link>
         {" · "}
-        <Link href="/rules" className="underline">留言規範</Link>
+        <Link href="/rules" className="underline">留言與影片規範</Link>
       </p>
     </>
   );

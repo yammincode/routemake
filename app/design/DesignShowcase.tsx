@@ -8,12 +8,13 @@ import { Chip, ChipRow } from "@/components/ui/Chip";
 import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
-import { ColorPicker, GradePicker, Label, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
+import { Check, ColorPicker, GradePicker, Label, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
 import { NewRouteCard, NewRouteRow, ResetList, SoonBox, ZoneCard, ZoneList } from "@/components/ui/Gym";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { CalendarHeat, DailyBars, Delta, GradeBars, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
+import { PickedFile, VideoItem, VideoList, VideoPickButton } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
 import { fakeWall } from "@/lib/demo";
 import { FEEL, GRADE_FEEL, HOLD_COLOR_NAMES, type HoldColor, type Status } from "@/lib/design";
@@ -89,6 +90,7 @@ export default function DesignShowcase() {
   const [status, setStatus] = useState<Status | null>("send");
   const [feel, setFeel] = useState<number | null>(2);
   const [gfeel, setGfeel] = useState<number | null>(0);
+  const [consent, setConsent] = useState(false);
   const [pickColor, setPickColor] = useState<HoldColor>("紅");
   const [pickGrade, setPickGrade] = useState(3);
   const [pickTags, setPickTags] = useState<string[]>(["技巧"]);
@@ -355,6 +357,20 @@ export default function DesignShowcase() {
         />
       </Block>
 
+      <Block title="顧客影片">
+        <VideoList>
+          <VideoItem name="小安" ago="2 天前" status="flash" caption="第三手用左腳勾" />
+          <VideoItem name="我" ago="今天" status="project" meta="B 區 B-03" onDelete={() => toast("已刪除影片")} />
+        </VideoList>
+        <VideoPickButton onPick={(f) => toast(`選了 ${f.name}`)}>分享攀爬影片</VideoPickButton>
+        <div className="mt-3">
+          <PickedFile name="IMG_2031.MOV" size={23500000} onClear={() => toast("換一支")} />
+        </div>
+        <Check checked={consent} onChange={setConsent}>
+          影片裡的其他人都同意入鏡，內容符合分享規範
+        </Check>
+      </Block>
+
       <Block title="其他">
         <Empty>這個月還沒有完攀紀錄。</Empty>
         <div className="mt-3">
@@ -401,6 +417,12 @@ export default function DesignShowcase() {
                   <LinkButton>清除紀錄</LinkButton>
                 </>
               )}
+            </SheetSection>
+            <SheetSection title="影片" aside="1 支">
+              <VideoList>
+                <VideoItem name="小安" ago="2 天前" status="send" caption="最後一手要果斷" />
+              </VideoList>
+              <VideoPickButton onPick={(f) => toast(`選了 ${f.name}`)}>分享攀爬影片</VideoPickButton>
             </SheetSection>
             <SheetSection title="留言" aside="2 則">
               <CommentList>

@@ -35,6 +35,8 @@ export function createMock() {
     comments: [],
     audit: [],
     files: {},
+    videos: [], // route_videos
+    vfiles: {}, // route-videos 檔案：path -> { buf, owner, created_at }
     scoring: {
       grade_points: [10, 15, 20, 30, 40, 55, 70, 90, 110, 135, 160],
       style_bonus: { 力量: 10, 指力: 10, 動態: 15, 耐力: 10, 協調: 10, 技巧: 5, 平衡: 5, 腳法: 5, 柔軟: 5 },
@@ -59,6 +61,15 @@ export function createMock() {
   };
   const addAscent = (userId, route, status, climbedOn, extra = {}) =>
     db.ascents.push({ id: uuid(), user_id: userId, route_id: route.id, status, climbed_on: climbedOn, feel: null, grade_feel: null, private_note: null, updated_at: now(), ...extra });
+
+  const addVideo = (userId, route, extra = {}) => {
+    const z = db.zones.find((x) => x.id === route.zone_id);
+    const path = `${z.gym_id}/${route.id}/${userId}/${uuid()}.mp4`;
+    db.vfiles[path] = { buf: Buffer.from("fake"), owner: userId, created_at: now() };
+    const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, created_at: now(), ...extra };
+    db.videos.push(v);
+    return v;
+  };
 
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const session = (email, u) => {
@@ -88,6 +99,18 @@ export function createMock() {
   const isOwner = (uid) => !!prof(uid)?.is_owner;
   const isStaff = (uid, g) => isOwner(uid) || db.staff_roles.some((s) => s.user_id === uid && s.gym_id === g);
   const isMgr = (uid, g) => isOwner(uid) || db.staff_roles.some((s) => s.user_id === uid && s.gym_id === g && s.role === "manager");
+  const gymOfRoute = (id) => zoneOf(db.routes.find((r) => r.id === id).zone_id).gym_id;
+  // 路線下架時刪掉影片資料（資料庫觸發器）
+  const dropVideos = (routeId) => (db.videos = db.videos.filter((v) => v.route_id !== routeId));
+  const canShare = (uid, routeId) => {
+    const r = db.routes.find((x) => x.id === routeId);
+    const g = r && db.gyms.find((x) => x.id === zoneOf(r.zone_id).gym_id);
+    return !!(uid && r && !r.archived_at && r.comments_enabled && g.comments_enabled && prof(uid)?.nickname);
+  };
+  const videoPathOk = (uid, routeId, path) => {
+    const parts = path.split("/");
+    return parts.length === 4 && parts[1] === routeId && parts[2] === uid && db.routes.some((r) => r.id === routeId) && parts[0] === gymOfRoute(routeId);
+  };
   const audit = (uid, gym, action, target, detail) => db.audit.push({ id: ++auditSeq, user_id: uid, gym_id: gym, action, target_id: target, detail, created_at: now() });
 
   // PostgREST 篩選（eq、is、in、gte、lt、or）
@@ -171,7 +194,7 @@ export function createMock() {
       const z = zoneOf(a.p_zone);
       if (!isStaff(uid, z.gym_id)) return J(route, 403, { code: "42501", message: "沒有權限" });
       let n = 0;
-      db.routes.forEach((r) => { if (r.zone_id === z.id && !r.archived_at) { r.archived_at = now(); n++; } });
+      db.routes.forEach((r) => { if (r.zone_id === z.id && !r.archived_at) { r.archived_at = now(); dropVideos(r.id); n++; } });
       z.next_reset_on = null;
       audit(uid, z.gym_id, "zone.archive_all", z.id, { count: n, zone: z.name });
       return J(route, 200, n);
@@ -184,6 +207,28 @@ export function createMock() {
       c.deleted_at = now();
       if (c.user_id !== uid) audit(uid, g, "comment.delete", c.id, { code: r.code, body: c.body, author_nickname: prof(c.user_id)?.nickname });
       return J(route, 200, null);
+    }
+    if (fn === "delete_video") {
+      const v = db.videos.find((x) => x.id === a.p_video);
+      if (!v) return J(route, 404, { code: "P0002", message: "找不到這支影片" });
+      const g = gymOfRoute(v.route_id);
+      if (v.user_id !== uid && !isStaff(uid, g)) return J(route, 403, { code: "42501", message: "沒有權限" });
+      db.videos = db.videos.filter((x) => x !== v);
+      if (v.user_id !== uid) audit(uid, g, "video.delete", v.id, { code: db.routes.find((r) => r.id === v.route_id).code, author_nickname: prof(v.user_id)?.nickname, caption: v.caption });
+      return J(route, 200, v.path);
+    }
+    if (fn === "video_paths_for_routes") {
+      return J(route, 200, db.videos.filter((v) => a.p_routes.includes(v.route_id) && isStaff(uid, gymOfRoute(v.route_id))).map((v) => v.path));
+    }
+    if (fn === "video_usage") {
+      if (!isStaff(uid, a.p_gym)) return J(route, 200, null);
+      const fs = Object.entries(db.vfiles).filter(([k]) => k.startsWith(a.p_gym + "/"));
+      return J(route, 200, { count: fs.length, bytes: fs.reduce((t, [, f]) => t + f.buf.length, 0) });
+    }
+    if (fn === "orphan_video_paths") {
+      if (!isStaff(uid, a.p_gym)) return J(route, 200, []);
+      const hourAgo = new Date(Date.now() - 3600000).toISOString();
+      return J(route, 200, Object.entries(db.vfiles).filter(([k, f]) => k.startsWith(a.p_gym + "/") && f.created_at < hourAgo && !db.videos.some((v) => v.path === k)).map(([k]) => k));
     }
     if (fn === "lookup_user") {
       const p = db.profiles.find((x) => x.username === a.p_username.toLowerCase());
@@ -248,6 +293,26 @@ export function createMock() {
       return J(route, 200, { Key: "zone-photos/" + path });
     }
 
+    if (p.startsWith("/storage/v1/object/public/route-videos/")) {
+      const f = db.vfiles[decodeURIComponent(p.replace("/storage/v1/object/public/route-videos/", ""))];
+      return f ? route.fulfill({ status: 200, headers: { ...cors, "content-type": "video/mp4" }, body: f.buf }) : route.fulfill({ status: 404 });
+    }
+    if (p.startsWith("/storage/v1/object/route-videos/") && m === "POST") {
+      const path = decodeURIComponent(p.replace("/storage/v1/object/route-videos/", ""));
+      const routeId = path.split("/")[1];
+      const dayAgo = new Date(Date.now() - 86400000).toISOString();
+      const recent = Object.values(db.vfiles).filter((f) => f.owner === uid && f.created_at > dayAgo).length;
+      if (!videoPathOk(uid, routeId, path) || !canShare(uid, routeId) || recent >= 10)
+        return J(route, 403, { statusCode: "403", error: "Unauthorized", message: "new row violates row-level security policy" });
+      db.vfiles[path] = { buf: req.postDataBuffer() ?? Buffer.alloc(0), owner: uid, created_at: now() };
+      return J(route, 200, { Key: "route-videos/" + path });
+    }
+    if (p === "/storage/v1/object/route-videos" && m === "DELETE") {
+      const removed = (body?.prefixes ?? []).filter((k) => db.vfiles[k] && (k.split("/")[2] === uid || isStaff(uid, k.split("/")[0])));
+      removed.forEach((k) => delete db.vfiles[k]);
+      return J(route, 200, removed.map((name) => ({ name })));
+    }
+
     if (p.startsWith("/rest/v1/rpc/")) return rpc(route, p.split("/").pop(), body || {}, uid);
 
     const t = p.replace("/rest/v1/", "");
@@ -290,7 +355,10 @@ export function createMock() {
       }
       if (m === "PATCH") {
         filt(db.routes, sp).filter((r) => isStaff(uid, zoneOf(r.zone_id).gym_id)).forEach((r) => {
-          if (!r.archived_at && body.archived_at) audit(uid, zoneOf(r.zone_id).gym_id, "route.archive", r.id, { code: r.code, zone: zoneOf(r.zone_id).name, grade: r.grade, color: r.hold_color });
+          if (!r.archived_at && body.archived_at) {
+            audit(uid, zoneOf(r.zone_id).gym_id, "route.archive", r.id, { code: r.code, zone: zoneOf(r.zone_id).name, grade: r.grade, color: r.hold_color });
+            dropVideos(r.id);
+          }
           Object.assign(r, body);
         });
         return empty(route);
@@ -327,6 +395,29 @@ export function createMock() {
         return empty(route, 201);
       }
     }
+    if (t === "route_videos") {
+      if (m === "GET" || m === "HEAD") {
+        const q = new URLSearchParams(sp);
+        const gym = (q.get("routes.zones.gym_id") || "").replace(/^eq\./, "");
+        q.delete("routes.zones.gym_id");
+        let rows = db.videos.map((v) => {
+          const r = db.routes.find((x) => x.id === v.route_id);
+          const z = zoneOf(r.zone_id);
+          return { ...v, profiles: { nickname: prof(v.user_id)?.nickname }, routes: { code: r.code, zones: { gym_id: z.gym_id, name: z.name } } };
+        });
+        if (gym) rows = rows.filter((v) => v.routes.zones.gym_id === gym);
+        rows.sort((x, y) => y.created_at.localeCompare(x.created_at));
+        rows = filt(rows, q);
+        if (m === "HEAD") return route.fulfill({ status: 200, headers: { ...cors, "content-range": `*/${rows.length}` } });
+        return out(rows);
+      }
+      if (m === "POST") {
+        if (!canShare(uid, body.route_id) || !videoPathOk(uid, body.route_id, body.path))
+          return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "route_videos"' });
+        db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, ...body, user_id: uid, created_at: now() });
+        return empty(route, 201);
+      }
+    }
     if (t === "profiles" && m === "PATCH") { Object.assign(prof(uid), { nickname: body.nickname }); return empty(route); }
     if (t === "staff_roles" && m === "GET") return out(filt(db.staff_roles.filter((s) => s.user_id === uid || isMgr(uid, s.gym_id)), sp).map((s) => ({ ...s, profiles: { nickname: prof(s.user_id)?.nickname } })));
     if (t === "scoring_rules") {
@@ -344,5 +435,5 @@ export function createMock() {
     return J(route, 404, { message: `mock: 沒處理 ${m} ${p}` });
   }
 
-  return { db, state, addUser, addRoute, addAscent, handler };
+  return { db, state, addUser, addRoute, addAscent, addVideo, handler };
 }

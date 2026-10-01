@@ -34,7 +34,8 @@ create table if not exists storage.objects (
   id uuid primary key default gen_random_uuid(),
   bucket_id text references storage.buckets (id),
   name text not null,
-  owner uuid,
+  owner uuid default auth.uid(),       -- Supabase Storage 會填入上傳者
+  metadata jsonb,                      -- Supabase Storage 會填入 size、mimetype
   created_at timestamptz default now()
 );
 alter table storage.objects enable row level security;

@@ -28,8 +28,11 @@ self.addEventListener("install", (event) => {
 // Supabase 的資料（登入、紀錄、心得、留言）一律不存進 Service Worker 快取：
 // 快取不會隨登出清掉，共用手機時可能被下一個人看到。離線用的資料改由 App 存在手機並在登出時清除。
 // 公開照片（storage/v1/object/public）不含個人資料，仍照一般圖片快取
+// 顧客影片檔案很大、會被刪除，也一律不存進快取（不佔手機空間，刪掉後也不會留在手機上）
 const supabaseData = {
-  matcher: ({ url }: { url: URL }) => url.hostname.endsWith(".supabase.co") && !url.pathname.startsWith("/storage/v1/object/public/"),
+  matcher: ({ url }: { url: URL }) =>
+    url.hostname.endsWith(".supabase.co") &&
+    (!url.pathname.startsWith("/storage/v1/object/public/") || url.pathname.startsWith("/storage/v1/object/public/route-videos/")),
   handler: new NetworkOnly(),
 };
 

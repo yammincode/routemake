@@ -7,6 +7,7 @@ import AuditPanel from "@/components/admin/AuditPanel";
 import ScoringPanel from "@/components/admin/ScoringPanel";
 import ShareQr from "@/components/admin/ShareQr";
 import StaffPanel from "@/components/admin/StaffPanel";
+import VideoPanel from "@/components/admin/VideoPanel";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Empty, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
@@ -320,6 +321,7 @@ export default function AdminView() {
         </>
       )}
 
+      {gym && <VideoPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <AuditPanel gymId={gymId} gymName={gym.name} />}
       {access.is_owner && <ScoringPanel />}
@@ -347,7 +349,7 @@ export default function AdminView() {
         {confirm?.kind === "reset" && zone && (
           <>
             <SheetTitle>{zone.name} 整區換線</SheetTitle>
-            <SheetSub>{routes.length} 條路線會下架，顧客的紀錄和心得都會保留。下架後記得上傳新照片、設定下次換線日。</SheetSub>
+            <SheetSub>{routes.length} 條路線會下架，顧客的紀錄和心得都會保留，顧客分享的影片會刪除。下架後記得上傳新照片、設定下次換線日。</SheetSub>
             <Button variant="danger" disabled={busy} onClick={resetZone}>
               確認下架
             </Button>

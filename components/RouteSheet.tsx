@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import RouteVideos from "@/components/RouteVideos";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import { Label, Segmented, TextArea, TextField } from "@/components/ui/Form";
@@ -18,7 +19,7 @@ import { isNetworkError, queueAscent } from "@/lib/offline";
 import { ascentPoints, routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
-// 路線卡片（底部彈出）：路線資訊、我的紀錄與心得、公開留言
+// 路線卡片（底部彈出）：路線資訊、我的紀錄與心得、顧客影片、公開留言
 export default function RouteSheet({
   route,
   zoneName,
@@ -227,6 +228,8 @@ function RouteBody({
           </>
         )}
       </SheetSection>
+
+      <RouteVideos route={r} gymId={gymId} open={commentsOpen} staff={staff} myStatus={ascent?.status ?? null} onLogin={toLogin} />
 
       <SheetSection title="留言" aside={commentsOpen && comments ? `${comments.length} 則` : undefined}>
         {!commentsOpen ? (

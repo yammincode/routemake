@@ -91,15 +91,16 @@
 | `Button.tsx` | `Button`（default／primary／danger）、`LinkButton` |
 | `Chip.tsx` | `ChipRow`、`Chip` |
 | `Sheet.tsx` | `Sheet`、`SheetTitle`、`SheetSub`、`SheetSection` |
-| `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`、`Segmented`、`ColorPicker`、`GradePicker`、`TagPicker` |
+| `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`、`Segmented`、`ColorPicker`、`GradePicker`、`TagPicker`、`Check` |
 | `Route.tsx` | `Points`、`Grade`、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`、`RouteRow`、`RouteList`、`CommentCount`、`SetterNote` |
 | `Wall.tsx` | `WallPhoto`、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`、`ZoneList`、`ProgressBar`、`ResetList`、`NewRouteRow`、`NewRouteCard`、`GymRow`、`SoonBox`、`dueText` |
 | `FloorPlan.tsx` | `FloorPlan` |
 | `Comments.tsx` | `CommentItem`、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
+| `Video.tsx` | `VideoItem`、`VideoList`、`VideoPickButton`、`PickedFile`（顧客分享影片） |
 | `Stats.tsx` | `DailyBars`、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
 | `Toast.tsx` | `ToastProvider`、`useToast` |
-| `Icon.tsx` | `Icon`（flash、send、project、chat、lock、down） |
+| `Icon.tsx` | `Icon`（flash、send、project、chat、lock、down、video） |
 
 頁面層級：`components/Header.tsx`（Logo＋場館切換）、`components/TabBar.tsx`（底部三個分頁）。
