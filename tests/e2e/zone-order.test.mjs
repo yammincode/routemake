@@ -1,5 +1,6 @@
 // 店長拖曳整理區域順序；定線長看不到；日期框不會蓋到上傳照片按鈕
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { after, before, test } from "node:test";
 import { BASE, createMock, launch, login, phone } from "./helpers.mjs";
 
@@ -8,6 +9,29 @@ before(async () => (browser = await launch()));
 after(async () => browser?.close());
 
 const order = (mock) => mock.db.zones.filter((z) => z.gym_id === "mingde").sort((a, b) => a.sort - b.sort).map((z) => z.code).join("");
+
+test("後台點平面圖切換區域；圖上沒有的區域用按鈕", async () => {
+  const mock = createMock();
+  mock.addUser("boss", "password1", { nickname: "老闆", is_owner: true });
+  mock.db.zones.push({ id: crypto.randomUUID(), gym_id: "mingde", code: "W2", name: "比賽牆02", sort: 6, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0 });
+  mock.addRoute(mock.db.zones.find((z) => z.code === "B"), 3, "紅");
+  const B = await phone(browser, mock);
+  const b = B.page;
+  await login(b, "boss", "password1", "/admin");
+  await b.waitForTimeout(1000);
+  assert.equal(await b.inputValue("#zname"), "A 區", "預設第一區");
+  assert.equal(await b.getAttribute('svg[role=img] g[aria-label^="A 區"]', "aria-pressed"), "true");
+  assert.ok((await b.getAttribute('svg[role=img] g[aria-label^="B 區"]', "aria-label")).includes("牆上 1 條"), "平面圖顯示路線數");
+  await b.locator('svg[role=img] g[aria-label^="B 區"]').click();
+  await b.waitForTimeout(500);
+  assert.equal(await b.inputValue("#zname"), "B 區", "點平面圖切換區域");
+  assert.equal(await b.locator("main ul li").count(), 1, "顯示 B 區的路線");
+  assert.equal(await b.locator('main button:text-is("A 區")').count(), 0, "圖上有的區域不再重複放按鈕");
+  await b.click('main button:text-is("比賽牆02")');
+  await b.waitForTimeout(400);
+  assert.equal(await b.inputValue("#zname"), "比賽牆02", "圖上沒有的區域用按鈕選");
+  assert.deepEqual(B.errors, []);
+});
 
 test("店長拖曳和按鈕調整區域順序，顧客首頁跟著變", async () => {
   const mock = createMock();
@@ -47,8 +71,10 @@ test("店長拖曳和按鈕調整區域順序，顧客首頁跟著變", async ()
   assert.equal(order(mock), "DABWC");
   assert.ok((await m.locator("[role=status]").last().textContent()).includes("已更新區域順序"));
   assert.ok(mock.db.audit.some((a) => a.action === "zone.reorder" && a.detail.zones[0] === "D 區"), "寫操作紀錄");
-  const chips = await m.locator("main div.no-scrollbar", { hasText: "整理順序" }).locator("button").allTextContents();
-  assert.deepEqual(chips.slice(0, 5), ["D 區", "A 區", "B 區", "比賽牆", "C 區"], "後台區域按鈕照新順序");
+  await m.click('main button:text-is("整理順序")');
+  await m.waitForTimeout(300);
+  assert.deepEqual(await labels(), ["D 區D", "A 區A", "B 區B", "比賽牆W", "C 區C"], "再打開是新順序");
+  await m.click('[role=dialog] >> text=取消');
 
   // 定線長看不到「整理順序」
   const S = await phone(browser, mock);

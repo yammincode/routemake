@@ -6,7 +6,22 @@ import { pressKeys } from "./Gym";
 export type PlanZone = { code: string; name: string; done: number; total: number; resetDays: number | null };
 
 // 館內平面圖（原型 planSVG）：依完成度上色，7 天內換線用紅色虛線框
-export default function FloorPlan({ shape, gymName, zones, onSelect }: { shape: FloorPlanShape; gymName: string; zones: PlanZone[]; onSelect: (code: string) => void }) {
+// admin：管理後台用，顯示每區路線數，selected 的區域加粗框（目前編輯中）
+export default function FloorPlan({
+  shape,
+  gymName,
+  zones,
+  onSelect,
+  admin = false,
+  selected,
+}: {
+  shape: FloorPlanShape;
+  gymName: string;
+  zones: PlanZone[];
+  onSelect: (code: string) => void;
+  admin?: boolean;
+  selected?: string;
+}) {
   return (
     <div className="mb-2 rounded-plan bg-surface px-2 pt-2.5 pb-1.5 shadow-card">
       <svg viewBox={shape.viewBox} role="img" aria-label={`${gymName}平面圖`} className="block h-auto w-full">
@@ -24,14 +39,22 @@ export default function FloorPlan({ shape, gymName, zones, onSelect }: { shape: 
           if (!P) return null;
           const p = z.total ? z.done / z.total : 0;
           const soon = z.resetDays != null && z.resetDays >= 0 && z.resetDays <= 7;
-          const fill = `color-mix(in srgb,var(--accent) ${Math.round(18 + p * 72)}%,var(--blush))`;
+          const on = selected === z.code;
+          const fill = admin
+            ? `color-mix(in srgb,var(--accent) ${on ? 55 : 14}%,var(--blush))`
+            : `color-mix(in srgb,var(--accent) ${Math.round(18 + p * 72)}%,var(--blush))`;
           const go = () => onSelect(z.code);
           return (
             <g
               key={z.code}
               tabIndex={0}
               role="button"
-              aria-label={`${z.name}，完成 ${z.done} / ${z.total}${soon ? "，" + (z.resetDays === 0 ? "今天換線" : `${z.resetDays} 天後換線`) : ""}`}
+              aria-label={
+                admin
+                  ? `${z.name}，牆上 ${z.total} 條`
+                  : `${z.name}，完成 ${z.done} / ${z.total}${soon ? "，" + (z.resetDays === 0 ? "今天換線" : `${z.resetDays} 天後換線`) : ""}`
+              }
+              aria-pressed={admin ? on : undefined}
               onClick={go}
               onKeyDown={pressKeys(go)}
               className="group cursor-pointer focus:outline-none"
@@ -41,8 +64,8 @@ export default function FloorPlan({ shape, gymName, zones, onSelect }: { shape: 
                   key={i}
                   points={pt}
                   fill={fill}
-                  stroke={soon ? "var(--warn)" : "var(--surface)"}
-                  strokeWidth={soon ? 4 : 2}
+                  stroke={on ? "var(--ink)" : soon ? "var(--warn)" : "var(--surface)"}
+                  strokeWidth={on ? 6 : soon ? 4 : 2}
                   strokeDasharray={soon ? "10 7" : undefined}
                   className="group-hover:[stroke-width:4] group-hover:[stroke:var(--ink)] group-focus:[stroke-width:4] group-focus:[stroke:var(--ink)]"
                 />
@@ -51,7 +74,7 @@ export default function FloorPlan({ shape, gymName, zones, onSelect }: { shape: 
                 {z.name.replace(" 區", "")}
               </text>
               <text x={P.lx} y={P.ly + 36} fontSize={32} textAnchor="middle" className="fill-ink font-num font-bold">
-                {z.done}/{z.total}
+                {admin ? `${z.total} 條` : `${z.done}/${z.total}`}
               </text>
               {soon && (
                 <text x={P.lx} y={P.ly + 68} fontSize={24} textAnchor="middle" className="fill-warn font-bold">
@@ -63,9 +86,15 @@ export default function FloorPlan({ shape, gymName, zones, onSelect }: { shape: 
         })}
       </svg>
       <div className="flex items-center justify-between px-2 pt-0.5 pb-1 text-tiny text-muted">
-        <span className="inline-flex items-center gap-[5px]">
-          完成度 少<i className="inline-block h-2 w-[22px] rounded bg-linear-to-r from-blush to-accent" />多
-        </span>
+        {admin ? (
+          <span className="inline-flex items-center gap-[5px]">
+            <i className="inline-block h-2.5 w-3.5 rounded-sm border-2 border-ink bg-blush" />點區域切換，粗框是目前區域
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-[5px]">
+            完成度 少<i className="inline-block h-2 w-[22px] rounded bg-linear-to-r from-blush to-accent" />多
+          </span>
+        )}
         <span className="inline-flex items-center gap-[5px]">
           <b className="inline-block h-0 w-3.5 border-t-2 border-dashed border-warn" />7 天內換線
         </span>

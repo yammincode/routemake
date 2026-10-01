@@ -11,6 +11,7 @@ import VideoPanel from "@/components/admin/VideoPanel";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Empty, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
+import FloorPlan from "@/components/ui/FloorPlan";
 import { SortList } from "@/components/ui/SortList";
 import { Label, TextField, Toggle } from "@/components/ui/Form";
 import { CommentCount, Points, RouteList, RouteRow, Tags } from "@/components/ui/Route";
@@ -25,6 +26,7 @@ import {
   getActiveRoutes,
   getCommentCounts,
   getGyms,
+  getZoneProgress,
   getZones,
   photoUrl,
   reorderZones,
@@ -35,7 +37,8 @@ import {
   type Route,
   type Zone,
 } from "@/lib/data";
-import { ago } from "@/lib/date";
+import { ago, daysUntil } from "@/lib/date";
+import { MINGDE_PLAN } from "@/lib/floorplan";
 import { LIVE_GYM } from "@/lib/gyms";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
@@ -53,6 +56,7 @@ export default function AdminView() {
   const [zoneId, setZoneId] = useState<string | null>(null);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [zoneCounts, setZoneCounts] = useState<Record<string, number>>({});
   const [target, setTarget] = useState<EditTarget>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [busy, setBusy] = useState(false);
@@ -74,8 +78,9 @@ export default function AdminView() {
   const loadZones = useCallback(async () => {
     if (!gymId) return;
     try {
-      const zs = await getZones(gymId);
+      const [zs, progress] = await Promise.all([getZones(gymId), getZoneProgress(gymId)]);
       setZones(zs);
+      setZoneCounts(Object.fromEntries(progress.map((p) => [p.zone_id, p.route_count])));
       setZoneId((cur) => (cur && zs.some((z) => z.id === cur) ? cur : (zs[0]?.id ?? null)));
     } catch (e) {
       toast((e as Error).message);
@@ -87,6 +92,7 @@ export default function AdminView() {
     try {
       const rs = await getActiveRoutes(zoneId);
       setRoutes(rs);
+      setZoneCounts((c) => ({ ...c, [zoneId]: rs.length }));
       setCounts(await getCommentCounts(rs.map((r) => r.id)));
     } catch (e) {
       toast((e as Error).message);
@@ -104,6 +110,9 @@ export default function AdminView() {
   const gym = gyms.find((g) => g.id === gymId);
   const zone = zones?.find((z) => z.id === zoneId) ?? null;
   const manager = isManagerOf(access, gymId);
+  // 有平面圖的館：點圖選區域；圖上沒畫到的區域（例如新增的）放在下面的按鈕
+  const plan = gymId === LIVE_GYM.id ? MINGDE_PLAN : null;
+  const offPlan = (zones ?? []).filter((z) => !plan?.zones[z.code]);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -208,23 +217,39 @@ export default function AdminView() {
         )}
       </SetBox>
 
-      <ChipRow>
-        {(zones ?? []).map((z) => (
-          <Chip key={z.id} pressed={z.id === zoneId} onClick={() => setZoneId(z.id)}>
-            {z.name}
-          </Chip>
-        ))}
-        {manager && (
-          <Chip pressed={false} onClick={() => setConfirm({ kind: "zone" })}>
-            ＋ 新增區域
-          </Chip>
-        )}
-        {manager && zones && zones.length > 1 && (
-          <Chip pressed={false} onClick={() => setConfirm({ kind: "order", ids: zones.map((z) => z.id) })}>
-            整理順序
-          </Chip>
-        )}
-      </ChipRow>
+      {plan && zones && zones.length > 0 && (
+        <FloorPlan
+          admin
+          shape={plan}
+          gymName={gym?.name ?? ""}
+          selected={zone?.code}
+          zones={zones.map((z) => ({ code: z.code, name: z.name, done: 0, total: zoneCounts[z.id] ?? 0, resetDays: daysUntil(z.next_reset_on) }))}
+          onSelect={(code) => {
+            const z = zones.find((x) => x.code === code);
+            if (z) setZoneId(z.id);
+          }}
+        />
+      )}
+
+      {(offPlan.length > 0 || manager) && (
+        <ChipRow>
+          {offPlan.map((z) => (
+            <Chip key={z.id} pressed={z.id === zoneId} onClick={() => setZoneId(z.id)}>
+              {z.name}
+            </Chip>
+          ))}
+          {manager && (
+            <Chip pressed={false} onClick={() => setConfirm({ kind: "zone" })}>
+              ＋ 新增區域
+            </Chip>
+          )}
+          {manager && zones && zones.length > 1 && (
+            <Chip pressed={false} onClick={() => setConfirm({ kind: "order", ids: zones.map((z) => z.id) })}>
+              整理順序
+            </Chip>
+          )}
+        </ChipRow>
+      )}
 
       {!zones ? (
         <Empty>讀取中…</Empty>

@@ -194,6 +194,8 @@ export default function DesignShowcase() {
 
       <Block title="平面圖與區域">
         <FloorPlan shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={ZONES} onSelect={(c) => toast(`點了 ${c} 區`)} />
+        <p className="mt-3 mb-1.5 text-meta text-muted">管理後台（admin）：顯示路線數，粗框是目前編輯的區域</p>
+        <FloorPlan admin selected="B" shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={ZONES} onSelect={(c) => toast(`切換到 ${c} 區`)} />
         <ZoneList>
           {ZONES.slice(0, 3).map((z) => (
             <ZoneCard key={z.code} photo={fakeWall(z.seed).uri} name={z.name} done={z.done} total={z.total} resetDays={z.resetDays} />
