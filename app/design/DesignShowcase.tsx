@@ -7,7 +7,7 @@ import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/C
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { SortList } from "@/components/ui/SortList";
 import { Tabs } from "@/components/ui/Tabs";
-import { HoldLegend, HoldMarks, HoldTools, SprayRow } from "@/components/ui/Spray";
+import { HoldLegend, HoldMarks, HoldTools, RouteThumb, SprayRow } from "@/components/ui/Spray";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
@@ -414,7 +414,16 @@ export default function DesignShowcase() {
         </div>
         <HoldLegend />
         <ul className="m-0 grid list-none gap-2.5 p-0">
-          <SprayRow grade={4} name="下雨天的指力" meta="小安 出的・3 天前" sends={12} likes={8} done onClick={() => toast("打開路線")} />
+          <SprayRow
+            grade={4}
+            name="下雨天的指力"
+            meta="小安 出的・3 天前"
+            sends={12}
+            likes={8}
+            done
+            thumb={<RouteThumb src={wall.uri} holds={[{ x: 20, y: 82, t: "s" }, { x: 32, y: 60, t: "h" }, { x: 46, y: 42, t: "h" }, { x: 64, y: 16, t: "t" }]} />}
+            onClick={() => toast("打開路線")}
+          />
           <SprayRow grade={1} name="晚餐前的熱身" meta="阿明 出的・今天" sends={0} likes={1} onClick={() => toast("打開路線")} />
         </ul>
       </Block>

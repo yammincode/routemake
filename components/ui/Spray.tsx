@@ -15,8 +15,8 @@ export const HOLD_SIZES = [
 ] as const;
 const look = (t: Hold["t"]) => HOLD_TYPES.find((x) => x.t === t)!;
 
-// 照片上的圈圈（放在 WallPhoto 裡，跟著照片放大縮小）；onTap 時圈圈可以點（編輯時用來刪除）
-export function HoldMarks({ holds, onTap }: { holds: Hold[]; onTap?: (i: number) => void }) {
+// 照片上的圈圈（放在 WallPhoto 裡，跟著照片放大縮小）；onTap 時圈圈可以點（編輯時用來刪除）；mini：縮圖用（細框、不顯示 S／T 字）
+export function HoldMarks({ holds, onTap, mini = false }: { holds: Hold[]; onTap?: (i: number) => void; mini?: boolean }) {
   return (
     <>
       {holds.map((h, i) => {
@@ -28,9 +28,10 @@ export function HoldMarks({ holds, onTap }: { holds: Hold[]; onTap?: (i: number)
           width: `${d}%`,
           borderColor: k.color,
           transform: "translate(-50%, -50%)",
-          boxShadow: "0 0 0 1.5px rgba(255,255,255,.85), inset 0 0 0 1.5px rgba(255,255,255,.85)",
+          boxShadow: mini ? "0 0 0 1px rgba(255,255,255,.85)" : "0 0 0 1.5px rgba(255,255,255,.85), inset 0 0 0 1.5px rgba(255,255,255,.85)",
+          borderWidth: mini ? 2 : undefined,
         };
-        const label = k.short && (
+        const label = !mini && k.short && (
           <span
             className="absolute -top-1 -right-1 grid size-[18px] place-items-center rounded-full font-num text-[11px] font-bold text-white"
             style={{ background: k.color, transform: "scale(var(--inv, 1))" }}
@@ -116,7 +117,33 @@ export function HoldTools({
   );
 }
 
-// Spray Wall 路線列（列表用）：難度、名稱、出題者、完攀人數、讚數
+// 路線縮圖：公版照片放大到這條路線的範圍（所有圈圈的外框），顯示圈圈；ratio＝照片高／寬
+export function RouteThumb({ src, holds, ratio = 0.75, size = 56 }: { src: string; holds: Hold[]; ratio?: number; size?: number }) {
+  const xs = holds.map((h) => h.x);
+  const ys = holds.map((h) => h.y);
+  const pad = 6;
+  const bw = Math.max(...xs) - Math.min(...xs) + pad * 2;
+  const bh = (Math.max(...ys) - Math.min(...ys) + pad * 2) * ratio;
+  // 放大倍數：讓路線範圍剛好塞進正方形（最少 1 倍、最多 4 倍）
+  const s = Math.min(4, Math.max(1, 100 / Math.max(bw, bh, 1)));
+  const w = size * s;
+  const h = w * ratio;
+  const cx = ((Math.min(...xs) + Math.max(...xs)) / 2 / 100) * w;
+  const cy = ((Math.min(...ys) + Math.max(...ys)) / 2 / 100) * h;
+  const left = Math.min(0, Math.max(size - w, size / 2 - cx));
+  const top = Math.min(0, Math.max(size - h, size / 2 - cy));
+  return (
+    <span aria-hidden className="relative block flex-none overflow-hidden rounded-cell bg-line" style={{ width: size, height: size }}>
+      <span className="absolute" style={{ width: w, height: h, left, top }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" loading="lazy" draggable={false} className="block size-full select-none" />
+        <HoldMarks holds={holds} mini />
+      </span>
+    </span>
+  );
+}
+
+// Spray Wall 路線列（列表用）：難度、縮圖、名稱、出題者、完攀人數、讚數
 export function SprayRow({
   grade,
   name,
@@ -124,8 +151,10 @@ export function SprayRow({
   sends,
   likes,
   done,
+  thumb,
   onClick,
 }: {
+  thumb?: ReactNode;
   grade: number;
   name: string;
   meta: ReactNode;
@@ -140,7 +169,8 @@ export function SprayRow({
         onClick={onClick}
         className={`flex w-full items-center gap-3 rounded-card bg-surface p-3 text-left shadow-card ${done ? "border-l-4 border-accent" : ""}`}
       >
-        <Grade grade={grade} />
+        <Grade grade={grade} className="text-num-row w-[46px]" />
+        {thumb}
         <span className="min-w-0 flex-1">
           <b className="block truncate text-sub">{name}</b>
           <span className="block truncate text-meta text-muted">{meta}</span>
