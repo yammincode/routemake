@@ -7,6 +7,7 @@
 
 create schema if not exists supabase_migrations;
 create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text);
+alter table supabase_migrations.schema_migrations enable row level security;
 
 -- >>>>>>>>>> 20261006000011_route_videos
 
@@ -83,7 +84,7 @@ declare
   v public.route_videos;
   v_gym text;
 begin
-  select * into v from public.route_videos where id = p_video;
+  v := (select x from public.route_videos x where x.id = p_video);
   if v.id is null then
     raise exception '找不到這支影片' using errcode = 'P0002';
   end if;

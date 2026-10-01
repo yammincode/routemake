@@ -7,6 +7,7 @@
 
 create schema if not exists supabase_migrations;
 create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text);
+alter table supabase_migrations.schema_migrations enable row level security;
 
 -- >>>>>>>>>> 20261005000010_security_audit
 
@@ -91,12 +92,11 @@ begin
   end if;
 
   perform set_config('app.bulk_archive', 'on', true);
-  with done as (
-    update public.routes set archived_at = now()
-     where zone_id = p_zone and archived_at is null
-    returning code
-  )
-  select coalesce(array_agg(code order by code), '{}') into v_codes from done;
+  -- 不用 select … into：Supabase SQL Editor 會把它當成建新表，自動插入 enable RLS 而把函式弄壞
+  v_codes := (select coalesce(array_agg(code order by code), '{}') from public.routes
+               where zone_id = p_zone and archived_at is null);
+  update public.routes set archived_at = now()
+   where zone_id = p_zone and archived_at is null;
   perform set_config('app.bulk_archive', 'off', true);
 
   perform set_config('app.internal', 'on', true);
@@ -116,7 +116,7 @@ declare
   c     public.comments;
   v_gym text;
 begin
-  select * into c from public.comments where id = p_comment and deleted_at is null;
+  c := (select x from public.comments x where x.id = p_comment and x.deleted_at is null);
   if c.id is null then
     raise exception '找不到這則留言' using errcode = 'P0002';
   end if;
@@ -150,7 +150,9 @@ begin
     raise exception '沒有權限' using errcode = '42501';
   end if;
 
-  select id, nickname, username into v_user, v_nick, v_name from public.profiles where username = lower(btrim(p_username));
+  v_user := (select id from public.profiles where username = lower(btrim(p_username)));
+  v_nick := (select nickname from public.profiles where id = v_user);
+  v_name := (select username from public.profiles where id = v_user);
   if v_user is null then
     raise exception '找不到這個帳號，請對方先註冊' using errcode = 'P0002';
   end if;
@@ -171,7 +173,7 @@ language plpgsql security definer set search_path = '' as $$
 declare
   v_role text;
 begin
-  select role into v_role from public.staff_roles where user_id = p_user and gym_id = p_gym;
+  v_role := (select role from public.staff_roles where user_id = p_user and gym_id = p_gym);
   if v_role is null then return; end if;
   if not (public.is_owner() or (v_role = 'setter' and public.is_manager(p_gym))) then
     raise exception '沒有權限' using errcode = '42501';

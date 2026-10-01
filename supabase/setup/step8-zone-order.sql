@@ -7,6 +7,7 @@
 
 create schema if not exists supabase_migrations;
 create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text);
+alter table supabase_migrations.schema_migrations enable row level security;
 
 -- >>>>>>>>>> 20261007000012_zone_order
 
@@ -23,7 +24,7 @@ begin
   if not public.is_manager(p_gym) then
     raise exception '只有店長可以調整區域順序' using errcode = '42501';
   end if;
-  select coalesce(array_agg(id order by id), '{}') into v_all from public.zones where gym_id = p_gym;
+  v_all := (select coalesce(array_agg(id order by id), '{}') from public.zones where gym_id = p_gym);
   if p_zones is null
      or cardinality(p_zones) <> cardinality(v_all)
      or (select array_agg(distinct z order by z) from unnest(p_zones) z) is distinct from v_all then

@@ -14,6 +14,7 @@ out=$1; shift
   echo
   echo "create schema if not exists supabase_migrations;"
   echo "create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text);"
+  echo "alter table supabase_migrations.schema_migrations enable row level security;"
   for f in "$@"; do
     base=$(basename "$f" .sql)
     echo
