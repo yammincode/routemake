@@ -86,15 +86,20 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
   await c.waitForTimeout(400);
   assert.match((await c.locator("[role=dialog] p", { hasText: "Flash" }).first().textContent()).replace(/\s+/g, ""), /完攀50分・Flash60分/);
   await c.click('[role=dialog] button:has-text("Flash")');
-  await c.fill("#lnote", "終於送了！");
-  await c.click("[role=dialog] >> text=儲存紀錄");
   await c.waitForTimeout(500);
-  assert.ok((await c.locator("[role=status]").last().textContent()).includes("+60 分"));
+  assert.ok((await c.locator("[role=status]").last().textContent()).includes("+60 分"), "點一下就記錄");
   assert.equal(mock.db.ascents[0].status, "flash");
+  await c.click("[role=dialog] >> text=＋ 加上心得與感受");
+  await c.fill("#lnote", "終於送了！");
+  await c.click('[role=dialog] button:text-is("儲存")');
+  await c.waitForTimeout(500);
   assert.equal(mock.db.ascents[0].private_note, "終於送了！");
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(300);
 
   await c.locator("main ul li button", { hasText: "A-01" }).click();
   await c.waitForTimeout(500);
+  await c.click('[role=dialog] [role=tab]:has-text("留言")');
   await c.fill('[role=dialog] textarea[placeholder^="公開留言"]', "腳踩對就很簡單");
   await c.click("[role=dialog] >> text=送出");
   await c.waitForTimeout(500);

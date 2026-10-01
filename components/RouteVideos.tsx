@@ -5,14 +5,14 @@ import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Check, Label, TextField } from "@/components/ui/Form";
-import { SheetSection } from "@/components/ui/Sheet";
+import { ClosedNotice } from "@/components/ui/Comments";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoPickButton, VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { checkVideo, deleteVideo, getVideos, uploadVideo, videoUrl, type Route, type Video } from "@/lib/data";
 import { ago } from "@/lib/date";
 import type { Status } from "@/lib/design";
 
-// 路線卡片的「影片」區塊：看大家分享的攀爬影片、上傳自己的
+// 路線卡片的「影片」分頁：看大家分享的攀爬影片、上傳自己的；onCount 回報影片數（分頁標籤用）
 // 規則跟留言一樣：路線在牆上、留言開放才能分享；路線下架時影片會一起刪除
 export default function RouteVideos({
   route: r,
@@ -21,6 +21,7 @@ export default function RouteVideos({
   staff,
   myStatus,
   onLogin,
+  onCount,
 }: {
   route: Route;
   gymId: string;
@@ -28,6 +29,7 @@ export default function RouteVideos({
   staff: boolean;
   myStatus: Status | null;
   onLogin: () => void;
+  onCount?: (n: number) => void;
 }) {
   const { session } = useAuth();
   const toast = useToast();
@@ -43,6 +45,9 @@ export default function RouteVideos({
       .then(setVideos)
       .catch(() => setVideos([]));
   }, [r.id]);
+  useEffect(() => {
+    if (videos) onCount?.(videos.length);
+  }, [videos, onCount]);
 
   const canShare = open && !r.archived_at;
   const cards: VideoCard[] = (videos ?? []).map((v) => ({
@@ -53,7 +58,7 @@ export default function RouteVideos({
     caption: v.caption,
     status: v.status,
   }));
-  if (!canShare && !videos?.length) return null;
+  if (!canShare && videos && !videos.length) return <ClosedNotice>這條路線目前不開放分享影片</ClosedNotice>;
 
   const pick = async (f: File) => {
     try {
@@ -96,7 +101,7 @@ export default function RouteVideos({
   };
 
   return (
-    <SheetSection title="影片" aside={videos?.length ? `${videos.length} 支` : undefined}>
+    <>
       {videos && videos.length > 0 ? (
         <>
           <VideoStrip items={cards} onOpen={setPlaying} />
@@ -141,6 +146,6 @@ export default function RouteVideos({
             {!busy && <LinkButton onClick={reset}>取消</LinkButton>}
           </>
         ))}
-    </SheetSection>
+    </>
   );
 }

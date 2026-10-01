@@ -43,7 +43,6 @@ test("離線：看路線、記錄排隊、連線後送出；快取裡沒有 Supa
   assert.match(await page.locator("[role=status]").first().textContent(), /沒有網路/);
   await page.click('main button[aria-label^="V4"]');
   await page.click('[role=dialog] button:has-text("Flash")');
-  await page.click("[role=dialog] >> text=儲存紀錄");
   await page.waitForTimeout(500);
   assert.equal(mock.db.ascents.length, 0, "離線時還沒送出");
   assert.match((await page.locator("[role=status]").allTextContents()).join(" "), /1 筆紀錄會在連上網路後送出/);

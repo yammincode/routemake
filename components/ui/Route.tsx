@@ -52,7 +52,8 @@ export function StatusBadge({ status, old = false }: { status: Status; old?: boo
 }
 
 // 選擇紀錄狀態的三顆大按鈕（原型 .acts）
-export function StatusPicker({ value, onChange }: { value: Status | null; onChange: (s: Status) => void }) {
+// compact：路線卡片上方的一排小按鈕（點一下就記錄）
+export function StatusPicker({ value, onChange, compact = false }: { value: Status | null; onChange: (s: Status) => void; compact?: boolean }) {
   const on: Record<Status, string> = {
     flash: "aria-pressed:border-flash aria-pressed:bg-flash aria-pressed:text-flash-ink font-num text-num-picker leading-[1.2] italic tracking-[0.05em]",
     send: "aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-surface text-sub",
@@ -65,9 +66,9 @@ export function StatusPicker({ value, onChange }: { value: Status | null; onChan
           key={s}
           aria-pressed={value === s}
           onClick={() => onChange(s)}
-          className={`grid justify-items-center gap-0.5 rounded-tile border-[1.5px] border-line px-1 pt-3 pb-2.5 font-bold transition-transform duration-100 active:scale-[0.97] ${on[s]}`}
+          className={`${compact ? "flex items-center justify-center gap-1.5 rounded-field py-2.5" : "grid justify-items-center gap-0.5 rounded-tile pt-3 pb-2.5"} border-[1.5px] border-line px-1 font-bold transition-transform duration-100 active:scale-[0.97] ${on[s]}`}
         >
-          <Icon name={s} className="size-[22px]" />
+          <Icon name={s} className={compact ? "size-[18px]" : "size-[22px]"} />
           {STATUS_LABEL[s]}
         </button>
       ))}

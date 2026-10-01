@@ -42,14 +42,17 @@ export function Toggle({ checked, onChange, label, hint }: { checked: boolean; o
 }
 
 // 三選一（原型 .seg），例如感覺、難度體感
+// small：一排小膠囊（圖示與文字同一行），用在路線卡片
 export function Segmented<T extends number | string>({
   options,
   value,
   onChange,
+  small = false,
 }: {
   options: readonly { v: T; e: string; t: string }[];
   value: T | null;
   onChange: (v: T) => void;
+  small?: boolean;
 }) {
   return (
     <div className="grid grid-cols-3 gap-1.5">
@@ -58,9 +61,9 @@ export function Segmented<T extends number | string>({
           key={String(o.v)}
           aria-pressed={value === o.v}
           onClick={() => onChange(o.v)}
-          className="grid justify-items-center rounded-field border border-line px-0.5 py-2 text-note aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-surface"
+          className={`${small ? "flex items-center justify-center gap-1 rounded-full py-1.5" : "grid justify-items-center rounded-field py-2"} border border-line px-0.5 text-note aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-surface`}
         >
-          <span className="text-[20px] leading-[1.2]">{o.e}</span>
+          <span className={small ? "text-[15px] leading-none" : "text-[20px] leading-[1.2]"}>{o.e}</span>
           {o.t}
         </button>
       ))}

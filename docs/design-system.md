@@ -91,12 +91,13 @@
 | `Button.tsx` | `Button`（default／primary／danger）、`LinkButton` |
 | `Chip.tsx` | `ChipRow`、`Chip` |
 | `Sheet.tsx` | `Sheet`、`SheetTitle`、`SheetSub`、`SheetSection` |
-| `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`、`Segmented`、`ColorPicker`、`GradePicker`、`TagPicker`、`Check` |
-| `Route.tsx` | `Points`、`Grade`、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`、`RouteRow`、`RouteList`、`CommentCount`、`SetterNote` |
+| `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`、`Segmented`（small：一排小膠囊）、`ColorPicker`、`GradePicker`、`TagPicker`、`Check` |
+| `Route.tsx` | `Points`、`Grade`、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`（compact：路線卡片一排小按鈕）、`RouteRow`、`RouteList`、`CommentCount`、`SetterNote` |
 | `Wall.tsx` | `WallPhoto`、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`、`ZoneList`、`ProgressBar`、`ResetList`、`NewRouteRow`、`NewRouteCard`、`GymRow`、`SoonBox`、`dueText` |
 | `FloorPlan.tsx` | `FloorPlan` |
 | `Comments.tsx` | `CommentItem`（含 👍 按讚）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
+| `Tabs.tsx` | `Tabs`（路線卡片的紀錄／影片／留言分頁） |
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |
 | `Video.tsx` | `VideoStrip`（橫向滑動縮圖）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`（顧客分享影片） |
 | `Stats.tsx` | `DailyBars`、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |

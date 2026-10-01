@@ -6,6 +6,7 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { SortList } from "@/components/ui/SortList";
+import { Tabs } from "@/components/ui/Tabs";
 import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
@@ -100,6 +101,7 @@ export default function DesignShowcase() {
   const [consent, setConsent] = useState(false);
   const [playing, setPlaying] = useState<number | null>(null);
   const [liked, setLiked] = useState(false);
+  const [demoTab, setDemoTab] = useState<"log" | "video" | "comment">("log");
   const [order, setOrder] = useState(["A 區", "比賽牆", "B 區", "C 區"]);
   const [pickColor, setPickColor] = useState<HoldColor>("紅");
   const [pickGrade, setPickGrade] = useState(3);
@@ -367,6 +369,21 @@ export default function DesignShowcase() {
             { grade: 6, ratio: 0.1, label: "1/10" },
           ]}
         />
+      </Block>
+
+      <Block title="路線卡片：點一下就記錄＋分頁">
+        <StatusPicker compact value={status} onChange={setStatus} />
+        <Tabs
+          tabs={[
+            { key: "log", label: "紀錄" },
+            { key: "video", label: "影片", count: 3 },
+            { key: "comment", label: "留言", count: 1 },
+          ]}
+          value={demoTab}
+          onChange={setDemoTab}
+        />
+        <Label>爬起來的感覺（小）</Label>
+        <Segmented small options={FEEL} value={feel} onChange={setFeel} />
       </Block>
 
       <Block title="拖曳排序">

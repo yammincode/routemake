@@ -137,6 +137,8 @@ test("未登入看得到影片、要登入才能分享；留言關閉且沒有�
   await g.waitForTimeout(400);
   await g.locator("main ul li button", { hasText: "A-02" }).click();
   await g.waitForTimeout(600);
-  assert.ok(!(await g.textContent("[role=dialog]")).includes("影片"), "留言關閉、沒有影片：不顯示影片區");
+  await g.click('[role=dialog] [role=tab]:has-text("影片")');
+  assert.ok((await g.textContent("[role=dialog]")).includes("這條路線目前不開放分享影片"), "留言關閉、沒有影片：不能分享");
+  assert.equal(await g.locator("[role=dialog] input[type=file]").count(), 0);
   assert.deepEqual(G.errors, []);
 });
