@@ -11,6 +11,7 @@ import VideoPanel from "@/components/admin/VideoPanel";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Empty, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
+import { SortList } from "@/components/ui/SortList";
 import { Label, TextField, Toggle } from "@/components/ui/Form";
 import { CommentCount, Points, RouteList, RouteRow, Tags } from "@/components/ui/Route";
 import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
@@ -26,6 +27,7 @@ import {
   getGyms,
   getZones,
   photoUrl,
+  reorderZones,
   setGymComments,
   updateZone,
   uploadZonePhoto,
@@ -38,7 +40,7 @@ import { LIVE_GYM } from "@/lib/gyms";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
-type Confirm = { kind: "photo"; file: File } | { kind: "reset" } | { kind: "zone" } | null;
+type Confirm = { kind: "photo"; file: File } | { kind: "reset" } | { kind: "zone" } | { kind: "order"; ids: string[] } | null;
 
 // 管理後台：選場館、全館留言開關、區域設定與照片、在照片上標路線、整區換線、員工
 export default function AdminView() {
@@ -157,6 +159,14 @@ export default function AdminView() {
       toast(`已新增 ${name}`);
     });
 
+  const saveOrder = (ids: string[]) =>
+    run(async () => {
+      await reorderZones(gymId, ids);
+      setConfirm(null);
+      await loadZones();
+      toast("已更新區域順序");
+    });
+
   const resetZone = () =>
     run(async () => {
       if (!zone) return;
@@ -207,6 +217,11 @@ export default function AdminView() {
         {manager && (
           <Chip pressed={false} onClick={() => setConfirm({ kind: "zone" })}>
             ＋ 新增區域
+          </Chip>
+        )}
+        {manager && zones && zones.length > 1 && (
+          <Chip pressed={false} onClick={() => setConfirm({ kind: "order", ids: zones.map((z) => z.id) })}>
+            整理順序
           </Chip>
         )}
       </ChipRow>
@@ -352,6 +367,23 @@ export default function AdminView() {
             <SheetSub>{routes.length} 條路線會下架，顧客的紀錄和心得都會保留，顧客分享的影片會刪除。下架後記得上傳新照片、設定下次換線日。</SheetSub>
             <Button variant="danger" disabled={busy} onClick={resetZone}>
               確認下架
+            </Button>
+            <LinkButton onClick={() => setConfirm(null)}>取消</LinkButton>
+          </>
+        )}
+        {confirm?.kind === "order" && zones && (
+          <>
+            <SheetTitle>整理區域順序</SheetTitle>
+            <SheetSub>按住右邊「≡」上下拖曳，或用 ↑ ↓ 調整。顧客首頁的區域也會照這個順序；平面圖上的位置不會變。</SheetSub>
+            <SortList
+              items={confirm.ids.map((id) => {
+                const z = zones.find((x) => x.id === id)!;
+                return { id, label: z.name, sub: z.code };
+              })}
+              onChange={(ids) => setConfirm({ kind: "order", ids })}
+            />
+            <Button variant="primary" className="mt-4" disabled={busy} onClick={() => saveOrder(confirm.ids)}>
+              儲存順序
             </Button>
             <LinkButton onClick={() => setConfirm(null)}>取消</LinkButton>
           </>

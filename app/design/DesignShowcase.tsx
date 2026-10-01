@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
+import { SortList } from "@/components/ui/SortList";
 import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
@@ -91,6 +92,7 @@ export default function DesignShowcase() {
   const [feel, setFeel] = useState<number | null>(2);
   const [gfeel, setGfeel] = useState<number | null>(0);
   const [consent, setConsent] = useState(false);
+  const [order, setOrder] = useState(["A 區", "比賽牆", "B 區", "C 區"]);
   const [pickColor, setPickColor] = useState<HoldColor>("紅");
   const [pickGrade, setPickGrade] = useState(3);
   const [pickTags, setPickTags] = useState<string[]>(["技巧"]);
@@ -355,6 +357,10 @@ export default function DesignShowcase() {
             { grade: 6, ratio: 0.1, label: "1/10" },
           ]}
         />
+      </Block>
+
+      <Block title="拖曳排序">
+        <SortList items={order.map((n) => ({ id: n, label: n }))} onChange={setOrder} />
       </Block>
 
       <Block title="顧客影片">

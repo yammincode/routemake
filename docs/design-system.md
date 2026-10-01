@@ -97,6 +97,7 @@
 | `Gym.tsx` | `ZoneCard`、`ZoneList`、`ProgressBar`、`ResetList`、`NewRouteRow`、`NewRouteCard`、`GymRow`、`SoonBox`、`dueText` |
 | `FloorPlan.tsx` | `FloorPlan` |
 | `Comments.tsx` | `CommentItem`、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
+| `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |
 | `Video.tsx` | `VideoItem`、`VideoList`、`VideoPickButton`、`PickedFile`（顧客分享影片） |
 | `Stats.tsx` | `DailyBars`、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |

@@ -10,10 +10,12 @@ export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: st
   );
 }
 
-const field = "w-full rounded-field border border-line bg-sunk px-3 py-[11px]";
+const field = "w-full min-w-0 rounded-field border border-line bg-sunk px-3 py-[11px]";
+// iPhone 的日期框有自己的最小寬度和高度，會撐出格子、蓋到旁邊：固定高度、靠左
+const dateFix = "block h-12 appearance-none text-left [&::-webkit-date-and-time-value]:text-left";
 
 export function TextField({ className = "", ...rest }: ComponentProps<"input">) {
-  return <input className={`${field} ${className}`} {...rest} />;
+  return <input className={`${field} ${rest.type === "date" ? dateFix : ""} ${className}`} {...rest} />;
 }
 
 export function TextArea({ className = "", ...rest }: ComponentProps<"textarea">) {

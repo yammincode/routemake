@@ -230,6 +230,15 @@ export function createMock() {
       const hourAgo = new Date(Date.now() - 3600000).toISOString();
       return J(route, 200, Object.entries(db.vfiles).filter(([k, f]) => k.startsWith(a.p_gym + "/") && f.created_at < hourAgo && !db.videos.some((v) => v.path === k)).map(([k]) => k));
     }
+    if (fn === "reorder_zones") {
+      if (!isMgr(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有店長可以調整區域順序" });
+      const zs = db.zones.filter((z) => z.gym_id === a.p_gym);
+      if (a.p_zones.length !== zs.length || new Set(a.p_zones).size !== zs.length || !zs.every((z) => a.p_zones.includes(z.id)))
+        return J(route, 400, { code: "22023", message: "區域清單不完整，請重新整理後再試" });
+      a.p_zones.forEach((id, i) => (zoneOf(id).sort = i + 1));
+      audit(uid, a.p_gym, "zone.reorder", null, { zones: a.p_zones.map((id) => zoneOf(id).name) });
+      return J(route, 200, null);
+    }
     if (fn === "lookup_user") {
       const p = db.profiles.find((x) => x.username === a.p_username.toLowerCase());
       return p ? J(route, 200, { id: p.id, nickname: p.nickname }) : J(route, 404, { code: "P0002", message: "找不到這個帳號，請對方先註冊" });

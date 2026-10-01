@@ -537,6 +537,37 @@ reset role;
 select tests.ok('影片：本人刪除不寫操作紀錄', (select count(*) from public.audit_log where action = 'video.delete') = 1);
 
 -- ---------------------------------------------------------------------
+-- 區域排序
+-- ---------------------------------------------------------------------
+create temp table zo (k text primary key, v uuid[]);
+grant all on zo to anon, authenticated;
+insert into zo select 'rev', array_agg(id order by sort desc, code desc) from public.zones where gym_id = 'mingde';
+insert into zo select 'cur', array_agg(id order by sort, code) from public.zones where gym_id = 'mingde';
+set role authenticated; select tests.login(:ST);
+select tests.throws('區域排序：定線員不能調整', format('select public.reorder_zones(''mingde'', %L)', (select v from zo where k = 'rev')));
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.throws('區域排序：顧客不能調整', format('select public.reorder_zones(''mingde'', %L)', (select v from zo where k = 'rev')));
+reset role;
+set role authenticated; select tests.login(:ST2);
+select tests.throws('區域排序：別館定線員不能調整', format('select public.reorder_zones(''mingde'', %L)', (select v from zo where k = 'rev')));
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.throws('區域排序：少一區被擋', format('select public.reorder_zones(''mingde'', %L)', (select v[2:] from zo where k = 'rev')));
+select tests.throws('區域排序：重複的區被擋', format('select public.reorder_zones(''mingde'', %L)', (select v[1:cardinality(v) - 1] || v[1] from zo where k = 'rev')));
+select tests.throws('區域排序：混入別館的區被擋', format('select public.reorder_zones(''mingde'', %L)',
+  (select v[1:cardinality(v) - 1] || (select id from public.zones where gym_id = 'g2' limit 1) from zo where k = 'rev')));
+select tests.throws('區域排序：店長不能調整別館', format('select public.reorder_zones(''g2'', %L)', (select array_agg(id) from public.zones where gym_id = 'g2')));
+select tests.lives('區域排序：店長可以調整', format('select public.reorder_zones(''mingde'', %L)', (select v from zo where k = 'rev')));
+reset role;
+select tests.ok('區域排序：順序已更新', (select array_agg(id order by sort, code) from public.zones where gym_id = 'mingde') = (select v from zo where k = 'rev'));
+select tests.ok('區域排序：有寫操作紀錄', exists (select 1 from public.audit_log where action = 'zone.reorder' and user_id = :MG and jsonb_array_length(detail -> 'zones') = cardinality((select v from zo where k = 'rev'))));
+set role authenticated; select tests.login(:OW);
+select tests.lives('區域排序：老闆可以調整任何館', format('select public.reorder_zones(''g2'', %L)', (select array_agg(id) from public.zones where gym_id = 'g2')));
+select tests.lives('區域排序：老闆改回原本順序', format('select public.reorder_zones(''mingde'', %L)', (select v from zo where k = 'cur')));
+reset role;
+
+-- ---------------------------------------------------------------------
 -- 結果
 -- ---------------------------------------------------------------------
 \o

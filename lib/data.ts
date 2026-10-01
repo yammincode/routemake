@@ -163,6 +163,10 @@ export async function updateZone(id: string, patch: Partial<Pick<Zone, "name" | 
 export async function createZone(gym: string, code: string, name: string, sort: number): Promise<Zone> {
   return must(await supabase().from("zones").insert({ gym_id: gym, code, name, sort }).select(ZONE_COLS).single());
 }
+// 區域順序：傳入這間館全部區域的 id，依序排列（只有店長、老闆）
+export async function reorderZones(gym: string, ids: string[]) {
+  must(await supabase().rpc("reorder_zones", { p_gym: gym, p_zones: ids }));
+}
 export type RouteInput = Pick<Route, "grade" | "hold_color" | "style_tags" | "setter_note" | "comments_enabled">;
 export async function createRoute(zoneId: string, input: RouteInput, x: number, y: number): Promise<Route> {
   return must(
