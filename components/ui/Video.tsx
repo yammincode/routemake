@@ -1,57 +1,172 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Status } from "@/lib/design";
 import Icon from "./Icon";
 import { StatusBadge } from "./Route";
 
-// 顧客分享的影片（路線卡片「影片」區塊）；網址加 #t=0.1 讓手機顯示第一格畫面；沒有網址時顯示黑色預留框
-export function VideoItem({
-  src,
-  name,
-  ago,
-  caption,
-  status,
-  meta,
-  onDelete,
-}: {
-  src?: string;
+export type VideoCard = {
+  key: string;
+  src?: string; // 沒有網址時顯示黑色預留框（展示頁用）
   name: string;
   ago: string;
   caption?: string | null;
   status?: Status | null;
-  meta?: ReactNode;
-  onDelete?: () => void;
-}) {
+  meta?: ReactNode; // 例如後台的「B 區 B-03」
+};
+
+// 影片縮圖：直式，顯示第一格畫面（網址加 #t=0.1 讓手機載入第一格）、上傳者、完成狀態
+export function VideoThumb({ v, onClick }: { v: VideoCard; onClick: () => void }) {
+  const [bad, setBad] = useState(false);
   return (
-    <div className="overflow-hidden rounded-btn bg-sunk">
-      {src ? (
-        <video controls playsInline preload="metadata" src={`${src}#t=0.1`} className="block max-h-[60vh] w-full bg-black" />
-      ) : (
-        <div className="grid aspect-video place-items-center bg-black text-white/60">
-          <Icon name="video" className="size-8" />
-        </div>
+    <button
+      onClick={onClick}
+      aria-label={`播放 ${v.name} 的影片${v.caption ? "：" + v.caption : ""}`}
+      className="relative aspect-[9/16] w-[112px] flex-none snap-start overflow-hidden rounded-btn bg-black text-left"
+    >
+      {v.src && !bad && (
+        <video
+          muted
+          playsInline
+          preload="metadata"
+          src={`${v.src}#t=0.1`}
+          onError={() => setBad(true)}
+          className="pointer-events-none absolute inset-0 size-full object-cover"
+        />
       )}
-      <div className="px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2 text-meta text-muted">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <b className="truncate font-bold text-ink">{name}</b>
-            {ago}
-            {status && <StatusBadge status={status} />}
-          </span>
-          {onDelete && (
-            <button onClick={onDelete} className="flex-none px-1 py-0.5 text-meta text-warn">
-              刪除
-            </button>
-          )}
-        </div>
-        {meta && <div className="mt-0.5 text-meta text-muted">{meta}</div>}
-        {caption && <p className="mt-0.5 mb-0 text-sub leading-normal break-words">{caption}</p>}
-      </div>
+      <span className="absolute inset-0 grid place-items-center text-white/85">
+        <span className="grid size-10 place-items-center rounded-full bg-black/45">
+          <Icon name="play" className="size-5" />
+        </span>
+      </span>
+      {v.status && (
+        <span className="absolute top-1.5 left-1.5 origin-top-left scale-[0.8]">
+          <StatusBadge status={v.status} />
+        </span>
+      )}
+      <span className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/75 to-transparent px-2 pt-6 pb-1.5 text-meta leading-tight text-white">
+        <b className="block truncate font-bold">{v.name}</b>
+        <span className="text-white/75">{v.ago}</span>
+      </span>
+    </button>
+  );
+}
+
+// 橫向一排影片縮圖，左右滑動選擇
+export function VideoStrip({ items, onOpen }: { items: VideoCard[]; onOpen: (i: number) => void }) {
+  return (
+    <div className="no-scrollbar mb-3 flex snap-x gap-2.5 overflow-x-auto pb-1">
+      {items.map((v, i) => (
+        <VideoThumb key={v.key} v={v} onClick={() => onOpen(i)} />
+      ))}
     </div>
   );
 }
 
-export function VideoList({ children }: { children: ReactNode }) {
-  return <div className="mb-3 grid gap-2.5">{children}</div>;
+// 全螢幕播放：左右滑動或按 ‹ › 換上一支／下一支；按 ✕、點背景或 Esc 關閉
+// actions：放在說明下方的按鈕（例如刪除）
+export function VideoViewer({
+  items,
+  index,
+  onIndex,
+  actions,
+}: {
+  items: VideoCard[];
+  index: number | null;
+  onIndex: (i: number | null) => void;
+  actions?: (i: number) => ReactNode;
+}) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const open = index != null && index >= 0 && index < items.length;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation(); // 不要連下面的面板一起關掉
+        onIndex(null);
+      }
+      if (e.key === "ArrowLeft" && index > 0) onIndex(index - 1);
+      if (e.key === "ArrowRight" && index < items.length - 1) onIndex(index + 1);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, index, items.length, onIndex]);
+
+  if (!open) return null;
+  const v = items[index];
+  const go = (d: number) => {
+    const n = index + d;
+    if (n >= 0 && n < items.length) onIndex(n);
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="影片播放"
+      className="fixed inset-0 z-30 flex flex-col bg-black text-white"
+      onClick={(e) => e.target === e.currentTarget && onIndex(null)}
+    >
+      <div className="flex items-center justify-between px-4 pt-[calc(10px+env(safe-area-inset-top,0px))] pb-2 text-meta text-white/75">
+        <span className="font-num">
+          {index + 1} / {items.length}
+        </span>
+        <button aria-label="關閉" onClick={() => onIndex(null)} className="grid size-10 place-items-center text-[26px] leading-none text-white">
+          ×
+        </button>
+      </div>
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center"
+        onPointerDown={(e) => (start.current = { x: e.clientX, y: e.clientY })}
+        onPointerUp={(e) => {
+          const s = start.current;
+          start.current = null;
+          if (!s) return;
+          const dx = e.clientX - s.x;
+          if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(e.clientY - s.y) * 1.5) go(dx < 0 ? 1 : -1);
+        }}
+        onClick={(e) => e.target === e.currentTarget && onIndex(null)}
+      >
+        {failed === v.key || !v.src ? (
+          <p className="max-w-[260px] text-center text-sub leading-normal text-white/80">
+            {v.src ? "這支影片無法在你的手機播放（可能是 iPhone 的 HEVC 格式），可以換一支手機或電腦試試看。" : "影片預覽"}
+          </p>
+        ) : (
+          <video
+            key={v.key}
+            controls
+            autoPlay
+            playsInline
+            src={v.src}
+            onError={() => setFailed(v.key)}
+            className="max-h-full w-full object-contain"
+          />
+        )}
+        {index > 0 && (
+          <button aria-label="上一支" onClick={() => go(-1)} className="absolute left-1 grid size-11 place-items-center rounded-full bg-black/40 text-[28px] leading-none">
+            ‹
+          </button>
+        )}
+        {index < items.length - 1 && (
+          <button aria-label="下一支" onClick={() => go(1)} className="absolute right-1 grid size-11 place-items-center rounded-full bg-black/40 text-[28px] leading-none">
+            ›
+          </button>
+        )}
+      </div>
+      <div className="px-4 pt-3 pb-[calc(16px+env(safe-area-inset-bottom,0px))]">
+        <div className="flex items-center gap-2 text-meta text-white/75">
+          <b className="text-sub font-bold text-white">{v.name}</b>
+          {v.ago}
+          {v.status && <StatusBadge status={v.status} />}
+        </div>
+        {v.meta && <div className="mt-0.5 text-meta text-white/75">{v.meta}</div>}
+        {v.caption && <p className="mt-1 mb-0 text-sub leading-normal break-words">{v.caption}</p>}
+        {actions && <div className="mt-2">{actions(index)}</div>}
+      </div>
+    </div>
+  );
 }
 
 // 選擇影片的按鈕（外觀同滿版按鈕）；選好後回傳檔案

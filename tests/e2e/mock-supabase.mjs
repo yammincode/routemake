@@ -42,6 +42,7 @@ export function createMock() {
     routes: [],
     ascents: [],
     comments: [],
+    likes: [], // comment_likes
     audit: [],
     files: {},
     videos: [], // route_videos
@@ -400,7 +401,7 @@ export function createMock() {
     }
     if (t === "comments") {
       if (m === "GET") {
-        let rows = filt(db.comments.filter((c) => !c.deleted_at), sp).map((c) => ({ ...c, profiles: { nickname: prof(c.user_id)?.nickname } }));
+        let rows = filt(db.comments.filter((c) => !c.deleted_at), sp).map((c) => ({ ...c, profiles: { nickname: prof(c.user_id)?.nickname }, comment_likes: db.likes.filter((l) => l.comment_id === c.id).map((l) => ({ user_id: l.user_id })) }));
         rows.sort((a, b) => a.created_at.localeCompare(b.created_at));
         if (!sel.includes("profiles")) rows = rows.map(({ profiles, ...c }) => c);
         return out(rows);
@@ -434,6 +435,20 @@ export function createMock() {
           return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "route_videos"' });
         db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, ...body, user_id: uid, created_at: now() });
         return empty(route, 201);
+      }
+    }
+    if (t === "comment_likes") {
+      if (m === "POST") {
+        const c = db.comments.find((x) => x.id === body.comment_id && !x.deleted_at);
+        if (!uid || !c || !prof(uid)?.nickname) return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "comment_likes"' });
+        if (db.likes.some((l) => l.comment_id === c.id && l.user_id === uid)) return J(route, 409, { code: "23505", message: "duplicate key" });
+        db.likes.push({ comment_id: c.id, user_id: uid });
+        return empty(route, 201);
+      }
+      if (m === "DELETE") {
+        const del = filt(db.likes.filter((l) => l.user_id === uid), sp);
+        db.likes = db.likes.filter((l) => !del.includes(l));
+        return empty(route);
       }
     }
     if (t === "profiles" && m === "PATCH") { Object.assign(prof(uid), { nickname: body.nickname }); return empty(route); }

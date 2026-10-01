@@ -577,6 +577,41 @@ select tests.lives('區域排序：老闆改回原本順序', format('select pub
 reset role;
 
 -- ---------------------------------------------------------------------
+-- 留言按讚
+-- ---------------------------------------------------------------------
+select tests.login(null);
+insert into ids select 'likeC', id from public.comments where deleted_at is null order by created_at limit 1;
+set role authenticated; select tests.login(:A);
+select tests.lives('按讚：顧客可以按讚', format('insert into public.comment_likes (comment_id) values (%L)', (select v from ids where k = 'likeC')));
+select tests.throws('按讚：同一則不能按兩次', format('insert into public.comment_likes (comment_id) values (%L)', (select v from ids where k = 'likeC')));
+select tests.throws('按讚：不能幫別人按', format('insert into public.comment_likes (comment_id, user_id) values (%L, %L)', (select v from ids where k = 'likeC'), :MG));
+select tests.throws('按讚：不能改', 'update public.comment_likes set created_at = now()');
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.lives('按讚：另一個人也可以按', format('insert into public.comment_likes (comment_id) values (%L)', (select v from ids where k = 'likeC')));
+select tests.ok('按讚：不能收回別人的讚（0 筆）', tests.rows(format('delete from public.comment_likes where user_id = %L', :A)) = 0);
+reset role;
+select tests.login(null);
+update public.profiles set nickname = null where id = :NN;
+set role authenticated; select tests.login(:NN);
+select tests.throws('按讚：沒有暱稱不能按', format('insert into public.comment_likes (comment_id) values (%L)', (select v from ids where k = 'likeC')));
+reset role;
+select tests.login(null);
+update public.profiles set nickname = '洗版' where id = :NN;
+set role anon; select tests.login(null);
+select tests.ok('按讚：未登入看得到讚數', (select count(*) from public.comment_likes where comment_id = (select v from ids where k = 'likeC')) = 2);
+select tests.throws('按讚：未登入不能按', format('insert into public.comment_likes (comment_id) values (%L)', (select v from ids where k = 'likeC')));
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.ok('按讚：可以收回自己的讚', tests.rows('delete from public.comment_likes') = 1);
+reset role;
+select tests.login(null);
+update public.comments set deleted_at = now() where id = (select v from ids where k = 'likeC');
+set role authenticated; select tests.login(:A);
+select tests.throws('按讚：已刪除的留言不能按', format('insert into public.comment_likes (comment_id) values (%L)', (select v from ids where k = 'likeC')));
+reset role;
+
+-- ---------------------------------------------------------------------
 -- 結果
 -- ---------------------------------------------------------------------
 \o

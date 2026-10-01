@@ -28,13 +28,17 @@ self.addEventListener("install", (event) => {
 // Supabase 的資料（登入、紀錄、心得、留言）一律不存進 Service Worker 快取：
 // 快取不會隨登出清掉，共用手機時可能被下一個人看到。離線用的資料改由 App 存在手機並在登出時清除。
 // 公開照片（storage/v1/object/public）不含個人資料，仍照一般圖片快取
-// 顧客影片檔案很大、會被刪除，也一律不存進快取（不佔手機空間，刪掉後也不會留在手機上）
 const supabaseData = {
-  matcher: ({ url }: { url: URL }) =>
-    url.hostname.endsWith(".supabase.co") &&
-    (!url.pathname.startsWith("/storage/v1/object/public/") || url.pathname.startsWith("/storage/v1/object/public/route-videos/")),
+  matcher: ({ url }: { url: URL }) => url.hostname.endsWith(".supabase.co") && !url.pathname.startsWith("/storage/v1/object/public/"),
   handler: new NetworkOnly(),
 };
+
+// 顧客影片完全不經過 Service Worker：直接由瀏覽器向 Supabase 讀取
+// （iPhone Safari 的影片分段讀取經過 Service Worker 轉手時常常播不出來；也不佔手機快取空間）
+// 這個監聽要比 Serwist 先註冊，stopImmediatePropagation 讓 Serwist 不處理這個請求
+self.addEventListener("fetch", (event) => {
+  if (event.request.url.includes("/storage/v1/object/public/route-videos/")) event.stopImmediatePropagation();
+});
 
 const zoneShell = {
   matcher: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) => sameOrigin && url.pathname === "/zone",

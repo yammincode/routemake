@@ -48,7 +48,15 @@ export type Ascent = {
   grade_feel: number | null;
   private_note: string | null;
 };
-export type Comment = { id: string; route_id: string; user_id: string; body: string; created_at: string; nickname: string };
+export type Comment = {
+  id: string;
+  route_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  nickname: string;
+  likers: string[]; // 按讚的人（user id）
+};
 export type Staff = { user_id: string; gym_id: string; role: "setter" | "manager"; nickname: string | null };
 
 const ROUTE_COLS = "id,zone_id,code,grade,hold_color,style_tags,setter_note,pin_x,pin_y,comments_enabled,created_at,archived_at";
@@ -123,11 +131,18 @@ export async function getComments(routeId: string): Promise<Comment[]> {
   const rows = must(
     await supabase()
       .from("comments")
-      .select("id,route_id,user_id,body,created_at,profiles!comments_user_id_fkey(nickname)")
+      .select("id,route_id,user_id,body,created_at,profiles!comments_user_id_fkey(nickname),comment_likes(user_id)")
       .eq("route_id", routeId)
       .order("created_at")
-  ) as unknown as (Omit<Comment, "nickname"> & { profiles: { nickname: string | null } | null })[];
-  return rows.map(({ profiles, ...c }) => ({ ...c, nickname: profiles?.nickname ?? "攀岩者" }));
+  ) as unknown as (Omit<Comment, "nickname" | "likers"> & {
+    profiles: { nickname: string | null } | null;
+    comment_likes: { user_id: string }[] | null;
+  })[];
+  return rows.map(({ profiles, comment_likes, ...c }) => ({
+    ...c,
+    nickname: profiles?.nickname ?? "攀岩者",
+    likers: (comment_likes ?? []).map((l) => l.user_id),
+  }));
 }
 export async function getCommentCounts(routeIds: string[]): Promise<Record<string, number>> {
   if (!routeIds.length) return {};
@@ -148,6 +163,13 @@ export async function clearAscent(routeId: string) {
 }
 export async function postComment(routeId: string, body: string) {
   must(await supabase().from("comments").insert({ route_id: routeId, body }));
+}
+// 留言按讚 👍／收回
+export async function likeComment(id: string) {
+  must(await supabase().from("comment_likes").insert({ comment_id: id }));
+}
+export async function unlikeComment(id: string) {
+  must(await supabase().from("comment_likes").delete().eq("comment_id", id));
 }
 export async function deleteComment(id: string) {
   must(await supabase().rpc("delete_comment", { p_comment: id }));

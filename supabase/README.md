@@ -10,12 +10,13 @@
 |---|---|---|
 | `setup/step2-database.sql` | migration 0001–0006：8 張表、RLS、函式、照片 bucket、六間店與明德館 5 區 | 已套用 |
 | `setup/step3-username-login.sql` | migration 0007：帳號名稱＋密碼登入、指派員工改用帳號名稱 | 已套用 |
-| `setup/step4-scoring.sql` | migration 0008：路線分數、風格加成、每日積分（scoring_rules、points_summary） | 待套用 |
-| `setup/step5-gym-names.sql` | migration 0009：六間店正式名稱 | 待套用 |
-| `setup/step6-security-audit.sql` | migration 0010：留言頻率限制、操作紀錄顯示暱稱與看得懂的內容 | 待套用 |
-| `setup/step7-route-videos.sql` | migration 0011：顧客分享影片（route_videos、route-videos 空間、下架自動刪除、每日上限） | 待套用 |
-| `setup/step8-zone-order.sql` | migration 0012：店長拖曳整理區域順序（reorder_zones） | 待套用 |
-| `setup/step9-gym-zones.sql` | migration 0013：萬華、中和、南港、新店開放並建立區域；明德比賽牆分四段、新增 Spray Wall；10 月換線日 | 待套用 |
+| `setup/step4-scoring.sql` | migration 0008：路線分數、風格加成、每日積分（scoring_rules、points_summary） | 已套用 |
+| `setup/step5-gym-names.sql` | migration 0009：六間店正式名稱 | 已套用 |
+| `setup/step6-security-audit.sql` | migration 0010：留言頻率限制、操作紀錄顯示暱稱與看得懂的內容 | 已套用 |
+| `setup/step7-route-videos.sql` | migration 0011：顧客分享影片（route_videos、route-videos 空間、下架自動刪除、每日上限） | 已套用 |
+| `setup/step8-zone-order.sql` | migration 0012：店長拖曳整理區域順序（reorder_zones） | 已套用 |
+| `setup/step9-gym-zones.sql` | migration 0013：萬華、中和、南港、新店開放並建立區域；明德比賽牆分四段、新增 Spray Wall；10 月換線日 | 已套用 |
+| `setup/step10-comment-likes.sql` | migration 0014：留言按讚 👍（comment_likes） | 待套用 |
 
 ## 規則摘要
 
@@ -31,6 +32,7 @@
 | audit_log | 該館店長、老闆 | 只能由函式寫入 | 不開放 |
 | scoring_rules | 所有人 | 只有老闆 | 不開放 |
 | route_videos | 所有人 | 登入且有暱稱；路線未下架、留言開啟；路徑要是 `{館}/{路線}/{本人}/檔名`；不能修改 | `delete_video()`：本人或該館員工（員工刪除寫操作紀錄）；路線下架時自動刪除 |
+| comment_likes | 所有人 | 登入且有暱稱；留言未刪除；每人每則一個讚；不能修改 | 只能收回自己的讚 |
 | Storage `zone-photos` | 公開 | `{館}/zones/` 員工、`{館}/floorplan/` 店長 | 同左 |
 | Storage `route-videos` | 公開 | 同 route_videos；每支 50 MB、mp4／mov／webm；每人 24 小時 10 支 | 本人或該館員工 |
 

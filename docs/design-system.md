@@ -96,12 +96,12 @@
 | `Wall.tsx` | `WallPhoto`、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`、`ZoneList`、`ProgressBar`、`ResetList`、`NewRouteRow`、`NewRouteCard`、`GymRow`、`SoonBox`、`dueText` |
 | `FloorPlan.tsx` | `FloorPlan` |
-| `Comments.tsx` | `CommentItem`、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
+| `Comments.tsx` | `CommentItem`（含 👍 按讚）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |
-| `Video.tsx` | `VideoItem`、`VideoList`、`VideoPickButton`、`PickedFile`（顧客分享影片） |
+| `Video.tsx` | `VideoStrip`（橫向滑動縮圖）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`（顧客分享影片） |
 | `Stats.tsx` | `DailyBars`、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
 | `Toast.tsx` | `ToastProvider`、`useToast` |
-| `Icon.tsx` | `Icon`（flash、send、project、chat、lock、down、video） |
+| `Icon.tsx` | `Icon`（flash、send、project、chat、lock、down、video、play） |
 
 頁面層級：`components/Header.tsx`（Logo＋場館切換）、`components/TabBar.tsx`（底部三個分頁）。

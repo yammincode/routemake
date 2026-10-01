@@ -1,8 +1,24 @@
 import type { ReactNode } from "react";
 import Icon from "./Icon";
 
-// 留言（原型 .cmt）
-export function CommentItem({ name, ago, body, onDelete }: { name: string; ago: string; body: string; onDelete?: () => void }) {
+// 留言（原型 .cmt）；likes／liked／onLike：👍 按讚（沒有 onLike 時只顯示讚數）
+export function CommentItem({
+  name,
+  ago,
+  body,
+  onDelete,
+  likes = 0,
+  liked = false,
+  onLike,
+}: {
+  name: string;
+  ago: string;
+  body: string;
+  onDelete?: () => void;
+  likes?: number;
+  liked?: boolean;
+  onLike?: () => void;
+}) {
   return (
     <div className="rounded-btn bg-sunk px-3 py-2.5">
       <div className="flex items-center justify-between text-meta text-muted">
@@ -17,6 +33,20 @@ export function CommentItem({ name, ago, body, onDelete }: { name: string; ago: 
         )}
       </div>
       <p className="mt-0.5 mb-0 text-sub leading-normal break-words">{body}</p>
+      {(onLike || likes > 0) && (
+        <div className="mt-1.5 flex">
+          <button
+            aria-pressed={liked}
+            aria-label={liked ? `收回讚，目前 ${likes} 個讚` : `按讚，目前 ${likes} 個讚`}
+            disabled={!onLike}
+            onClick={onLike}
+            className="inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-[3px] text-meta text-muted aria-pressed:border-accent aria-pressed:bg-accent-soft aria-pressed:font-bold aria-pressed:text-accent disabled:border-transparent disabled:px-0"
+          >
+            <span aria-hidden>👍</span>
+            {likes > 0 ? <span className="font-num">{likes}</span> : "讚"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

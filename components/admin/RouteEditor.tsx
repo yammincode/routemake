@@ -107,7 +107,7 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
             {comments?.length ? (
               <CommentList>
                 {comments.map((c) => (
-                  <CommentItem key={c.id} name={c.nickname} ago={ago(c.created_at)} body={c.body} onDelete={() => removeComment(c.id)} />
+                  <CommentItem key={c.id} name={c.nickname} ago={ago(c.created_at)} body={c.body} likes={c.likers.length} onDelete={() => removeComment(c.id)} />
                 ))}
               </CommentList>
             ) : (

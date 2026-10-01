@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Empty, SectionTitle } from "@/components/ui/Card";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
-import { VideoItem, VideoList } from "@/components/ui/Video";
+import { VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { cleanOrphanVideos, deleteVideo, getGymVideos, getVideoUsage, videoUrl, type GymVideo } from "@/lib/data";
 import { ago } from "@/lib/date";
 
@@ -19,6 +19,7 @@ export default function VideoPanel({ gymId, gymName }: { gymId: string; gymName:
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [playing, setPlaying] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -38,12 +39,23 @@ export default function VideoPanel({ gymId, gymName }: { gymId: string; gymName:
     });
   }, [load]);
 
+  const cards: VideoCard[] = (videos ?? []).map((v) => ({
+    key: v.id,
+    src: videoUrl(v.path),
+    name: v.nickname,
+    ago: ago(v.created_at),
+    caption: v.caption,
+    status: v.status,
+    meta: `${v.zone_name} ${v.route_code}`,
+  }));
+
   const remove = async (v: GymVideo) => {
     if (confirm !== v.id) return setConfirm(v.id);
     setBusy(true);
     try {
       await deleteVideo(v.id);
       setConfirm(null);
+      setPlaying(null);
       toast("已刪除影片");
       await load();
     } catch (e) {
@@ -84,20 +96,19 @@ export default function VideoPanel({ gymId, gymName }: { gymId: string; gymName:
       ) : videos.length === 0 ? (
         <Empty>還沒有顧客分享影片。</Empty>
       ) : (
-        <VideoList>
-          {videos.map((v) => (
-            <VideoItem
-              key={v.id}
-              src={videoUrl(v.path)}
-              name={v.nickname}
-              ago={ago(v.created_at)}
-              caption={v.caption}
-              status={v.status}
-              meta={`${v.zone_name} ${v.route_code}${confirm === v.id ? "・再按一次「刪除」確認" : ""}`}
-              onDelete={busy ? undefined : () => void remove(v)}
-            />
-          ))}
-        </VideoList>
+        <>
+          <VideoStrip items={cards} onOpen={(i) => (setConfirm(null), setPlaying(i))} />
+          <VideoViewer
+            items={cards}
+            index={playing}
+            onIndex={(i) => (setConfirm(null), setPlaying(i))}
+            actions={(i) => (
+              <button disabled={busy} onClick={() => void remove(videos[i])} className="text-meta text-warn disabled:opacity-50">
+                {confirm === videos[i].id ? "確定刪除？再按一次" : "刪除這支影片"}
+              </button>
+            )}
+          />
+        </>
       )}
     </>
   );

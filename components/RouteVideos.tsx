@@ -7,7 +7,7 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { Check, Label, TextField } from "@/components/ui/Form";
 import { SheetSection } from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/Toast";
-import { PickedFile, VideoItem, VideoList, VideoPickButton } from "@/components/ui/Video";
+import { PickedFile, VideoPickButton, VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { checkVideo, deleteVideo, getVideos, uploadVideo, videoUrl, type Route, type Video } from "@/lib/data";
 import { ago } from "@/lib/date";
 import type { Status } from "@/lib/design";
@@ -36,6 +36,7 @@ export default function RouteVideos({
   const [caption, setCaption] = useState("");
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [playing, setPlaying] = useState<number | null>(null);
 
   useEffect(() => {
     getVideos(r.id)
@@ -44,6 +45,14 @@ export default function RouteVideos({
   }, [r.id]);
 
   const canShare = open && !r.archived_at;
+  const cards: VideoCard[] = (videos ?? []).map((v) => ({
+    key: v.id,
+    src: videoUrl(v.path),
+    name: v.nickname,
+    ago: ago(v.created_at),
+    caption: v.caption,
+    status: v.status,
+  }));
   if (!canShare && !videos?.length) return null;
 
   const pick = async (f: File) => {
@@ -78,6 +87,7 @@ export default function RouteVideos({
   const remove = async (id: string) => {
     try {
       await deleteVideo(id);
+      setPlaying(null);
       setVideos((vs) => vs?.filter((v) => v.id !== id) ?? null);
       toast("已刪除影片");
     } catch (e) {
@@ -88,19 +98,22 @@ export default function RouteVideos({
   return (
     <SheetSection title="影片" aside={videos?.length ? `${videos.length} 支` : undefined}>
       {videos && videos.length > 0 ? (
-        <VideoList>
-          {videos.map((v) => (
-            <VideoItem
-              key={v.id}
-              src={videoUrl(v.path)}
-              name={v.nickname}
-              ago={ago(v.created_at)}
-              caption={v.caption}
-              status={v.status}
-              onDelete={session && (v.user_id === session.user.id || staff) ? () => remove(v.id) : undefined}
-            />
-          ))}
-        </VideoList>
+        <>
+          <VideoStrip items={cards} onOpen={setPlaying} />
+          <VideoViewer
+            items={cards}
+            index={playing}
+            onIndex={setPlaying}
+            actions={(i) => {
+              const v = videos[i];
+              return session && (v.user_id === session.user.id || staff) ? (
+                <button onClick={() => void remove(v.id)} className="text-meta text-warn">
+                  刪除這支影片
+                </button>
+              ) : null;
+            }}
+          />
+        </>
       ) : (
         <p className="mt-1 mb-2.5 text-note text-muted">{videos ? "還沒有人分享影片，拍下你的攀爬過程吧。" : "讀取中…"}</p>
       )}

@@ -15,7 +15,7 @@ import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, 
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { CalendarHeat, DailyBars, Delta, GradeBars, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
-import { PickedFile, VideoItem, VideoList, VideoPickButton } from "@/components/ui/Video";
+import { PickedFile, VideoPickButton, VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
 import { fakeWall } from "@/lib/demo";
 import { FEEL, GRADE_FEEL, HOLD_COLOR_NAMES, type HoldColor, type Status } from "@/lib/design";
@@ -34,6 +34,12 @@ const ZONES = [
 
 const STATUSES: (Status | null)[] = ["flash", "send", null, "send", "project", null, "send", null, null, "flash"];
 const TAGS = [["力量"], ["技巧", "平衡"], ["腳法"], ["動態"], ["指力"], [], ["協調", "柔軟"], ["耐力"], ["平衡"], ["技巧"]];
+
+const DEMO_VIDEOS: VideoCard[] = [
+  { key: "1", name: "小安", ago: "2 天前", status: "flash", caption: "第三手用左腳勾" },
+  { key: "2", name: "阿明", ago: "昨天", status: "send", caption: "最後一手要果斷" },
+  { key: "3", name: "我", ago: "今天", status: "project", meta: "B 區 B-03" },
+];
 
 function Swatch({ name, varName }: { name: string; varName: string }) {
   return (
@@ -92,6 +98,8 @@ export default function DesignShowcase() {
   const [feel, setFeel] = useState<number | null>(2);
   const [gfeel, setGfeel] = useState<number | null>(0);
   const [consent, setConsent] = useState(false);
+  const [playing, setPlaying] = useState<number | null>(null);
+  const [liked, setLiked] = useState(false);
   const [order, setOrder] = useState(["A 區", "比賽牆", "B 區", "C 區"]);
   const [pickColor, setPickColor] = useState<HoldColor>("紅");
   const [pickGrade, setPickGrade] = useState(3);
@@ -366,10 +374,17 @@ export default function DesignShowcase() {
       </Block>
 
       <Block title="顧客影片">
-        <VideoList>
-          <VideoItem name="小安" ago="2 天前" status="flash" caption="第三手用左腳勾" />
-          <VideoItem name="我" ago="今天" status="project" meta="B 區 B-03" onDelete={() => toast("已刪除影片")} />
-        </VideoList>
+        <VideoStrip items={DEMO_VIDEOS} onOpen={setPlaying} />
+        <VideoViewer
+          items={DEMO_VIDEOS}
+          index={playing}
+          onIndex={setPlaying}
+          actions={() => (
+            <button onClick={() => toast("已刪除影片")} className="text-meta text-warn">
+              刪除這支影片
+            </button>
+          )}
+        />
         <VideoPickButton onPick={(f) => toast(`選了 ${f.name}`)}>分享攀爬影片</VideoPickButton>
         <div className="mt-3">
           <PickedFile name="IMG_2031.MOV" size={23500000} onClear={() => toast("換一支")} />
@@ -427,14 +442,12 @@ export default function DesignShowcase() {
               )}
             </SheetSection>
             <SheetSection title="影片" aside="1 支">
-              <VideoList>
-                <VideoItem name="小安" ago="2 天前" status="send" caption="最後一手要果斷" />
-              </VideoList>
+              <VideoStrip items={DEMO_VIDEOS.slice(0, 2)} onOpen={setPlaying} />
               <VideoPickButton onPick={(f) => toast(`選了 ${f.name}`)}>分享攀爬影片</VideoPickButton>
             </SheetSection>
             <SheetSection title="留言" aside="2 則">
               <CommentList>
-                <CommentItem name="小安" ago="2 天前" body="第三手好遠，矮個子加油" />
+                <CommentItem name="小安" ago="2 天前" body="第三手好遠，矮個子加油" likes={liked ? 4 : 3} liked={liked} onLike={() => setLiked(!liked)} />
                 <CommentItem name="我" ago="今天" body="腳踩對就很簡單" onDelete={() => toast("已刪除留言")} />
               </CommentList>
               <CommentForm value={draft} onChange={setDraft} onSubmit={() => { setDraft(""); toast("已送出留言"); }} />

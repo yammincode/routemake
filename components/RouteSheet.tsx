@@ -12,7 +12,7 @@ import { Grade, SetterNote, StatusPicker, Tags, Tape } from "@/components/ui/Rou
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/Toast";
 import { isStaffOf } from "@/lib/auth";
-import { clearAscent, deleteComment, getComments, postComment, saveAscent, type Ascent, type Comment, type Route } from "@/lib/data";
+import { clearAscent, deleteComment, getComments, likeComment, postComment, saveAscent, unlikeComment, type Ascent, type Comment, type Route } from "@/lib/data";
 import { ago, todayYmd, ymd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, type Status } from "@/lib/design";
 import { isNetworkError, queueAscent } from "@/lib/offline";
@@ -165,6 +165,22 @@ function RouteBody({
     }
   };
 
+  // 👍 先更新畫面，失敗再改回來
+  const toggleLike = async (c: Comment) => {
+    if (!session) return toLogin();
+    const uid = session.user.id;
+    const had = c.likers.includes(uid);
+    const flip = (on: boolean) =>
+      setComments((cs) => cs?.map((x) => (x.id === c.id ? { ...x, likers: on ? [...x.likers, uid] : x.likers.filter((u) => u !== uid) } : x)) ?? null);
+    flip(!had);
+    try {
+      await (had ? unlikeComment(c.id) : likeComment(c.id));
+    } catch (e) {
+      flip(had);
+      toast((e as Error).message);
+    }
+  };
+
   const toLogin = () => router.push(`/login?next=${encodeURIComponent(location.pathname)}`);
 
   return (
@@ -244,6 +260,9 @@ function RouteBody({
                     name={c.nickname}
                     ago={ago(c.created_at)}
                     body={c.body}
+                    likes={c.likers.length}
+                    liked={!!session && c.likers.includes(session.user.id)}
+                    onLike={() => void toggleLike(c)}
                     onDelete={session && (c.user_id === session.user.id || staff) ? () => remove(c.id) : undefined}
                   />
                 ))}

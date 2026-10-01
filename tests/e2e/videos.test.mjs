@@ -28,9 +28,17 @@ test("顧客分享影片、刪除自己的；員工刪影片並記錄；下架�
   await c.locator("main ul li button", { hasText: "A-01" }).click();
   await c.waitForTimeout(600);
   const dialog = c.locator("[role=dialog]");
-  assert.ok((await dialog.textContent()).includes("第三手用左腳勾"), "看得到別人分享的影片");
-  assert.equal(await dialog.locator("video").count(), 1);
-  assert.equal(await dialog.locator('button:text-is("刪除")').count(), 0, "別人的影片沒有刪除鍵");
+  const thumbs = dialog.locator('button[aria-label^="播放"]');
+  assert.equal(await thumbs.count(), 1, "看得到別人分享的影片縮圖");
+  await thumbs.first().click();
+  const viewer = c.locator('[aria-label="影片播放"]');
+  await viewer.waitFor();
+  assert.ok((await viewer.textContent()).includes("第三手用左腳勾"), "全螢幕顯示說明");
+  assert.equal(await viewer.locator('button:text-is("刪除這支影片")').count(), 0, "別人的影片沒有刪除鍵");
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(200);
+  assert.equal(await viewer.count(), 0, "Esc 關閉播放");
+  assert.equal(await dialog.count(), 1, "路線卡片還開著");
 
   await dialog.locator("input[type=file]").setInputFiles(clip("clip.avi", "video/x-msvideo"));
   await c.waitForTimeout(400);
@@ -48,9 +56,23 @@ test("顧客分享影片、刪除自己的；員工刪影片並記錄；下架�
   assert.ok(mine.path.startsWith(`mingde/${r1.id}/${me}/`) && mine.path.endsWith(".mp4"), "路徑是 場館/路線/本人/檔名");
   assert.equal(mine.caption, "我的 beta");
   assert.ok(mock.db.vfiles[mine.path], "檔案已上傳");
-  assert.equal(await dialog.locator("video").count(), 2);
+  assert.equal(await thumbs.count(), 2);
 
-  await dialog.locator('button:text-is("刪除")').click();
+  // 新的在前：第一支是自己的；滑到下一支是別人的
+  await thumbs.first().click();
+  await viewer.waitFor();
+  assert.ok((await viewer.textContent()).includes("我的 beta"));
+  assert.ok((await viewer.textContent()).includes("1 / 2"));
+  const box = await viewer.boundingBox();
+  await c.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.45);
+  await c.mouse.down();
+  await c.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.45, { steps: 5 });
+  await c.mouse.up();
+  await c.waitForTimeout(200);
+  assert.ok((await viewer.textContent()).includes("2 / 2") && (await viewer.textContent()).includes("第三手用左腳勾"), "左滑換下一支");
+  await viewer.locator('button[aria-label="上一支"]').click();
+  assert.ok((await viewer.textContent()).includes("1 / 2"), "按 ‹ 回上一支");
+  await viewer.locator('button:text-is("刪除這支影片")').click();
   await c.waitForTimeout(600);
   assert.equal(mock.db.videos.length, 1, "刪除自己的影片");
   assert.ok(!mock.db.vfiles[mine.path], "檔案也刪掉");
@@ -70,11 +92,14 @@ test("顧客分享影片、刪除自己的；員工刪影片並記錄；下架�
   await s.waitForTimeout(1200);
   const main = await s.textContent("main");
   assert.ok(main.includes("明德館顧客影片") && /目前\s*2\s*支/.test(main), "後台看得到影片數");
-  const item = s.locator("main div.overflow-hidden", { hasText: "第三手用左腳勾" });
-  await item.locator('button:text-is("刪除")').click();
+  await s.locator('main button[aria-label^="播放 阿明"]').click();
+  const sv = s.locator('[aria-label="影片播放"]');
+  await sv.waitFor();
+  assert.ok((await sv.textContent()).includes("A 區 A-01"), "後台播放顯示區域與路線");
+  await sv.locator('button:text-is("刪除這支影片")').click();
   await s.waitForTimeout(200);
-  assert.ok((await item.textContent()).includes("再按一次"), "刪除要按兩次");
-  await item.locator('button:text-is("刪除")').click();
+  assert.ok((await sv.textContent()).includes("再按一次"), "刪除要按兩次");
+  await sv.locator('button:text-is("確定刪除？再按一次")').click();
   await s.waitForTimeout(800);
   assert.equal(mock.db.videos.length, 1);
   assert.ok(mock.db.audit.some((a) => a.action === "video.delete" && a.detail.author_nickname === "阿明"), "員工刪影片寫操作紀錄");
@@ -105,7 +130,8 @@ test("未登入看得到影片、要登入才能分享；留言關閉且沒有�
   await g.locator("main ul li button", { hasText: "A-01" }).click();
   await g.waitForTimeout(600);
   const text = await g.textContent("[role=dialog]");
-  assert.ok(text.includes("看我的") && text.includes("登入後分享影片"));
+  assert.ok(text.includes("看我的") || (await g.locator('[role=dialog] button[aria-label*="看我的"]').count()) === 1);
+  assert.ok(text.includes("登入後分享影片"));
   assert.equal(await g.locator("[role=dialog] input[type=file]").count(), 0);
   await g.keyboard.press("Escape");
   await g.waitForTimeout(400);
