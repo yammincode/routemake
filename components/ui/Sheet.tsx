@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 // 底部彈出面板（原型 .sheet）；點背景或按 Esc 關閉
+// 直接放到 body 底下，面板裡再開面板（例如路線卡片裡點名字看人物卡）也會蓋住整個畫面
 export default function Sheet({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     if (!open) return;
@@ -17,7 +19,7 @@ export default function Sheet({ open, onClose, children }: { open: boolean; onCl
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/[0.42]" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div
         role="dialog"
@@ -26,7 +28,8 @@ export default function Sheet({ open, onClose, children }: { open: boolean; onCl
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

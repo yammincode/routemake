@@ -38,3 +38,12 @@ export const GRADE_FEEL = [
   { v: 0, e: "＝", t: "剛好" },
   { v: 1, e: "⬆", t: "偏硬" },
 ] as const;
+
+// 人物卡：六角形能力（順序＝圖上從上方順時針）與攀岩年資選項
+export const ABILITY_AXES = ["力量", "指力", "動態", "耐力", "技巧", "柔軟"] as const;
+export const CLIMBING_YEARS = [
+  { v: "lt1", t: "未滿 1 年" },
+  { v: "1-3", t: "1–3 年" },
+  { v: "3-5", t: "3–5 年" },
+  { v: "5+", t: "5 年以上" },
+] as const;

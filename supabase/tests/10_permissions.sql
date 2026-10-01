@@ -651,6 +651,52 @@ select tests.throws('編輯：路線關閉留言後不能改', format('select pu
 reset role;
 
 -- ---------------------------------------------------------------------
+-- 人物卡
+-- ---------------------------------------------------------------------
+set role anon; select tests.login(null);
+select tests.ok('人物卡：預設不公開，別人只看得到暱稱', public.profile_card(:B) = '{"nickname": "乙", "public": false, "self": false}'::jsonb, public.profile_card(:B)::text);
+select tests.throws('人物卡：不能直接讀自我介紹欄位', 'select bio from public.profiles');
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.ok('人物卡：本人看得到自己的（未公開）', (public.profile_card(:B) ->> 'self')::boolean and public.profile_card(:B) ? 'ability');
+select tests.throws('人物卡：不能直接改欄位', 'update public.profiles set bio = ''嗨'' where id = auth.uid()');
+select tests.throws('人物卡：自我介紹不能放網址', $q$select public.save_my_card(true, '來看 https://x.co', null, null, null)$q$);
+select tests.throws('人物卡：自我介紹不能放電話', $q$select public.save_my_card(true, '打給我 0912 345 678', null, null, null)$q$);
+select tests.throws('人物卡：自我介紹不能放 IG', $q$select public.save_my_card(true, 'IG 找我', null, null, null)$q$);
+select tests.throws('人物卡：自我介紹不能放 LINE', $q$select public.save_my_card(true, '加 line 聊', null, null, null)$q$);
+select tests.throws('人物卡：自我介紹不能超過 60 字', $q$select public.save_my_card(true, repeat('字', 61), null, null, null)$q$);
+select tests.throws('人物卡：自評要 6 項 1–5', $q$select public.save_my_card(true, '嗨', null, null, '{1,2,3}')$q$);
+select tests.throws('人物卡：自評不能超過 5', $q$select public.save_my_card(true, '嗨', null, null, '{1,2,3,4,5,6}')$q$);
+select tests.throws('人物卡：年資只能選固定選項', $q$select public.save_my_card(true, '嗨', '10年', null, null)$q$);
+select tests.lives('人物卡：可以儲存並公開', $q$select public.save_my_card(true, '  喜歡動態路線  ', '1-3', 'mingde', '{3,4,5,2,3,1}')$q$);
+reset role;
+set role anon; select tests.login(null);
+select tests.ok('人物卡：公開後未登入也看得到', (select c ->> 'bio' = '喜歡動態路線' and c ->> 'years' = '1-3' and c ->> 'home_gym' = 'mingde'
+  and c -> 'self_stats' = '[3,4,5,2,3,1]' and not (c ->> 'self')::boolean from public.profile_card(:B) c));
+select tests.ok('人物卡：不會回傳私人心得或攀爬時間', (select not (c::text ilike '%note%' or c ? 'climbed_on' or c ? 'last_climb') from public.profile_card(:B) c));
+select tests.ok('人物卡：能力值 6 項、最高 100', (select jsonb_array_length(c -> 'ability') = 6 and (select max(x::int) from jsonb_array_elements_text(c -> 'ability') x) = 100 from public.profile_card(:B) c), public.profile_card(:B)::text);
+select tests.ok('人物卡：能力值依完攀風格（B-94 動態＋指力 → 動態、指力最高）',
+  (select (c -> 'ability' ->> 1)::int = 100 and (c -> 'ability' ->> 2)::int = 100 and (c -> 'ability' ->> 0)::int = 0 from public.profile_card(:B) c), public.profile_card(:B)::text);
+select tests.ok('人物卡：最高完攀與總數', (select (c ->> 'top_grade')::int >= 4 and (c ->> 'total_sends')::int >= 3 from public.profile_card(:B) c));
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.lives('人物卡：可以關閉', $q$select public.save_my_card(false, '喜歡動態路線', '1-3', 'mingde', null)$q$);
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.ok('人物卡：關閉後別人又只看得到暱稱', not (public.profile_card(:B) ->> 'public')::boolean and not public.profile_card(:B) ? 'bio');
+select tests.throws('人物卡：顧客不能清除別人的自我介紹', format('select public.clear_card_bio(%L, ''mingde'')', :B));
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.throws('人物卡：定線員不能清除自我介紹', format('select public.clear_card_bio(%L, ''mingde'')', :B));
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.lives('人物卡：店長可以清除自我介紹', format('select public.clear_card_bio(%L, ''mingde'')', :B));
+reset role;
+select tests.ok('人物卡：清除後自我介紹是空的、有操作紀錄',
+  (select bio is null from public.profiles where id = :B)
+  and exists (select 1 from public.audit_log where action = 'card.clear' and detail ->> 'bio' = '喜歡動態路線'));
+
+-- ---------------------------------------------------------------------
 -- 結果
 -- ---------------------------------------------------------------------
 \o

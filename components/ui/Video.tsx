@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { Status } from "@/lib/design";
 import Icon from "./Icon";
 import { StatusBadge } from "./Route";
@@ -13,6 +14,7 @@ export type VideoCard = {
   caption?: string | null;
   status?: Status | null;
   meta?: ReactNode; // 例如後台的「B 區 B-03」
+  onName?: () => void; // 點名字看人物卡
 };
 
 // 影片縮圖：直式，顯示第一格畫面（網址加 #t=0.1 讓手機載入第一格）、上傳者、完成狀態
@@ -101,7 +103,7 @@ export function VideoViewer({
     if (n >= 0 && n < items.length) onIndex(n);
   };
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -157,7 +159,13 @@ export function VideoViewer({
       </div>
       <div className="px-4 pt-3 pb-[calc(16px+env(safe-area-inset-bottom,0px))]">
         <div className="flex items-center gap-2 text-meta text-white/75">
-          <b className="text-sub font-bold text-white">{v.name}</b>
+          {v.onName ? (
+            <button onClick={v.onName} className="text-sub font-bold text-white underline decoration-white/40 underline-offset-2">
+              {v.name}
+            </button>
+          ) : (
+            <b className="text-sub font-bold text-white">{v.name}</b>
+          )}
           {v.ago}
           {v.status && <StatusBadge status={v.status} />}
         </div>
@@ -165,7 +173,8 @@ export function VideoViewer({
         {v.caption && <p className="mt-1 mb-0 text-sub leading-normal break-words">{v.caption}</p>}
         {actions && <div className="mt-2">{actions(index)}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

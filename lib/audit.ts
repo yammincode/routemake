@@ -7,6 +7,7 @@ export const AUDIT_FILTERS = [
   { key: "route", label: "路線", actions: ["route.archive", "route.unarchive", "zone.archive_all", "zone.reorder"] },
   { key: "comment", label: "留言", actions: ["comment.delete"] },
   { key: "video", label: "影片", actions: ["video.delete"] },
+  { key: "card", label: "人物卡", actions: ["card.clear"] },
   { key: "staff", label: "員工", actions: ["staff.assign", "staff.remove"] },
   { key: "scoring", label: "計分", actions: ["scoring.update"] },
 ] as const;
@@ -33,6 +34,8 @@ export function describeAudit(a: AuditEntry): string {
       const cap = str(d.caption);
       return `刪除 ${str(d.author_nickname) || "顧客"} 在 ${str(d.code) || "路線"} 的影片${cap ? `「${cap}」` : ""}`;
     }
+    case "card.clear":
+      return `清除 ${person} 的人物卡自我介紹「${str(d.bio).length > 24 ? str(d.bio).slice(0, 24) + "…" : str(d.bio)}」`;
     case "staff.assign":
       return `指派 ${person} 為${ROLE_NAME[(str(d.role) || "setter") as Role]}`;
     case "staff.remove":

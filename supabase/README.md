@@ -18,6 +18,7 @@
 | `setup/step9-gym-zones.sql` | migration 0013：萬華、中和、南港、新店開放並建立區域；明德比賽牆分四段、新增 Spray Wall；10 月換線日 | 已套用 |
 | `setup/step10-comment-likes.sql` | migration 0014：留言按讚 👍（comment_likes） | 已套用 |
 | `setup/step11-one-comment.sql` | migration 0015：每人每條路線一則留言（重複的保留最新一則）、edit_comment() 編輯留言 | 待套用 |
+| `setup/step12-profile-card.sql` | migration 0016：人物卡（預設不公開、自我介紹擋聯絡方式、能力值依完攀計算＋自評、店長可清除） | 待套用 |
 
 ## 規則摘要
 
@@ -28,7 +29,7 @@
 | routes | 所有人 | 該館員工；編號自動產生、不能改 | 不開放，用 `archived_at` 下架 |
 | ascents | 只有本人 | 只有本人 | 只有本人 |
 | comments | 所有人（未刪除） | 登入且有暱稱；路線未下架、路線與場館留言都開啟；每人每條路線一則；1 分鐘最多 5 則、24 小時最多 100 則；本人可用 `edit_comment()` 修改 | `delete_comment()`：本人或該館員工（軟刪除） |
-| profiles | 所有人只能讀 id、暱稱、頭像（帳號名稱、手機不公開） | 本人只能改暱稱、頭像 | 不開放 |
+| profiles | 所有人只能讀 id、暱稱、頭像（帳號名稱、手機不公開）；人物卡只能透過 `profile_card()`，未公開時只回傳暱稱 | 本人只能改暱稱、頭像；人物卡用 `save_my_card()`；店長可用 `clear_card_bio()` 清除自我介紹 | 不開放 |
 | staff_roles | 本人、該館店長 | 店長只能指派定線長，店長由老闆指派（`lookup_user()` 先確認暱稱，再 `assign_staff(帳號, 館, 角色)`） | 同左（`remove_staff()`） |
 | audit_log | 該館店長、老闆 | 只能由函式寫入 | 不開放 |
 | scoring_rules | 所有人 | 只有老闆 | 不開放 |

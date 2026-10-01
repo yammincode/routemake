@@ -12,7 +12,9 @@ export function CommentItem({
   likes = 0,
   liked = false,
   onLike,
+  onName,
 }: {
+  onName?: () => void; // 點名字看人物卡
   name: string;
   ago: string;
   body: string;
@@ -27,7 +29,13 @@ export function CommentItem({
     <div className="h-full rounded-btn bg-sunk px-3 py-2.5">
       <div className="flex items-center justify-between text-meta text-muted">
         <span>
-          <b className="mr-1.5 font-bold text-ink">{name}</b>
+          {onName ? (
+            <button onClick={onName} className="mr-1.5 font-bold text-ink underline decoration-line underline-offset-2">
+              {name}
+            </button>
+          ) : (
+            <b className="mr-1.5 font-bold text-ink">{name}</b>
+          )}
           {ago}
           {edited && <span className="ml-1">・已編輯</span>}
         </span>

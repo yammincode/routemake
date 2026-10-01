@@ -485,3 +485,37 @@ export async function cleanOrphanVideos(gym: string): Promise<number> {
   await removeVideoFiles(paths);
   return paths.length;
 }
+
+// ---------- 人物卡 ----------
+// 沒公開時只有 nickname、public、self；公開或本人才有其他欄位
+export type ProfileCard = {
+  nickname: string | null;
+  public: boolean;
+  self: boolean;
+  bio?: string | null;
+  years?: string | null;
+  home_gym?: string | null;
+  self_stats?: number[] | null;
+  ability?: number[];
+  ability_sends?: number;
+  total_sends?: number;
+  month_sends?: number;
+  top_grade?: number | null;
+};
+export async function getProfileCard(userId: string): Promise<ProfileCard> {
+  return must(await supabase().rpc("profile_card", { p_user: userId }));
+}
+export async function saveMyCard(c: { public: boolean; bio: string; years: string | null; home_gym: string | null; self_stats: number[] | null }) {
+  must(
+    await supabase().rpc("save_my_card", {
+      p_public: c.public,
+      p_bio: c.bio,
+      p_years: c.years,
+      p_home_gym: c.home_gym,
+      p_self: c.self_stats,
+    })
+  );
+}
+export async function clearCardBio(userId: string, gym: string) {
+  must(await supabase().rpc("clear_card_bio", { p_user: userId, p_gym: gym }));
+}

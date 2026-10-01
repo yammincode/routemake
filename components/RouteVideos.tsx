@@ -22,7 +22,9 @@ export default function RouteVideos({
   myStatus,
   onLogin,
   onCount,
+  onProfile,
 }: {
+  onProfile?: (userId: string) => void;
   route: Route;
   gymId: string;
   open: boolean;
@@ -57,6 +59,7 @@ export default function RouteVideos({
     ago: ago(v.created_at),
     caption: v.caption,
     status: v.status,
+    onName: onProfile ? () => (setPlaying(null), onProfile(v.user_id)) : undefined,
   }));
   if (!canShare && videos && !videos.length) return <ClosedNotice>這條路線目前不開放分享影片</ClosedNotice>;
 

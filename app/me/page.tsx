@@ -1,11 +1,13 @@
 import Link from "next/link";
 import AccountCard from "@/components/AccountCard";
+import MyCardEditor from "@/components/MyCardEditor";
 import MeGym from "./MeGym";
 
 export default function MePage() {
   return (
     <>
       <MeGym />
+      <MyCardEditor />
       <div className="mt-7">
         <AccountCard />
       </div>

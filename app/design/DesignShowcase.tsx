@@ -7,10 +7,11 @@ import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/C
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { SortList } from "@/components/ui/SortList";
 import { Tabs } from "@/components/ui/Tabs";
+import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
-import { Check, ColorPicker, GradePicker, Label, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
+import { Check, ColorPicker, GradePicker, Label, Rating, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
 import { NewRouteCard, NewRouteRow, ResetList, SoonBox, ZoneCard, ZoneList } from "@/components/ui/Gym";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
@@ -102,6 +103,7 @@ export default function DesignShowcase() {
   const [playing, setPlaying] = useState<number | null>(null);
   const [liked, setLiked] = useState(false);
   const [demoTab, setDemoTab] = useState<"log" | "video" | "comment">("log");
+  const [rate, setRate] = useState<number | null>(3);
   const [order, setOrder] = useState(["A 區", "比賽牆", "B 區", "C 區"]);
   const [pickColor, setPickColor] = useState<HoldColor>("紅");
   const [pickGrade, setPickGrade] = useState(3);
@@ -393,6 +395,22 @@ export default function DesignShowcase() {
           <CommentItem name="阿明" ago="3 天前" body="起步右腳踩高一點" likes={1} onLike={() => toast("👍")} />
         </CommentList>
         <p className="-mt-1.5 mb-0 text-tiny text-muted">共 3 則，左右滑動看更多</p>
+      </Block>
+
+      <Block title="人物卡">
+        <ProfileCardView
+          name="小安"
+          meta="攀岩 1–3 年・常去明德館"
+          bio="喜歡動態路線，正在練指力"
+          chart={<HexChart actual={[40, 100, 85, 20, 60, 10]} self={[3, 4, 5, 2, 3, rate ?? 1]} />}
+          stats={<>最高完攀 <b className="font-num text-ink">V6</b>・本月完攀 <b className="font-num text-ink">23</b> 條</>}
+        />
+        <div className="mt-3 flex items-center gap-2">
+          <Avatar name="阿明" size={36} />
+          <Avatar name="Climber" size={36} />
+          <span className="text-meta text-muted">頭像只用暱稱第一個字</span>
+        </div>
+        <Rating label="柔軟" value={rate} onChange={setRate} />
       </Block>
 
       <Block title="拖曳排序">

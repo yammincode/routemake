@@ -256,6 +256,36 @@ export function createMock() {
       c.edited_at = now();
       return J(route, 200, null);
     }
+    if (fn === "profile_card") {
+      const p = prof(a.p_user);
+      if (!p) return J(route, 404, { code: "P0002", message: "找不到這個人" });
+      const self = a.p_user === uid;
+      if (!p.card_public && !self) return J(route, 200, { nickname: p.nickname, public: false, self: false });
+      const sends = db.ascents.filter((x) => x.user_id === a.p_user && x.status !== "project").map((x) => db.routes.find((r) => r.id === x.route_id));
+      const axes = [["力量"], ["指力"], ["動態", "協調"], ["耐力"], ["技巧", "腳法", "平衡"], ["柔軟"]];
+      const raw = axes.map((t) => sends.filter((r) => r.style_tags.some((g) => t.includes(g))).reduce((n, r) => n + db.scoring.grade_points[r.grade], 0));
+      const mx = Math.max(...raw);
+      return J(route, 200, {
+        nickname: p.nickname, public: !!p.card_public, self, bio: p.bio ?? null, years: p.climbing_years ?? null, home_gym: p.home_gym ?? null,
+        self_stats: p.self_stats ?? null, ability: raw.map((v) => (mx ? Math.round((100 * v) / mx) : 0)),
+        ability_sends: sends.filter((r) => r.style_tags.length).length, total_sends: sends.length, month_sends: sends.length,
+        top_grade: sends.length ? Math.max(...sends.map((r) => r.grade)) : null,
+      });
+    }
+    if (fn === "save_my_card") {
+      const bio = (a.p_bio || "").trim();
+      if (bio.length > 60 || /(https?:\/\/|www\.|line|instagram|\big\b|@|[0-9]{7,})/i.test(bio))
+        return J(route, 400, { code: "22023", message: "自我介紹最多 60 字，而且不能放聯絡方式（網址、電話、LINE、IG 等）" });
+      Object.assign(prof(uid), { card_public: !!a.p_public, bio: bio || null, climbing_years: a.p_years || null, home_gym: a.p_home_gym || null, self_stats: a.p_self });
+      return J(route, 200, null);
+    }
+    if (fn === "clear_card_bio") {
+      if (!isMgr(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有店長可以清除自我介紹" });
+      const p = prof(a.p_user);
+      audit(uid, a.p_gym, "card.clear", p.id, { nickname: p.nickname, bio: p.bio });
+      p.bio = null;
+      return J(route, 200, null);
+    }
     if (fn === "lookup_user") {
       const p = db.profiles.find((x) => x.username === a.p_username.toLowerCase());
       return p ? J(route, 200, { id: p.id, nickname: p.nickname }) : J(route, 404, { code: "P0002", message: "找不到這個帳號，請對方先註冊" });

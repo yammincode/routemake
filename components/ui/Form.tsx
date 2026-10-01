@@ -137,3 +137,28 @@ export function Check({ checked, onChange, children }: { checked: boolean; onCha
     </label>
   );
 }
+
+// 1–5 分評分（人物卡自評）：一排五顆小按鈕
+export function Rating({ label, value, onChange }: { label: string; value: number | null; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center gap-2 py-1">
+      <span className="w-10 flex-none text-note font-bold">{label}</span>
+      <div className="grid flex-1 grid-cols-5 gap-1.5" role="radiogroup" aria-label={label}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            role="radio"
+            aria-checked={value === n}
+            aria-label={`${label} ${n} 分`}
+            onClick={() => onChange(n)}
+            className={`rounded-full border py-1 font-num text-[15px] font-semibold ${
+              value != null && n <= value ? "border-accent bg-accent-soft text-accent" : "border-line text-muted"
+            } aria-checked:bg-accent aria-checked:text-surface`}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

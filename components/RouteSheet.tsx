@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import ProfileSheet from "@/components/ProfileSheet";
 import RouteVideos from "@/components/RouteVideos";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
@@ -89,6 +90,7 @@ function RouteBody({
   const [details, setDetails] = useState(!!(ascent && (ascent.feel != null || ascent.grade_feel != null || ascent.private_note)));
   const [videoCount, setVideoCount] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
+  const [profile, setProfile] = useState<string | null>(null);
   const onVideoCount = useCallback((n: number) => setVideoCount(n), []);
 
   const commentsOpen = gymCommentsOn && r.comments_enabled;
@@ -317,7 +319,7 @@ function RouteBody({
       </div>
 
       <div role="tabpanel" hidden={shownTab !== "video"}>
-        <RouteVideos route={r} gymId={gymId} open={commentsOpen} staff={staff} myStatus={ascent?.status ?? null} onLogin={toLogin} onCount={onVideoCount} />
+        <RouteVideos route={r} gymId={gymId} open={commentsOpen} staff={staff} myStatus={ascent?.status ?? null} onLogin={toLogin} onCount={onVideoCount} onProfile={setProfile} />
       </div>
 
       <div role="tabpanel" hidden={shownTab !== "comment"}>
@@ -335,6 +337,7 @@ function RouteBody({
                       ago={ago(c.created_at)}
                       body={c.body}
                       edited={!!c.edited_at}
+                      onName={() => setProfile(c.user_id)}
                       likes={c.likers.length}
                       liked={!!uid && c.likers.includes(uid)}
                       onLike={() => void toggleLike(c)}
@@ -373,6 +376,7 @@ function RouteBody({
           </>
         )}
       </div>
+      <ProfileSheet userId={profile} gymId={gymId} onClose={() => setProfile(null)} />
     </>
   );
 }
