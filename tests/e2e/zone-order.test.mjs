@@ -8,7 +8,7 @@ let browser;
 before(async () => (browser = await launch()));
 after(async () => browser?.close());
 
-const order = (mock) => mock.db.zones.filter((z) => z.gym_id === "mingde").sort((a, b) => a.sort - b.sort).map((z) => z.code).join("");
+const order = (mock) => mock.db.zones.filter((z) => z.gym_id === "mingde" && z.kind !== "spray").sort((a, b) => a.sort - b.sort).map((z) => z.code).join("");
 
 test("後台點平面圖切換區域；圖上沒有的區域用按鈕", async () => {
   const mock = createMock();

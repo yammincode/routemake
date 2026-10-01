@@ -93,7 +93,15 @@ export function NewRouteCard({ color, grade, zone, ago, ...rest }: ComponentProp
 }
 
 // 場館選擇列（原型 .gymrow）
-export function GymRow({ name, live, selected, logo, ...rest }: ComponentProps<"button"> & { name: string; live: boolean; selected: boolean; logo?: string }) {
+// tag：右邊的小字（預設「已上線／即將上線」）
+export function GymRow({
+  name,
+  live,
+  selected,
+  logo,
+  tag,
+  ...rest
+}: ComponentProps<"button"> & { name: string; live: boolean; selected: boolean; logo?: string; tag?: string }) {
   return (
     <button
       aria-pressed={selected}
@@ -105,7 +113,7 @@ export function GymRow({ name, live, selected, logo, ...rest }: ComponentProps<"
         {logo && <img src={logo} alt="" width={48} height={48} className={`size-12 flex-none ${live ? "" : "opacity-60 grayscale-[40%]"}`} />}
         {name}
       </span>
-      <small className={`text-meta ${live ? "font-bold text-accent" : "font-normal text-muted"}`}>{live ? "已上線" : "即將上線"}</small>
+      <small className={`text-meta ${live ? "font-bold text-accent" : "font-normal text-muted"}`}>{tag ?? (live ? "已上線" : "即將上線")}</small>
     </button>
   );
 }

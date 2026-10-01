@@ -7,6 +7,7 @@ import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/C
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { SortList } from "@/components/ui/SortList";
 import { Tabs } from "@/components/ui/Tabs";
+import { HoldLegend, HoldMarks, HoldTools, SprayRow } from "@/components/ui/Spray";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
@@ -104,6 +105,8 @@ export default function DesignShowcase() {
   const [liked, setLiked] = useState(false);
   const [demoTab, setDemoTab] = useState<"log" | "video" | "comment">("log");
   const [rate, setRate] = useState<number | null>(3);
+  const [holdType, setHoldType] = useState<"s" | "h" | "t">("s");
+  const [holdSize, setHoldSize] = useState<1 | 2 | 3>(2);
   const [order, setOrder] = useState(["A 區", "比賽牆", "B 區", "C 區"]);
   const [pickColor, setPickColor] = useState<HoldColor>("紅");
   const [pickGrade, setPickGrade] = useState(3);
@@ -395,6 +398,25 @@ export default function DesignShowcase() {
           <CommentItem name="阿明" ago="3 天前" body="起步右腳踩高一點" likes={1} onLike={() => toast("👍")} />
         </CommentList>
         <p className="-mt-1.5 mb-0 text-tiny text-muted">共 3 則，左右滑動看更多</p>
+      </Block>
+
+      <Block title="Spray Wall">
+        <HoldTools type={holdType} size={holdSize} onType={setHoldType} onSize={setHoldSize} />
+        <div className="relative mb-2 aspect-[4/3] overflow-hidden rounded-tile bg-sunk shadow-card">
+          <HoldMarks
+            holds={[
+              { x: 20, y: 82, t: "s", r: 2 },
+              { x: 32, y: 60, t: "h", r: 1 },
+              { x: 46, y: 42, t: "h", r: 3 },
+              { x: 64, y: 16, t: "t", r: 2 },
+            ]}
+          />
+        </div>
+        <HoldLegend />
+        <ul className="m-0 grid list-none gap-2.5 p-0">
+          <SprayRow grade={4} name="下雨天的指力" meta="小安 出的・3 天前" sends={12} likes={8} done onClick={() => toast("打開路線")} />
+          <SprayRow grade={1} name="晚餐前的熱身" meta="阿明 出的・今天" sends={0} likes={1} onClick={() => toast("打開路線")} />
+        </ul>
       </Block>
 
       <Block title="人物卡">

@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
-import { BackLink, PageTitle } from "@/components/ui/Card";
+import { BackLink, PageTitle, SectionTitle } from "@/components/ui/Card";
 import { GymRow } from "@/components/ui/Gym";
-import { GYMS, gymPath, saveLastGym } from "@/lib/gyms";
+import { GYMS, gymPath, saveLastGym, SPRAY_WALLS, sprayPath } from "@/lib/gyms";
 import { backOr } from "@/lib/nav";
 
 // 選擇攀岩館：點一間就進到那間館；上一頁回到入口頁
@@ -28,6 +28,23 @@ export default function GymPicker() {
             onClick={() => {
               saveLastGym(g.id);
               router.push(gymPath(g.id));
+            }}
+          />
+        ))}
+      </div>
+      <SectionTitle>Spray Wall</SectionTitle>
+      <div className="grid gap-2">
+        {SPRAY_WALLS.map((s) => (
+          <GymRow
+            key={s.id}
+            name={s.name}
+            logo={s.logo}
+            live
+            tag="大家一起出路線"
+            selected={false}
+            onClick={() => {
+              saveLastGym(s.id);
+              router.push(sprayPath(s.id));
             }}
           />
         ))}

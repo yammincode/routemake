@@ -31,6 +31,8 @@ export function createMock() {
       ["D", "D 區"],
     ].map(([code, name], i) => ({ id: uuid(), gym_id: "mingde", code, name, sort: i + 1, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0, grade_system: "v" }))
       .concat(
+        // Spray Wall（同 migration 0018）
+        [["mingde", "S"], ["g4", "SW"]].map(([gym_id, code]) => ({ id: uuid(), gym_id, code, name: "Spray Wall", sort: 99, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0, grade_system: "v", kind: "spray" })),
         // 其他館的區域（同 migration 0013）
         Object.entries({
           g2: [["A", "A 區"], ["B", "B 區"], ["C", "C 區"], ["D", "D 區"], ["TR", "訓練區"], ["SL", "教學區 Slab"]],
@@ -42,6 +44,7 @@ export function createMock() {
     routes: [],
     ascents: [],
     comments: [],
+    routeLikes: [], // route_likes
     likes: [], // comment_likes
     audit: [],
     files: {},
@@ -171,7 +174,7 @@ export function createMock() {
       return J(route, 200, p ? { id: p.id, username: p.username, nickname: p.nickname, avatar_url: null, is_owner: p.is_owner, roles: db.staff_roles.filter((s) => s.user_id === uid).map((s) => ({ gym_id: s.gym_id, role: s.role })) } : null);
     }
     if (fn === "zone_progress")
-      return J(route, 200, db.zones.filter((z) => z.gym_id === a.p_gym).sort((x, y) => x.sort - y.sort).map((z) => {
+      return J(route, 200, db.zones.filter((z) => z.gym_id === a.p_gym && z.kind !== "spray").sort((x, y) => x.sort - y.sort).map((z) => {
         const rs = db.routes.filter((r) => r.zone_id === z.id && !r.archived_at);
         return { zone_id: z.id, code: z.code, name: z.name, sort: z.sort, photo_path: z.photo_path, next_reset_on: z.next_reset_on, route_count: rs.length, done_count: rs.filter((r) => db.ascents.some((x) => x.route_id === r.id && x.user_id === uid && x.status !== "project")).length };
       }));
@@ -288,6 +291,20 @@ export function createMock() {
       p.bio = null;
       return J(route, 200, null);
     }
+    if (fn === "spray_list") {
+      let rs = db.routes.filter((r) => r.zone_id === a.p_zone && !r.archived_at && (r.kind ?? "gym") === a.p_kind && (a.p_grade == null || r.grade === a.p_grade));
+      if (a.p_sort === "mine") rs = rs.filter((r) => r.created_by === uid);
+      const rows = rs.map((r) => ({
+        id: r.id, code: r.code, name: r.name, grade: r.grade, description: r.description ?? null, holds: r.holds, kind: r.kind, created_at: r.created_at,
+        style_tags: r.style_tags, comments_enabled: r.comments_enabled, author: prof(r.created_by)?.nickname ?? null,
+        sends: new Set(db.ascents.filter((x) => x.route_id === r.id && x.status !== "project").map((x) => x.user_id)).size,
+        likes: db.routeLikes.filter((l) => l.route_id === r.id).length, liked: db.routeLikes.some((l) => l.route_id === r.id && l.user_id === uid),
+        mine: r.created_by === uid,
+      }));
+      const key = a.p_sort === "sends" ? "sends" : a.p_sort === "likes" ? "likes" : null;
+      rows.sort((x, y) => (key ? y[key] - x[key] : 0) || y.created_at.localeCompare(x.created_at));
+      return J(route, 200, rows.slice(a.p_offset, a.p_offset + a.p_limit));
+    }
     if (fn === "lookup_user") {
       const p = db.profiles.find((x) => x.username === a.p_username.toLowerCase());
       return p ? J(route, 200, { id: p.id, nickname: p.nickname }) : J(route, 404, { code: "P0002", message: "找不到這個帳號，請對方先註冊" });
@@ -396,7 +413,7 @@ export function createMock() {
     }
     if (t === "routes") {
       if (m === "GET") {
-        let rows = db.routes.map((r) => ({ ...r, zones: { gym_id: zoneOf(r.zone_id).gym_id, name: zoneOf(r.zone_id).name } }));
+        let rows = db.routes.map((r) => ({ ...r, zones: { gym_id: zoneOf(r.zone_id).gym_id, name: zoneOf(r.zone_id).name, kind: zoneOf(r.zone_id).kind ?? "wall" } }));
         rows = filt(rows, sp);
         if ((sp.get("order") || "").includes("created_at.desc")) rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
         else rows.sort((a, b) => a.grade - b.grade || a.code.localeCompare(b.code));
@@ -405,15 +422,19 @@ export function createMock() {
       }
       if (m === "POST") {
         const z = zoneOf(body.zone_id);
-        if (!isStaff(uid, z.gym_id)) return J(route, 403, { code: "42501", message: "沒有權限" });
+        const community = body.kind === "community" && z.kind === "spray" && prof(uid)?.nickname;
+        if (!isStaff(uid, z.gym_id) && !community) return J(route, 403, { code: "42501", message: "沒有權限" });
+        if (z.kind === "spray" && !(body.holds?.some((h) => h.t === "s") && body.holds?.some((h) => h.t === "t")))
+          return J(route, 400, { code: "22023", message: "路線要有起攀（S）和完攀（T），圈圈最多 60 個" });
         z.route_seq++;
-        const r = { id: uuid(), code: `${z.code}-${String(z.route_seq).padStart(2, "0")}`, style_tags: [], setter_note: null, comments_enabled: true, created_at: now(), archived_at: null, ...body };
+        const first = body.holds?.find((h) => h.t === "s");
+        const r = { id: uuid(), code: `${z.code}-${String(z.route_seq).padStart(2, "0")}`, style_tags: [], setter_note: null, comments_enabled: true, created_at: now(), archived_at: null, kind: "gym", created_by: uid, ...body, ...(first ? { pin_x: first.x, pin_y: first.y } : {}) };
         db.routes.push(r);
         return out([r]);
       }
       if (m === "PATCH") {
-        filt(db.routes, sp).filter((r) => isStaff(uid, zoneOf(r.zone_id).gym_id)).forEach((r) => {
-          if (!r.archived_at && body.archived_at) {
+        filt(db.routes, sp).filter((r) => isStaff(uid, zoneOf(r.zone_id).gym_id) || (r.kind === "community" && r.created_by === uid)).forEach((r) => {
+          if (!r.archived_at && body.archived_at && !(r.kind === "community" && r.created_by === uid)) {
             audit(uid, zoneOf(r.zone_id).gym_id, "route.archive", r.id, { code: r.code, zone: zoneOf(r.zone_id).name, grade: r.grade, color: r.hold_color });
             dropVideos(r.id);
           }
@@ -475,6 +496,18 @@ export function createMock() {
           return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "route_videos"' });
         db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, ...body, user_id: uid, created_at: now() });
         return empty(route, 201);
+      }
+    }
+    if (t === "route_likes") {
+      if (m === "POST") {
+        if (!uid || !prof(uid)?.nickname) return J(route, 403, { code: "42501", message: "沒有權限" });
+        db.routeLikes.push({ route_id: body.route_id, user_id: uid });
+        return empty(route, 201);
+      }
+      if (m === "DELETE") {
+        const del = filt(db.routeLikes.filter((l) => l.user_id === uid), sp);
+        db.routeLikes = db.routeLikes.filter((l) => !del.includes(l));
+        return empty(route);
       }
     }
     if (t === "comment_likes") {

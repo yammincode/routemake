@@ -6,7 +6,7 @@ import Logo from "@/components/Logo";
 import { GymRow } from "@/components/ui/Gym";
 import Icon from "@/components/ui/Icon";
 import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
-import { GYMS, gymPath, saveLastGym, type Gym } from "@/lib/gyms";
+import { GYMS, gymPath, saveLastGym, SPRAY_WALLS, sprayPath, type Gym } from "@/lib/gyms";
 
 // 頁首：左上 Logo，右上場館切換（原型 .hd）
 export default function Header({ gym }: { gym: Gym }) {
@@ -39,6 +39,21 @@ export default function Header({ gym }: { gym: Gym }) {
         <div className="grid gap-2">
           {GYMS.map((g) => (
             <GymRow key={g.id} name={g.name} logo={g.logo} live={g.live} selected={g.id === gym.id} onClick={() => pick(g)} />
+          ))}
+          {SPRAY_WALLS.map((s) => (
+            <GymRow
+              key={s.id}
+              name={s.name}
+              logo={s.logo}
+              live
+              tag="Spray Wall"
+              selected={s.id === gym.id}
+              onClick={() => {
+                setOpen(false);
+                saveLastGym(s.id);
+                router.push(sprayPath(s.id));
+              }}
+            />
           ))}
         </div>
       </Sheet>

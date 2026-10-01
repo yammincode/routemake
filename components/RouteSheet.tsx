@@ -12,7 +12,9 @@ import { Label, Segmented, TextArea, TextField } from "@/components/ui/Form";
 import { Grade, SetterNote, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { Tabs } from "@/components/ui/Tabs";
+import { HoldMarks } from "@/components/ui/Spray";
 import { useToast } from "@/components/ui/Toast";
+import { WallPhoto } from "@/components/ui/Wall";
 import { isStaffOf } from "@/lib/auth";
 import { clearAscent, deleteComment, editComment, getComments, likeComment, postComment, saveAscent, unlikeComment, type Ascent, type Comment, type Route } from "@/lib/data";
 import { ago, md, todayYmd, ymd } from "@/lib/date";
@@ -30,6 +32,7 @@ export default function RouteSheet({
   ascent,
   onClose,
   onSaved,
+  spray,
 }: {
   route: Route | null;
   zoneName: string;
@@ -38,6 +41,7 @@ export default function RouteSheet({
   ascent: Ascent | null;
   onClose: () => void;
   onSaved: (a: Ascent | null) => void;
+  spray?: SprayExtras;
 }) {
   return (
     <Sheet open={!!route} onClose={onClose}>
@@ -51,11 +55,24 @@ export default function RouteSheet({
           ascent={ascent}
           onClose={onClose}
           onSaved={onSaved}
+          spray={spray}
         />
       )}
     </Sheet>
   );
 }
+
+// Spray Wall 路線額外的內容：公版照片（顯示這條路線的圈圈）、出題者、讚、修改／刪除
+export type SprayExtras = {
+  photo: string | null;
+  author: string | null;
+  likes: number;
+  liked: boolean;
+  onLike: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  deleteLabel?: string; // 本人「刪除」、員工「下架」
+};
 
 function RouteBody({
   route: r,
@@ -65,6 +82,7 @@ function RouteBody({
   ascent,
   onClose,
   onSaved,
+  spray,
 }: {
   route: Route;
   zoneName: string;
@@ -73,6 +91,7 @@ function RouteBody({
   ascent: Ascent | null;
   onClose: () => void;
   onSaved: (a: Ascent | null) => void;
+  spray?: SprayExtras;
 }) {
   const { session, access } = useAuth();
   const rules = useScoring();
@@ -139,7 +158,16 @@ function RouteBody({
     }
     setStatus(s);
     const pts = rules ? ascentPoints(r.grade, r.style_tags, s, rules) : 0;
-    await persist(current(s), s === "flash" ? `Flash！漂亮 +${pts} 分` : s === "send" ? `完攀 +${pts} 分` : "已記錄：嘗試中");
+    // 岩友路線不算積分
+    const msg =
+      r.kind === "community"
+        ? `已記錄：${STATUS_LABEL[s]}（岩友路線不算積分）`
+        : s === "flash"
+          ? `Flash！漂亮 +${pts} 分`
+          : s === "send"
+            ? `完攀 +${pts} 分`
+            : "已記錄：嘗試中";
+    await persist(current(s), msg);
   };
 
   const save = async () => {
@@ -232,14 +260,30 @@ function RouteBody({
 
   return (
     <>
+      {spray?.photo && r.holds && (
+        <WallPhoto src={spray.photo} alt={`${r.name ?? "路線"}的圈圈`}>
+          <HoldMarks holds={r.holds} />
+        </WallPhoto>
+      )}
       <SheetTitle>
-        <Tape color={r.hold_color} className="h-[34px]" />
-        <Grade grade={r.grade} className="text-num-sheet" />
-        {r.hold_color}色
+        {r.name ? (
+          <>
+            <Grade grade={r.grade} className="text-num-sheet" />
+            <span className="min-w-0 break-words">{r.name}</span>
+          </>
+        ) : (
+          <>
+            <Tape color={r.hold_color} className="h-[34px]" />
+            <Grade grade={r.grade} className="text-num-sheet" />
+            {r.hold_color}色
+          </>
+        )}
       </SheetTitle>
       <SheetSub>
-        {zoneName} {r.code}・{ago(r.created_at)}設定{r.archived_at ? "・已下架" : ""}
-        {rules && (
+        {spray ? `${spray.author ?? "攀岩者"} 出的・${ago(r.created_at)}` : `${zoneName} ${r.code}・${ago(r.created_at)}設定`}
+        {r.archived_at ? "・已下架" : ""}
+        {r.kind === "community" && "・岩友路線不算積分"}
+        {rules && r.kind !== "community" && (
           <>
             {"・"}完攀 <b className="font-num text-[16px] text-ink">{routePoints(r.grade, r.style_tags, rules)}</b> 分・Flash{" "}
             <b className="font-num text-[16px] text-ink">{ascentPoints(r.grade, r.style_tags, "flash", rules)}</b> 分
@@ -248,6 +292,29 @@ function RouteBody({
       </SheetSub>
       <Tags tags={r.style_tags} />
       {r.setter_note && <SetterNote>{r.setter_note}</SetterNote>}
+      {r.description && <SetterNote>{r.description}</SetterNote>}
+      {spray && (
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            aria-pressed={spray.liked}
+            onClick={spray.onLike}
+            className="inline-flex items-center gap-1 rounded-full border border-line px-3 py-1 text-note text-muted aria-pressed:border-accent aria-pressed:bg-accent-soft aria-pressed:font-bold aria-pressed:text-accent"
+          >
+            👍 <span className="font-num">{spray.likes}</span>
+          </button>
+          <span className="flex-1" />
+          {spray.onEdit && (
+            <button onClick={spray.onEdit} className="px-1 py-1 text-note font-bold text-accent">
+              修改
+            </button>
+          )}
+          {spray.onDelete && (
+            <button onClick={spray.onDelete} className="px-1 py-1 text-note text-warn">
+              {spray.deleteLabel ?? "下架"}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="mt-3">
         <StatusPicker compact value={session ? status : null} onChange={(s) => void quick(s)} />

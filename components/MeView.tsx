@@ -152,8 +152,8 @@ export default function MeView({ gymId }: { gymId: string }) {
                   grade={a.route.grade}
                   title={
                     <>
-                      {a.route.zone_name} {a.route.hold_color}色 {feelEmoji(a.feel)}
-                      {rules && <Points prefix="+" n={ascentPoints(a.route.grade, a.route.style_tags, a.status, rules)} />}
+                      {a.route.name ? `${a.route.zone_name}・${a.route.name}` : `${a.route.zone_name} ${a.route.hold_color}色`} {feelEmoji(a.feel)}
+                      {rules && a.route.kind !== "community" && <Points prefix="+" n={ascentPoints(a.route.grade, a.route.style_tags, a.status, rules)} />}
                     </>
                   }
                   meta={`${+a.climbed_on.slice(5, 7)}/${+a.climbed_on.slice(8, 10)}${gf ? `，體感${gf}` : ""}${a.route.archived_at ? "，已下架" : ""}`}

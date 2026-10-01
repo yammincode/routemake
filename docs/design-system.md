@@ -29,6 +29,8 @@
 
 **平面圖完成度**：`color-mix(accent (18 + 完成比例×72)%, blush)`。
 
+Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線點）、`--hold-top`（完攀 T），只用在照片上的圈圈。
+
 ## 字體
 
 | Tailwind | 字型 | 字重 | 用途 |
@@ -97,6 +99,7 @@
 | `Gym.tsx` | `ZoneCard`、`ZoneList`、`ProgressBar`、`ResetList`、`NewRouteRow`、`NewRouteCard`、`GymRow`、`SoonBox`、`dueText` |
 | `FloorPlan.tsx` | `FloorPlan` |
 | `Comments.tsx` | `CommentItem`（含 👍 按讚）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
+| `Spray.tsx` | `HoldMarks`（照片上的圈圈：起攀 S 綠、路線點 藍、完攀 T 紅）、`HoldLegend`、`HoldTools`（選種類與大小）、`SprayRow`、`HOLD_TYPES`、`HOLD_SIZES` |
 | `Profile.tsx` | `Avatar`（暱稱第一個字）、`HexChart`（六角形能力表）、`ProfileCardView`（人物卡） |
 | `Tabs.tsx` | `Tabs`（路線卡片的紀錄／影片／留言分頁） |
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |

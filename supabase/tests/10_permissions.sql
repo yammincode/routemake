@@ -83,8 +83,8 @@ select tests.ok('初始資料：六間店、明德館 9 區（比賽牆分四段
   and (select count(*) from public.zones where gym_id = 'mingde' and plan_shape is not null) = 5);
 select tests.ok('開放館：明德、萬華、中和、南港、新店（中壢還沒）',
   (select array_agg(id order by id) from public.gyms where is_live) = '{g2,g3,g4,g5,mingde}');
-select tests.ok('各館區域數：萬華 6、中和 7、南港 3、新店 5',
-  (select array_agg(n order by gym_id) from (select gym_id, count(*) n from public.zones where gym_id <> 'mingde' group by gym_id) x) = '{6,7,3,5}');
+select tests.ok('各館區域數：萬華 6、中和 7、南港 3（＋Spray Wall）、新店 5',
+  (select array_agg(n order by gym_id) from (select gym_id, count(*) n from public.zones where gym_id <> 'mingde' group by gym_id) x) = '{6,7,4,5}');
 select tests.ok('明德館區域順序：A、比賽牆 1–4、B、C、D、Spray Wall',
   (select string_agg(name, '、' order by sort) from public.zones where gym_id = 'mingde') = 'A 區、比賽牆 1、比賽牆 2、比賽牆 3、比賽牆 4、B 區、C 區、D 區、Spray Wall');
 select tests.ok('換線日：比賽牆四段都是 10/6、新店上攀 E 區 10/18',
@@ -98,7 +98,7 @@ select tests.ok('新使用者自動建立 profiles 並存帳號名稱（轉小�
 -- 未登入的人
 -- ---------------------------------------------------------------------
 set role anon; select tests.login(null);
-select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 30);
+select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 31);
 select tests.ok('未登入：可以看暱稱', (select nickname from public.profiles where id = :A) = '甲');
 select tests.throws('未登入：讀不到手機號碼', 'select phone from public.profiles');
 select tests.throws('未登入：讀不到帳號名稱', 'select username from public.profiles');
@@ -728,6 +728,74 @@ select tests.ok('YDS：月統計最高難度抱石、上攀分開',
   public.monthly_stats(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int)::text);
 select tests.ok('YDS：人物卡最高難度抱石、上攀分開', (public.profile_card(:A) ->> 'top_yds')::int = 108);
 reset role;
+
+-- ---------------------------------------------------------------------
+-- Spray Wall
+-- ---------------------------------------------------------------------
+select tests.login(null);
+insert into ids select 'sw', id from public.zones where gym_id = 'mingde' and code = 'S';
+create temp table hs (k text primary key, v text);
+grant all on hs to anon, authenticated;
+insert into hs values ('ok', '[{"x":10,"y":80,"t":"s","r":2},{"x":30,"y":50,"t":"h"},{"x":50,"y":10,"t":"t","r":3}]'),
+                      ('noTop', '[{"x":10,"y":80,"t":"s"},{"x":30,"y":50,"t":"h"}]'),
+                      ('bad', '[{"x":10,"y":180,"t":"s"},{"x":50,"y":10,"t":"t"}]');
+select tests.ok('Spray：明德 S 區、南港 SW 是 Spray Wall', (select count(*) from public.zones where kind = 'spray') = 2);
+select tests.ok('Spray：不出現在區域進度（平面圖）', not exists (select 1 from public.zone_progress('mingde') where code = 'S'));
+set role authenticated; select tests.login(:A);
+select tests.lives('Spray：岩友可以出路線', format($q$insert into public.routes (zone_id, kind, name, description, grade, hold_color, pin_x, pin_y, holds) values (%L, 'community', ' 下雨天的指力 ', '起步雙手 S', 4, '白', 0, 0, %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'ok')));
+reset role;
+select tests.ok('Spray：出題者是本人、起步點在第一個 S、名稱去頭尾空白',
+  (select created_by = :A and pin_x = 10 and pin_y = 80 and name = '下雨天的指力' from public.routes where name like '%下雨天%'));
+insert into ids select 'cr', id from public.routes where name = '下雨天的指力';
+set role authenticated; select tests.login(:A);
+select tests.throws('Spray：岩友不能出岩館路線', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, holds) values (%L, 'gym', '偷出', 4, '白', 0, 0, %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'ok')));
+select tests.throws('Spray：沒有完攀 T 不行', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, holds) values (%L, 'community', '少了T', 4, '白', 0, 0, %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'noTop')));
+select tests.throws('Spray：圈圈座標超出範圍不行', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, holds) values (%L, 'community', '超出', 4, '白', 0, 0, %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'bad')));
+select tests.throws('Spray：名稱不能放聯絡方式', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, holds) values (%L, 'community', '加我IG', 4, '白', 0, 0, %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'ok')));
+select tests.throws('Spray：一般區域不能出岩友路線', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, holds) values (%L, 'community', '一般', 4, '白', 0, 0, %L)$q$, (select v from ids where k = 'zoneA'), (select v from hs where k = 'ok')));
+select tests.lives('Spray：本人可以修改自己的路線', format($q$update public.routes set name = '改名了', grade = 5 where id = %L$q$, (select v from ids where k = 'cr')));
+select tests.throws('Spray：不能把岩友路線改成岩館路線', format($q$update public.routes set kind = 'gym' where id = %L$q$, (select v from ids where k = 'cr')));
+select tests.lives('Spray：可以按讚', format('insert into public.route_likes (route_id) values (%L)', (select v from ids where k = 'cr')));
+select tests.ok('Spray：列表有出題者、讚數、我按過、我出的',
+  (select e ->> 'author' = (select nickname from public.profiles where id = :A) and (e ->> 'likes')::int = 1 and (e ->> 'liked')::boolean and (e ->> 'mine')::boolean and not e ? 'created_by'
+     from jsonb_array_elements(public.spray_list((select v from ids where k = 'sw'), 'community', null, 'new', 0, 20)) e where e ->> 'name' = '改名了'),
+  public.spray_list((select v from ids where k = 'sw'), 'community', null, 'new', 0, 20)::text);
+reset role;
+set role authenticated; select tests.login(:NN);
+select tests.ok('Spray：別人不能改我的路線（0 筆）', tests.rows(format($q$update public.routes set name = '亂改' where id = %L$q$, (select v from ids where k = 'cr'))) = 0);
+select tests.ok('Spray：列表篩選難度、我出的', jsonb_array_length(public.spray_list((select v from ids where k = 'sw'), 'community', 4, 'new', 0, 20)) = 0
+  and jsonb_array_length(public.spray_list((select v from ids where k = 'sw'), 'community', null, 'mine', 0, 20)) = 0);
+reset role;
+-- 每人 24 小時最多 5 條（已出 1 條，再 4 條可以，第 6 條被擋）
+set role authenticated; select tests.login(:A);
+select tests.lives('Spray：24 小時內第 2–5 條可以', format($q$do $$ begin for i in 2..5 loop insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, holds) values (%L, 'community', '路線' || i, 3, '白', 0, 0, %L); end loop; end $$$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'ok')));
+select tests.throws('Spray：第 6 條被擋', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, holds) values (%L, 'community', '第六條', 3, '白', 0, 0, %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'ok')));
+select tests.lives('Spray：本人可以刪除（下架）自己的路線', format($q$update public.routes set archived_at = now() where name = '路線5'$q$));
+reset role;
+select tests.ok('Spray：本人刪除自己的路線不寫操作紀錄', not exists (select 1 from public.audit_log where action = 'route.archive' and detail ->> 'code' = (select code from public.routes where name = '路線5')));
+set role authenticated; select tests.login(:ST);
+select tests.lives('Spray：員工可以出岩館路線', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, holds) values (%L, 'gym', '教練的路線', 6, '白', 0, 0, %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'ok')));
+select tests.lives('Spray：員工可以下架岩友路線', format($q$update public.routes set archived_at = now() where id = %L$q$, (select v from ids where k = 'cr')));
+reset role;
+select tests.ok('Spray：員工下架岩友路線有操作紀錄', exists (select 1 from public.audit_log where action = 'route.archive' and target_id = (select v from ids where k = 'cr')));
+-- 積分：岩友路線不算，岩館路線算
+select tests.login(null);
+insert into public.ascents (user_id, route_id, status, climbed_on)
+select :NN, id, 'send', public.taipei_today() from public.routes where name in ('路線2', '教練的路線');
+set role authenticated; select tests.login(:NN);
+select tests.ok('Spray：岩友路線不算積分，岩館路線算',
+  (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'today')::int
+   = public.route_points(6, '{}'),
+  public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int)::text);
+select tests.ok('Spray：月統計不算岩友路線', (public.monthly_stats(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'top_grade')::int = 6);
+reset role;
+-- 換公版照片：路線全部下架
+select tests.login(null);
+update public.zones set photo_path = 'mingde/zones/sw-old.jpg' where code = 'S' and gym_id = 'mingde';
+set role authenticated; select tests.login(:ST);
+select tests.lives('Spray：員工換公版照片', $q$update public.zones set photo_path = 'mingde/zones/sw-new.jpg' where gym_id = 'mingde' and code = 'S'$q$);
+reset role;
+select tests.ok('Spray：換照片後路線全部下架', not exists (select 1 from public.routes r join public.zones z on z.id = r.zone_id where z.gym_id = 'mingde' and z.code = 'S' and r.archived_at is null));
 
 -- ---------------------------------------------------------------------
 -- 結果

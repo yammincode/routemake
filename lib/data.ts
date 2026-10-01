@@ -15,6 +15,7 @@ export type Zone = {
   next_reset_on: string | null;
   sort: number;
   grade_system: GradeSystem;
+  kind?: "wall" | "spray";
 };
 export type ZoneProgress = {
   zone_id: string;
@@ -39,7 +40,15 @@ export type Route = {
   comments_enabled: boolean;
   created_at: string;
   archived_at: string | null;
+  // Spray Wall：岩館路線 gym／岩友路線 community；名稱、介紹、圈圈、出題者
+  kind?: "gym" | "community";
+  name?: string | null;
+  description?: string | null;
+  holds?: Hold[] | null;
+  created_by?: string | null;
 };
+// Spray Wall 圈圈：x、y 是照片上的百分比；t = s 起攀／h 路線點／t 完攀；r 大小 1–3
+export type Hold = { x: number; y: number; t: "s" | "h" | "t"; r?: 1 | 2 | 3 };
 export type Ascent = {
   id: string;
   route_id: string;
@@ -61,8 +70,8 @@ export type Comment = {
 };
 export type Staff = { user_id: string; gym_id: string; role: "setter" | "manager"; nickname: string | null };
 
-const ROUTE_COLS = "id,zone_id,code,grade,hold_color,style_tags,setter_note,pin_x,pin_y,comments_enabled,created_at,archived_at";
-const ZONE_COLS = "id,gym_id,code,name,photo_path,photo_width,photo_height,next_reset_on,sort,grade_system";
+const ROUTE_COLS = "id,zone_id,code,grade,hold_color,style_tags,setter_note,pin_x,pin_y,comments_enabled,created_at,archived_at,kind,name,description,holds,created_by";
+const ZONE_COLS = "id,gym_id,code,name,photo_path,photo_width,photo_height,next_reset_on,sort,grade_system,kind";
 
 // 資料庫錯誤轉成中文（資料庫的中文訊息直接顯示）
 export function dbError(e: { message?: string; code?: string } | null | undefined): string {
@@ -113,8 +122,9 @@ export async function getNewRoutes(gym: string): Promise<(Route & { zone_name: s
   const rows = must(
     await supabase()
       .from("routes")
-      .select(`${ROUTE_COLS},zones!inner(gym_id,name)`)
+      .select(`${ROUTE_COLS},zones!inner(gym_id,name,kind)`)
       .eq("zones.gym_id", gym)
+      .eq("zones.kind", "wall")
       .is("archived_at", null)
       .gte("created_at", since)
       .order("created_at", { ascending: false })
@@ -302,7 +312,12 @@ export async function getMonthAscents(year: number, month: number): Promise<Mont
 // 場館目前牆上所有路線（算各難度進度）
 export async function getGymActiveRoutes(gym: string): Promise<Route[]> {
   const rows = must(
-    await supabase().from("routes").select(`${ROUTE_COLS},zones!inner(gym_id)`).eq("zones.gym_id", gym).is("archived_at", null)
+    await supabase()
+      .from("routes")
+      .select(`${ROUTE_COLS},zones!inner(gym_id,kind)`)
+      .eq("zones.gym_id", gym)
+      .eq("zones.kind", "wall")
+      .is("archived_at", null)
   ) as unknown as (Route & { zones?: unknown })[];
   return rows.map((r) => {
     delete r.zones;
@@ -521,4 +536,33 @@ export async function saveMyCard(c: { public: boolean; bio: string; years: strin
 }
 export async function clearCardBio(userId: string, gym: string) {
   must(await supabase().rpc("clear_card_bio", { p_user: userId, p_gym: gym }));
+}
+
+// ---------- Spray Wall ----------
+export type SprayKind = "gym" | "community";
+export type SpraySort = "new" | "sends" | "likes" | "mine";
+export type SprayRoute = Route & { author: string | null; sends: number; likes: number; liked: boolean; mine: boolean };
+export const SPRAY_PAGE = 20;
+
+export async function getSprayZone(gymId: string, code: string): Promise<Zone> {
+  return must(await supabase().from("zones").select(ZONE_COLS).eq("gym_id", gymId).eq("code", code).single());
+}
+export async function getSprayList(zoneId: string, kind: SprayKind, grade: number | null, sort: SpraySort, offset: number): Promise<SprayRoute[]> {
+  const rows = must(
+    await supabase().rpc("spray_list", { p_zone: zoneId, p_kind: kind, p_grade: grade, p_sort: sort, p_offset: offset, p_limit: SPRAY_PAGE })
+  ) as Omit<SprayRoute, "zone_id" | "hold_color" | "setter_note" | "pin_x" | "pin_y" | "archived_at">[];
+  return rows.map((r) => ({ ...r, zone_id: zoneId, hold_color: "白", setter_note: null, pin_x: 0, pin_y: 0, archived_at: null }));
+}
+export type SprayInput = { name: string; grade: number; description: string; holds: Hold[] };
+// 新增或修改 Spray Wall 路線（起步點位置由資料庫依第一個起攀圈設定）
+export async function saveSprayRoute(zoneId: string, kind: SprayKind, input: SprayInput, id?: string) {
+  const row = { name: input.name.trim(), grade: input.grade, description: input.description.trim() || null, holds: input.holds };
+  if (id) must(await supabase().from("routes").update(row).eq("id", id));
+  else must(await supabase().from("routes").insert({ zone_id: zoneId, kind, hold_color: "白", pin_x: 0, pin_y: 0, ...row }));
+}
+export async function likeRoute(id: string) {
+  must(await supabase().from("route_likes").insert({ route_id: id }));
+}
+export async function unlikeRoute(id: string) {
+  must(await supabase().from("route_likes").delete().eq("route_id", id));
 }

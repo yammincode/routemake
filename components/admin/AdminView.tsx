@@ -6,6 +6,7 @@ import RouteEditor, { type EditTarget } from "@/components/admin/RouteEditor";
 import AuditPanel from "@/components/admin/AuditPanel";
 import ScoringPanel from "@/components/admin/ScoringPanel";
 import ShareQr from "@/components/admin/ShareQr";
+import SprayPhotoPanel from "@/components/admin/SprayPhotoPanel";
 import StaffPanel from "@/components/admin/StaffPanel";
 import VideoPanel from "@/components/admin/VideoPanel";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -53,6 +54,7 @@ export default function AdminView() {
   const [gyms, setGyms] = useState<Gym[]>([]);
   const [gymId, setGymId] = useState<string | null>(null);
   const [zones, setZones] = useState<Zone[] | null>(null);
+  const [sprayZones, setSprayZones] = useState<Zone[]>([]);
   const [zoneId, setZoneId] = useState<string | null>(null);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -78,7 +80,10 @@ export default function AdminView() {
   const loadZones = useCallback(async () => {
     if (!gymId) return;
     try {
-      const [zs, progress] = await Promise.all([getZones(gymId), getZoneProgress(gymId)]);
+      const [all, progress] = await Promise.all([getZones(gymId), getZoneProgress(gymId)]);
+      // Spray Wall 另外管理（公版照片），不放在平面圖與區域按鈕
+      const zs = all.filter((z) => z.kind !== "spray");
+      setSprayZones(all.filter((z) => z.kind === "spray"));
       setZones(zs);
       setZoneCounts(Object.fromEntries(progress.map((p) => [p.zone_id, p.route_count])));
       setZoneId((cur) => (cur && zs.some((z) => z.id === cur) ? cur : (zs[0]?.id ?? null)));
@@ -170,7 +175,7 @@ export default function AdminView() {
 
   const saveOrder = (ids: string[]) =>
     run(async () => {
-      await reorderZones(gymId, ids);
+      await reorderZones(gymId, [...ids, ...sprayZones.map((z) => z.id)]); // Spray Wall 排在最後
       setConfirm(null);
       await loadZones();
       toast("已更新區域順序");
@@ -375,6 +380,7 @@ export default function AdminView() {
         </>
       )}
 
+      {sprayZones.length > 0 && <SprayPhotoPanel zones={sprayZones} onChanged={() => void loadZones()} />}
       {gym && <VideoPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <AuditPanel gymId={gymId} gymName={gym.name} />}

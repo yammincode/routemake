@@ -19,6 +19,10 @@
   --warn: #b4471f;
   --flash: #f5b700;
   --flash-ink: #2b2100;
+  /* Spray Wall 圈圈：起攀 S 綠、路線點 藍、完攀 T 紅（照片上用，深淺模式相同） */
+  --hold-start: #1fa45a;
+  --hold-mid: #2f7de1;
+  --hold-top: #e5484d;
   --shadow: 0 1px 2px rgba(20, 32, 27, 0.06), 0 4px 14px rgba(20, 32, 27, 0.06);
 }
 
@@ -58,6 +62,9 @@
   --color-surface: var(--surface);
   --color-sunk: var(--sunk);
   --color-ink: var(--ink);
+  --color-hold-start: var(--hold-start);
+  --color-hold-mid: var(--hold-mid);
+  --color-hold-top: var(--hold-top);
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-accent: var(--accent);

@@ -16,9 +16,9 @@ test("入口頁、選館、返回都照順序", async () => {
 
   await page.click('main a[href="/gyms"]');
   await page.waitForURL("**/gyms");
-  const gyms = (await page.locator("main button[aria-pressed]").allTextContents()).map((s) => s.replace(/已上線|即將上線/, ""));
-  assert.deepEqual(gyms, ["明德館", "萬華館", "中和館", "南港館", "新店館", "中壢館"]);
-  assert.equal(await page.locator("main button[aria-pressed] img").count(), 6, "每間館都有 Logo");
+  const gyms = (await page.locator("main button[aria-pressed]").allTextContents()).map((s) => s.replace(/已上線|即將上線|大家一起出路線/, ""));
+  assert.deepEqual(gyms, ["明德館", "萬華館", "中和館", "南港館", "新店館", "中壢館", "明德 SPRAY WALL", "南港 SPRAY WALL"], "六間館＋兩面 Spray Wall");
+  assert.equal(await page.locator("main button[aria-pressed] img").count(), 8, "每一項都有 Logo");
 
   await page.click('main button:has-text("明德館")');
   await page.waitForURL("**/gym/mingde");
@@ -53,6 +53,6 @@ test("入口頁、選館、返回都照順序", async () => {
   assert.equal(await page.getAttribute('nav a:has-text("館內路線")', "href"), "/gym/g3", "館內路線分頁記住上次選的館");
   await page.waitForTimeout(400);
   assert.ok((await page.textContent("main")).includes("中和館"), "我的紀錄頁首顯示上次選的館");
-  assert.deepEqual(await page.locator("nav a").allTextContents(), ["館內路線", "人物卡", "我的紀錄", "管理後台"], "管理後台分頁一直顯示");
+  assert.deepEqual(await page.locator("nav a").allTextContents(), ["館內路線", "人物卡", "我的紀錄"], "一般人看不到管理後台分頁");
   assert.deepEqual(errors, []);
 });

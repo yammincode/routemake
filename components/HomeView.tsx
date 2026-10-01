@@ -11,6 +11,7 @@ import { NewRouteCard, NewRouteRow, ResetList, ZoneCard, ZoneList } from "@/comp
 import { getGym, getMyAscents, getNewRoutes, getZoneProgress, photoUrl, type Ascent, type Gym, type Route, type ZoneProgress } from "@/lib/data";
 import { ago, daysUntil, md } from "@/lib/date";
 import { PLANS } from "@/lib/floorplan";
+import { saveLastGym, SPRAY_WALLS, sprayPath } from "@/lib/gyms";
 import { overlayPending, withCache } from "@/lib/offline";
 
 const PLACEHOLDER =
@@ -89,6 +90,19 @@ export default function HomeView({ gymId }: { gymId: string }) {
           }}
         />
       )}
+
+      {SPRAY_WALLS.filter((s) => s.gymId === gymId).map((s) => (
+        <Button
+          key={s.id}
+          className="mt-2"
+          onClick={() => {
+            saveLastGym(s.id);
+            router.push(sprayPath(s.id));
+          }}
+        >
+          {s.name} →
+        </Button>
+      ))}
 
       <SectionTitle>所有區域</SectionTitle>
       <ZoneList>
