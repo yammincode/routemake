@@ -269,6 +269,20 @@ export default function AdminView() {
                 if (manager && v && v !== zone.name) void saveZone({ name: v }, "已更新區域名稱");
               }}
             />
+            <Label>等級制{manager ? "" : "（店長可切換）"}</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              {(["v", "yds"] as const).map((g) => (
+                <Chip
+                  key={g}
+                  pressed={zone.grade_system === g}
+                  disabled={!manager || busy || (zone.grade_system !== g && routes.length > 0)}
+                  onClick={() => zone.grade_system !== g && void saveZone({ grade_system: g }, g === "yds" ? "已改成上攀 YDS 等級" : "已改成抱石 V 級")}
+                >
+                  {g === "v" ? "抱石 V 級" : "上攀 YDS"}
+                </Chip>
+              ))}
+              {manager && routes.length > 0 && <span className="text-tiny text-muted">整區換線後才能切換</span>}
+            </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <Label htmlFor="zreset">下次換線日</Label>

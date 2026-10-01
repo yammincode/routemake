@@ -1,3 +1,4 @@
+import { gradeLabel } from "@/lib/design";
 import type { ReactNode } from "react";
 
 // 月份切換（原型 .month）
@@ -96,8 +97,8 @@ export function GradeBars({ rows }: { rows: { grade: number; ratio: number; labe
   return (
     <div className="grid gap-2.5">
       {rows.map((r) => (
-        <div key={r.grade} className="grid grid-cols-[40px_1fr_56px] items-center gap-2.5">
-          <span className="font-num text-num-bar font-bold">V{r.grade}</span>
+        <div key={r.grade} className="grid grid-cols-[52px_1fr_56px] items-center gap-2.5">
+          <span className="font-num text-num-bar font-bold">{gradeLabel(r.grade)}</span>
           <span className="h-3 overflow-hidden rounded-md bg-line">
             <i className="block h-full rounded-md bg-accent" style={{ width: `${r.ratio * 100}%` }} />
           </span>

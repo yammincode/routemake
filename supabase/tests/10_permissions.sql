@@ -697,6 +697,39 @@ select tests.ok('人物卡：清除後自我介紹是空的、有操作紀錄',
   and exists (select 1 from public.audit_log where action = 'card.clear' and detail ->> 'bio' = '喜歡動態路線'));
 
 -- ---------------------------------------------------------------------
+-- YDS 等級（上攀）
+-- ---------------------------------------------------------------------
+select tests.ok('YDS：中和抱石區以外都是 YDS，抱石區是 V',
+  (select bool_and(case when code = 'BO' then grade_system = 'v' else grade_system = 'yds' end) from public.zones where gym_id = 'g3'));
+select tests.ok('YDS：新店還是 V', (select bool_and(grade_system = 'v') from public.zones where gym_id = 'g5'));
+select tests.ok('YDS 分數：5.10a = 10、5.12a = 35', public.route_points(104, '{}') = 10 and public.route_points(112, '{}') = 35);
+select tests.ok('V 級分數不變：V4 = 50（前面改過計分規則）', public.route_points(4, '{}') = 50, public.route_points(4, '{}')::text);
+set role authenticated; select tests.login(:OW);
+select tests.lives('YDS：上攀區可以新增 5.11a', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 108, ''紅'', 1, 1)', (select id from public.zones where gym_id = 'g3' and code = 'A')));
+select tests.throws('YDS：上攀區不能用 V 級', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 4, ''紅'', 1, 1)', (select id from public.zones where gym_id = 'g3' and code = 'A')));
+select tests.throws('YDS：抱石區不能用 YDS', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 108, ''紅'', 1, 1)', (select id from public.zones where gym_id = 'g3' and code = 'BO')));
+select tests.throws('YDS：超過 5.13d 被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 120, ''紅'', 1, 1)', (select id from public.zones where gym_id = 'g3' and code = 'A')));
+select tests.throws('YDS：區域還有路線不能切換等級制', $q$update public.zones set grade_system = 'v' where gym_id = 'g3' and code = 'A'$q$);
+select tests.ok('YDS：沒有路線的區域可以切換', tests.rows($q$update public.zones set grade_system = 'yds' where gym_id = 'g3' and code = 'BO'$q$) = 1);
+select tests.ok('YDS：切回來', tests.rows($q$update public.zones set grade_system = 'v' where gym_id = 'g3' and code = 'BO'$q$) = 1);
+reset role;
+select tests.login(null);
+insert into public.staff_roles (user_id, gym_id, role) values (:ST2, 'g3', 'setter') on conflict do nothing;
+set role authenticated; select tests.login(:ST2);
+select tests.throws('YDS：定線員不能切換等級制', $q$update public.zones set grade_system = 'yds' where gym_id = 'g3' and code = 'BO'$q$);
+reset role;
+select tests.login(null);
+insert into public.ascents (user_id, route_id, status, climbed_on)
+select :A, id, 'send', public.taipei_today() from public.routes where grade = 108 limit 1;
+set role authenticated; select tests.login(:A);
+select tests.ok('YDS：月統計最高難度抱石、上攀分開',
+  (select (s ->> 'top_yds')::int = 108 and coalesce((s ->> 'top_grade')::int, 0) < 100
+     from public.monthly_stats(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) s),
+  public.monthly_stats(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int)::text);
+select tests.ok('YDS：人物卡最高難度抱石、上攀分開', (public.profile_card(:A) ->> 'top_yds')::int = 108);
+reset role;
+
+-- ---------------------------------------------------------------------
 -- 結果
 -- ---------------------------------------------------------------------
 \o

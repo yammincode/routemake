@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentProps, KeyboardEvent, ReactNode } from "react";
-import type { HoldColor } from "@/lib/design";
+import { gradeLabel, type HoldColor } from "@/lib/design";
 import { Button } from "./Button";
 import { HoldDot } from "./Route";
 
@@ -81,7 +81,7 @@ export function NewRouteCard({ color, grade, zone, ago, ...rest }: ComponentProp
   return (
     <button className="w-[118px] flex-none rounded-tile bg-surface p-3 text-left shadow-card" {...rest}>
       <span className="mb-1.5 flex items-center gap-2 font-num text-num-card font-bold">
-        <HoldDot color={color} />V{grade}
+        <HoldDot color={color} />{gradeLabel(grade)}
       </span>
       <small className="block text-meta leading-[1.4] text-muted">
         {zone}

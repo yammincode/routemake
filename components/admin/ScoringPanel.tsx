@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/Form";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { updateScoringRules } from "@/lib/data";
-import { GRADES, STYLE_TAGS } from "@/lib/design";
+import { GRADES, STYLE_TAGS, YDS_GRADES } from "@/lib/design";
 import { ascentPoints, routePoints, type ScoringRules } from "@/lib/scoring";
 import { setScoringRules, useScoring } from "@/lib/useScoring";
 
@@ -42,7 +42,7 @@ function Editor({ rules }: { rules: ScoringRules }) {
     <>
       <SectionTitle>計分規則</SectionTitle>
       <SetBox>
-        <Label>難度分數</Label>
+        <Label>難度分數（抱石 V 級）</Label>
         <div className="grid grid-cols-6 gap-1.5">
           {GRADES.map((g) => (
             <label key={g} className="grid gap-0.5 text-center">
@@ -56,6 +56,24 @@ function Editor({ rules }: { rules: ScoringRules }) {
             </label>
           ))}
         </div>
+        {r.yds_points && (
+          <>
+            <Label>難度分數（上攀 YDS）</Label>
+            <div className="grid grid-cols-5 gap-1.5">
+              {YDS_GRADES.map((label, i) => (
+                <label key={label} className="grid gap-0.5 text-center">
+                  <span className="font-num text-[14px] font-bold">{label}</span>
+                  <input
+                    inputMode="numeric"
+                    className={numField}
+                    value={r.yds_points![i]}
+                    onChange={(e) => setR({ ...r, yds_points: r.yds_points!.map((v, j) => (j === i ? int(e.target.value) : v)) })}
+                  />
+                </label>
+              ))}
+            </div>
+          </>
+        )}
         <Label>風格加成（%）</Label>
         <div className="grid grid-cols-5 gap-1.5">
           {STYLE_TAGS.map((t) => (

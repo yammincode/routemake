@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from "react";
-import { GRADES, HOLD_COLORS, HOLD_COLOR_NAMES, STYLE_TAGS, type HoldColor } from "@/lib/design";
+import { gradeLabel, gradesFor, HOLD_COLORS, HOLD_COLOR_NAMES, STYLE_TAGS, type GradeSystem, type HoldColor } from "@/lib/design";
 
 // 表單標籤
 export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
@@ -89,18 +89,18 @@ export function ColorPicker({ value, onChange }: { value: HoldColor; onChange: (
   );
 }
 
-// 難度選擇 V0–V10（原型 .grades）
-export function GradePicker({ value, onChange }: { value: number; onChange: (g: number) => void }) {
+// 難度選擇（原型 .grades）：抱石 V0–V10、上攀 YDS 5.6–5.13d
+export function GradePicker({ value, onChange, system = "v" }: { value: number; onChange: (g: number) => void; system?: GradeSystem }) {
   return (
-    <div className="grid grid-cols-6 gap-1.5">
-      {GRADES.map((g) => (
+    <div className={`grid gap-1.5 ${system === "yds" ? "grid-cols-4" : "grid-cols-6"}`}>
+      {gradesFor(system).map((g) => (
         <button
           key={g}
           aria-pressed={value === g}
           onClick={() => onChange(g)}
           className="rounded-cell border border-line py-1.5 font-num text-num-picker font-semibold aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-surface"
         >
-          V{g}
+          {gradeLabel(g)}
         </button>
       ))}
     </div>

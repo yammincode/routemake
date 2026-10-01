@@ -8,8 +8,12 @@ import Sheet from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/Toast";
 import { isManagerOf } from "@/lib/auth";
 import { clearCardBio, getProfileCard, type ProfileCard } from "@/lib/data";
-import { CLIMBING_YEARS } from "@/lib/design";
+import { CLIMBING_YEARS, gradeLabel } from "@/lib/design";
 import { findGym } from "@/lib/gyms";
+
+// 最高完攀：抱石、上攀都有就一起列
+export const topGrades = (c: ProfileCard) =>
+  [c.top_grade, c.top_yds].filter((g): g is number => g != null).map(gradeLabel).join("・") || "–";
 
 // 一行基本資料：年資・常去的館
 export function cardMeta(c: ProfileCard) {
@@ -70,7 +74,7 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
       chart={<HexChart actual={card.ability} self={card.self_stats} />}
       stats={
         <>
-          最高完攀 <b className="font-num text-ink">{card.top_grade != null ? `V${card.top_grade}` : "–"}</b>・本月完攀{" "}
+          最高完攀 <b className="font-num text-ink">{topGrades(card)}</b>・本月完攀{" "}
           <b className="font-num text-ink">{card.month_sends ?? 0}</b> 條
           {(card.ability_sends ?? 0) === 0 && <span className="block text-tiny">完攀有風格標籤的路線後，能力值就會出現</span>}
         </>

@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DEFAULT_GYM_PATH, lastGymPath } from "@/lib/gyms";
 
-// 底部分頁（原型 .tabs）；管理後台一直顯示，方便工作人員進入（進去後由 StaffGate 與資料庫權限把關）
+// 底部分頁（原型 .tabs）：館內路線、人物卡、我的紀錄、管理後台；管理後台一直顯示，方便工作人員進入（進去後由 StaffGate 與資料庫權限把關）
 const TABS = [
   { href: "gym", label: "館內路線", match: (p: string) => p.startsWith("/zone") || p.startsWith("/gym") },
+  { href: "/card", label: "人物卡", match: (p: string) => p.startsWith("/card") },
   { href: "/me", label: "我的紀錄", match: (p: string) => p.startsWith("/me") },
   { href: "/admin", label: "管理後台", match: (p: string) => p.startsWith("/admin") },
 ];

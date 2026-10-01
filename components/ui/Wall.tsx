@@ -1,9 +1,9 @@
 "use client";
 
 import { useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
-import { holdTextColor, HOLD_COLORS, type HoldColor, type Status } from "@/lib/design";
+import { gradeShort, holdTextColor, HOLD_COLORS, type HoldColor, type Status } from "@/lib/design";
 
-// 起步點標記（原型 .pin）：顏色＝岩點色、數字＝V 級；完攀加酒紅外圈，Flash 黃圈；不符合篩選時變淡
+// 起步點標記（原型 .pin）：顏色＝岩點色、數字＝難度（V 級數字或 YDS 去掉 5.）；完攀加酒紅外圈，Flash 黃圈；不符合篩選時變淡
 export function Pin({
   x,
   y,
@@ -37,7 +37,7 @@ export function Pin({
         color: holdTextColor(color),
       }}
     >
-      {grade}
+      <span className={grade >= 100 ? "text-[12px] tracking-[-0.03em]" : undefined}>{gradeShort(grade)}</span>
       {ring && <span aria-hidden className={`pointer-events-none absolute -inset-1.5 rounded-full border-2 border-white ${ring}`} />}
     </button>
   );

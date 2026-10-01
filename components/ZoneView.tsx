@@ -23,7 +23,7 @@ import {
   type Zone,
 } from "@/lib/data";
 import { ago, daysUntil, isNew } from "@/lib/date";
-import { STYLE_TAGS, type HoldColor } from "@/lib/design";
+import { gradeLabel, type HoldColor, STYLE_TAGS } from "@/lib/design";
 import { backOr } from "@/lib/nav";
 import { overlayPending, withCache } from "@/lib/offline";
 import { routePoints } from "@/lib/scoring";
@@ -126,7 +126,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
                 grade={r.grade}
                 status={s === "project" ? null : s}
                 dim={!match(r)}
-                label={`V${r.grade} ${r.hold_color}色 ${r.code}`}
+                label={`${gradeLabel(r.grade)} ${r.hold_color}色 ${r.code}`}
                 onClick={() => setOpen(r)}
               />
             );
@@ -144,7 +144,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
             </Chip>
             {grades.map((g) => (
               <Chip key={g} num pressed={grade === g} onClick={() => setGrade(g)}>
-                V{g}
+                {gradeLabel(g)}
               </Chip>
             ))}
           </ChipRow>

@@ -38,9 +38,11 @@ test("人物卡：設定、公開、從留言點名字查看、店長清除", as
 
   // 本人設定
   const B = await phone(browser, mock);
-  await login(B.page, "climberb", "password1", "/me");
+  await login(B.page, "climberb", "password1", "/card");
   await B.page.waitForTimeout(1000);
   const p = B.page;
+  assert.ok((await p.textContent("main")).includes("目前只有你看得到"), "人物卡頁顯示未公開");
+  await p.click('main button:text-is("編輯人物卡")');
   await p.fill("#cbio", "加我 IG 聊");
   await p.click('main button[role=switch]');
   await p.click('main button:text-is("儲存人物卡")');

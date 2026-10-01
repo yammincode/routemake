@@ -53,6 +53,6 @@ test("入口頁、選館、返回都照順序", async () => {
   assert.equal(await page.getAttribute('nav a:has-text("館內路線")', "href"), "/gym/g3", "館內路線分頁記住上次選的館");
   await page.waitForTimeout(400);
   assert.ok((await page.textContent("main")).includes("中和館"), "我的紀錄頁首顯示上次選的館");
-  assert.deepEqual(await page.locator("nav a").allTextContents(), ["館內路線", "我的紀錄", "管理後台"], "管理後台分頁一直顯示");
+  assert.deepEqual(await page.locator("nav a").allTextContents(), ["館內路線", "人物卡", "我的紀錄", "管理後台"], "管理後台分頁一直顯示");
   assert.deepEqual(errors, []);
 });

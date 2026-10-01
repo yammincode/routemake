@@ -23,7 +23,7 @@ import {
   type Route,
 } from "@/lib/data";
 import { todayYmd } from "@/lib/date";
-import { FEEL, GRADE_FEEL } from "@/lib/design";
+import { FEEL, GRADE_FEEL, gradeLabel } from "@/lib/design";
 import { overlayPending, withCache } from "@/lib/offline";
 import { ascentPoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
@@ -120,7 +120,10 @@ export default function MeView({ gymId }: { gymId: string }) {
         <StatTile value={stats?.sends ?? "–"} label="完攀" />
         <StatTile value={stats?.flashes ?? "–"} label="Flash" flash />
         <StatTile value={stats?.days ?? "–"} label="攀爬天數" />
-        <StatTile value={stats?.top_grade == null ? "–" : `V${stats.top_grade}`} label="最高難度" />
+        <StatTile
+          value={stats?.top_grade != null ? gradeLabel(stats.top_grade) : stats?.top_yds != null ? gradeLabel(stats.top_yds) : "–"}
+          label={stats?.top_grade != null && stats?.top_yds != null ? `最高（上攀 ${gradeLabel(stats.top_yds)}）` : "最高難度"}
+        />
       </StatGrid>
       {stats && (stats.sends > 0 || stats.prev_sends > 0) && <Delta diff={stats.sends - stats.prev_sends} />}
 

@@ -47,3 +47,18 @@ export const CLIMBING_YEARS = [
   { v: "3-5", t: "3–5 年" },
   { v: "5+", t: "5 年以上" },
 ] as const;
+
+// 等級制：抱石 V0–V10（grade 0–10）；上攀 YDS 5.6–5.13d（grade 100–119，跟資料庫一樣）
+export type GradeSystem = "v" | "yds";
+export const YDS_GRADES = [
+  "5.6", "5.7", "5.8", "5.9",
+  "5.10a", "5.10b", "5.10c", "5.10d",
+  "5.11a", "5.11b", "5.11c", "5.11d",
+  "5.12a", "5.12b", "5.12c", "5.12d",
+  "5.13a", "5.13b", "5.13c", "5.13d",
+] as const;
+export const isYds = (g: number) => g >= 100;
+export const gradeLabel = (g: number) => (isYds(g) ? (YDS_GRADES[g - 100] ?? "?") : `V${g}`);
+// 起步點圓圈裡放的短標籤：V 級只寫數字，YDS 去掉「5.」
+export const gradeShort = (g: number) => (isYds(g) ? (YDS_GRADES[g - 100] ?? "?").slice(2) : String(g));
+export const gradesFor = (s: GradeSystem): number[] => (s === "yds" ? YDS_GRADES.map((_, i) => 100 + i) : [...GRADES]);

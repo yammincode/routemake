@@ -29,7 +29,7 @@ export function createMock() {
       ["B", "B 區"],
       ["C", "C 區"],
       ["D", "D 區"],
-    ].map(([code, name], i) => ({ id: uuid(), gym_id: "mingde", code, name, sort: i + 1, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0 }))
+    ].map(([code, name], i) => ({ id: uuid(), gym_id: "mingde", code, name, sort: i + 1, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0, grade_system: "v" }))
       .concat(
         // 其他館的區域（同 migration 0013）
         Object.entries({
@@ -37,7 +37,7 @@ export function createMock() {
           g3: [["A", "A 區"], ["AB", "Auto-Belay"], ["B", "B 區"], ["C", "C 區"], ["D", "D 區"], ["SP", "速度牆"], ["BO", "抱石區"]],
           g4: [["A", "A 區"], ["B", "B 區"], ["C", "C 區"]],
           g5: [["A", "抱石 A 區"], ["B", "抱石 B 區"], ["C", "C 區"], ["D", "D 區"], ["E", "上攀 E 區"]],
-        }).flatMap(([gym_id, zs]) => zs.map(([code, name], i) => ({ id: uuid(), gym_id, code, name, sort: i + 1, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0 })))
+        }).flatMap(([gym_id, zs]) => zs.map(([code, name], i) => ({ id: uuid(), gym_id, code, name, sort: i + 1, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0, grade_system: gym_id === "g3" && code !== "BO" ? "yds" : "v" })))
       ),
     routes: [],
     ascents: [],
@@ -49,6 +49,7 @@ export function createMock() {
     vfiles: {}, // route-videos 檔案：path -> { buf, owner, created_at }
     scoring: {
       grade_points: [10, 15, 20, 30, 40, 55, 70, 90, 110, 135, 160],
+      yds_points: [4, 5, 6, 8, 10, 11, 13, 15, 17, 20, 25, 30, 35, 40, 48, 55, 70, 80, 90, 110],
       style_bonus: { 力量: 10, 指力: 10, 動態: 15, 耐力: 10, 協調: 10, 技巧: 5, 平衡: 5, 腳法: 5, 柔軟: 5 },
       max_style_bonus: 30,
       flash_multiplier: 1.2,
@@ -148,7 +149,7 @@ export function createMock() {
     const limit = Number(sp.get("limit"));
     return limit ? rows.slice(0, limit) : rows;
   };
-  const rawPoints = (r) => db.scoring.grade_points[r.grade] * (100 + Math.min(db.scoring.max_style_bonus, r.style_tags.reduce((s, t) => s + (db.scoring.style_bonus[t] || 0), 0)));
+  const rawPoints = (r) => (r.grade >= 100 ? db.scoring.yds_points[r.grade - 100] : db.scoring.grade_points[r.grade]) * (100 + Math.min(db.scoring.max_style_bonus, r.style_tags.reduce((s, t) => s + (db.scoring.style_bonus[t] || 0), 0)));
   const points = (a) => {
     const r = db.routes.find((x) => x.id === a.route_id);
     if (a.status === "send") return Math.round(rawPoints(r) / 100);
@@ -181,7 +182,7 @@ export function createMock() {
       const grade = (x) => db.routes.find((r) => r.id === x.route_id).grade;
       const by_grade = {}, by_day = {};
       cur.forEach((x) => { by_grade[grade(x)] = (by_grade[grade(x)] || 0) + 1; const d = +x.climbed_on.slice(8); by_day[d] = (by_day[d] || 0) + 1; });
-      return J(route, 200, { sends: cur.length, flashes: cur.filter((x) => x.status === "flash").length, days: new Set(cur.map((x) => x.climbed_on)).size, top_grade: cur.length ? Math.max(...cur.map(grade)) : null, by_grade, by_day, prev_sends: mine.filter((x) => x.climbed_on >= prev && x.climbed_on < from).length, total_sends: mine.length });
+      return J(route, 200, { sends: cur.length, flashes: cur.filter((x) => x.status === "flash").length, days: new Set(cur.map((x) => x.climbed_on)).size, top_grade: cur.filter((x) => grade(x) < 100).length ? Math.max(...cur.map(grade).filter((g) => g < 100)) : null, top_yds: cur.filter((x) => grade(x) >= 100).length ? Math.max(...cur.map(grade).filter((g) => g >= 100)) : null, by_grade, by_day, prev_sends: mine.filter((x) => x.climbed_on >= prev && x.climbed_on < from).length, total_sends: mine.length });
     }
     if (fn === "points_summary") {
       const { from, to, prev } = monthBounds(a.p_year, a.p_month);
@@ -263,13 +264,14 @@ export function createMock() {
       if (!p.card_public && !self) return J(route, 200, { nickname: p.nickname, public: false, self: false });
       const sends = db.ascents.filter((x) => x.user_id === a.p_user && x.status !== "project").map((x) => db.routes.find((r) => r.id === x.route_id));
       const axes = [["力量"], ["指力"], ["動態", "協調"], ["耐力"], ["技巧", "腳法", "平衡"], ["柔軟"]];
-      const raw = axes.map((t) => sends.filter((r) => r.style_tags.some((g) => t.includes(g))).reduce((n, r) => n + db.scoring.grade_points[r.grade], 0));
+      const raw = axes.map((t) => sends.filter((r) => r.style_tags.some((g) => t.includes(g))).reduce((n, r) => n + (r.grade >= 100 ? db.scoring.yds_points[r.grade - 100] : db.scoring.grade_points[r.grade]), 0));
       const mx = Math.max(...raw);
       return J(route, 200, {
         nickname: p.nickname, public: !!p.card_public, self, bio: p.bio ?? null, years: p.climbing_years ?? null, home_gym: p.home_gym ?? null,
         self_stats: p.self_stats ?? null, ability: raw.map((v) => (mx ? Math.round((100 * v) / mx) : 0)),
         ability_sends: sends.filter((r) => r.style_tags.length).length, total_sends: sends.length, month_sends: sends.length,
-        top_grade: sends.length ? Math.max(...sends.map((r) => r.grade)) : null,
+        top_grade: sends.some((r) => r.grade < 100) ? Math.max(...sends.filter((r) => r.grade < 100).map((r) => r.grade)) : null,
+        top_yds: sends.some((r) => r.grade >= 100) ? Math.max(...sends.filter((r) => r.grade >= 100).map((r) => r.grade)) : null,
       });
     }
     if (fn === "save_my_card") {

@@ -1,5 +1,6 @@
 "use client";
 
+import { gradeLabel } from "@/lib/design";
 import { useEffect, useState } from "react";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CommentItem, CommentList } from "@/components/ui/Comments";
@@ -25,7 +26,7 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
   const toast = useToast();
   const r = "route" in target ? target.route : null;
   const [color, setColor] = useState<HoldColor>(r?.hold_color ?? "紅");
-  const [grade, setGrade] = useState(r?.grade ?? 3);
+  const [grade, setGrade] = useState(r?.grade ?? (zone.grade_system === "yds" ? 104 : 3));
   const [tags, setTags] = useState<string[]>(r?.style_tags ?? []);
   const [note, setNote] = useState(r?.setter_note ?? "");
   const [cm, setCm] = useState(r?.comments_enabled ?? true);
@@ -47,7 +48,7 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
         toast("已儲存");
       } else if ("x" in target) {
         const created = await createRoute(zone.id, input, target.x, target.y);
-        toast(`已新增 ${created.code}（V${grade} ${color}色）`);
+        toast(`已新增 ${created.code}（${gradeLabel(grade)} ${color}色）`);
       }
       onChanged();
       onClose();
@@ -92,7 +93,7 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
       <Label>岩點顏色</Label>
       <ColorPicker value={color} onChange={setColor} />
       <Label>難度</Label>
-      <GradePicker value={grade} onChange={setGrade} />
+      <GradePicker system={zone.grade_system} value={grade} onChange={setGrade} />
       <Label>路線風格（可複選）</Label>
       <TagPicker value={tags} onChange={setTags} />
       <Label htmlFor="rnote">評語（選填，40 字內）</Label>

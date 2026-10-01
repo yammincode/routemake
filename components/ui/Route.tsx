@@ -1,10 +1,15 @@
 import type { ComponentProps, ReactNode } from "react";
-import { HOLD_COLORS, STATUS_LABEL, type HoldColor, type Status } from "@/lib/design";
+import { gradeLabel, HOLD_COLORS, isYds, STATUS_LABEL, type HoldColor, type Status } from "@/lib/design";
 import Icon from "./Icon";
 
 // 難度數字（Barlow Condensed）
+// 難度：V4 或 5.10a（YDS 字比較長，縮小一點）
 export function Grade({ grade, className = "text-num-row w-[50px]" }: { grade: number; className?: string }) {
-  return <span className={`font-num font-bold ${className}`}>V{grade}</span>;
+  return (
+    <span className={`font-num font-bold ${className}`}>
+      {isYds(grade) ? <span className="text-[0.72em] tracking-[-0.02em]">{gradeLabel(grade)}</span> : gradeLabel(grade)}
+    </span>
+  );
 }
 
 // 岩點色圓點

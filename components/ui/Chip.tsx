@@ -15,7 +15,7 @@ export function Chip({
   return (
     <button
       aria-pressed={pressed}
-      className={`flex-none rounded-full border border-line bg-surface px-3.5 py-[3px] aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-bg ${
+      className={`flex-none rounded-full border border-line bg-surface px-3.5 py-[3px] disabled:opacity-45 aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-bg ${
         num ? "font-num text-num-chip font-semibold" : "text-note leading-[1.9] font-medium"
       } ${className}`}
       {...rest}

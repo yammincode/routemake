@@ -1,5 +1,5 @@
 // 讀寫 Supabase 的資料函式；權限一律由資料庫 RLS 擋，這裡只負責呼叫
-import type { HoldColor, Status } from "@/lib/design";
+import type { GradeSystem, HoldColor, Status } from "@/lib/design";
 import type { ScoringRules } from "@/lib/scoring";
 import { supabase } from "@/lib/supabase";
 
@@ -14,6 +14,7 @@ export type Zone = {
   photo_height: number | null;
   next_reset_on: string | null;
   sort: number;
+  grade_system: GradeSystem;
 };
 export type ZoneProgress = {
   zone_id: string;
@@ -61,7 +62,7 @@ export type Comment = {
 export type Staff = { user_id: string; gym_id: string; role: "setter" | "manager"; nickname: string | null };
 
 const ROUTE_COLS = "id,zone_id,code,grade,hold_color,style_tags,setter_note,pin_x,pin_y,comments_enabled,created_at,archived_at";
-const ZONE_COLS = "id,gym_id,code,name,photo_path,photo_width,photo_height,next_reset_on,sort";
+const ZONE_COLS = "id,gym_id,code,name,photo_path,photo_width,photo_height,next_reset_on,sort,grade_system";
 
 // 資料庫錯誤轉成中文（資料庫的中文訊息直接顯示）
 export function dbError(e: { message?: string; code?: string } | null | undefined): string {
@@ -186,7 +187,7 @@ export async function deleteComment(id: string) {
 export async function setGymComments(gym: string, enabled: boolean) {
   must(await supabase().from("gyms").update({ comments_enabled: enabled }).eq("id", gym));
 }
-export async function updateZone(id: string, patch: Partial<Pick<Zone, "name" | "next_reset_on" | "photo_path" | "photo_width" | "photo_height">>) {
+export async function updateZone(id: string, patch: Partial<Pick<Zone, "name" | "next_reset_on" | "photo_path" | "photo_width" | "photo_height" | "grade_system">>) {
   must(await supabase().from("zones").update(patch).eq("id", id));
 }
 export async function createZone(gym: string, code: string, name: string, sort: number): Promise<Zone> {
@@ -269,6 +270,7 @@ export type MonthStats = {
   flashes: number;
   days: number;
   top_grade: number | null;
+  top_yds?: number | null;
   by_grade: Record<string, number>;
   by_day: Record<string, number>;
   prev_sends: number;
@@ -320,7 +322,7 @@ export type PointsSummary = {
   total: number;
 };
 export async function getScoringRules(): Promise<ScoringRules> {
-  return must(await supabase().from("scoring_rules").select("grade_points,style_bonus,max_style_bonus,flash_multiplier").eq("id", 1).single());
+  return must(await supabase().from("scoring_rules").select("grade_points,yds_points,style_bonus,max_style_bonus,flash_multiplier").eq("id", 1).single());
 }
 export async function updateScoringRules(r: ScoringRules) {
   must(await supabase().from("scoring_rules").update(r).eq("id", 1));
@@ -500,7 +502,8 @@ export type ProfileCard = {
   ability_sends?: number;
   total_sends?: number;
   month_sends?: number;
-  top_grade?: number | null;
+  top_grade?: number | null; // 抱石最高（V）
+  top_yds?: number | null; // 上攀最高（YDS，grade 100–119）
 };
 export async function getProfileCard(userId: string): Promise<ProfileCard> {
   return must(await supabase().rpc("profile_card", { p_user: userId }));

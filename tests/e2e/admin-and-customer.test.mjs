@@ -114,7 +114,7 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
   // ---- 老闆整區換線 ----
   await a.reload({ waitUntil: "networkidle" });
   await a.waitForTimeout(800);
-  await a.click("text=整區換線");
+  await a.click('main button:has-text("整區換線（")');
   await a.click("[role=dialog] >> text=確認下架");
   await a.waitForTimeout(600);
   assert.equal(await a.locator("main ul li").count(), 0);
