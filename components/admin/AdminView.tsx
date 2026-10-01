@@ -6,7 +6,7 @@ import RouteEditor, { type EditTarget } from "@/components/admin/RouteEditor";
 import AuditPanel from "@/components/admin/AuditPanel";
 import ScoringPanel from "@/components/admin/ScoringPanel";
 import ShareQr from "@/components/admin/ShareQr";
-import SprayPhotoPanel from "@/components/admin/SprayPhotoPanel";
+import SprayAdmin from "@/components/admin/SprayAdmin";
 import StaffPanel from "@/components/admin/StaffPanel";
 import VideoPanel from "@/components/admin/VideoPanel";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -40,7 +40,7 @@ import {
 } from "@/lib/data";
 import { ago, daysUntil } from "@/lib/date";
 import { PLANS } from "@/lib/floorplan";
-import { LIVE_GYM } from "@/lib/gyms";
+import { LIVE_GYM, SPRAY_WALLS } from "@/lib/gyms";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
@@ -53,6 +53,7 @@ export default function AdminView() {
   const rules = useScoring();
   const [gyms, setGyms] = useState<Gym[]>([]);
   const [gymId, setGymId] = useState<string | null>(null);
+  const [sprayId, setSprayId] = useState<string | null>(null); // 選了 Spray Wall 時（跟岩館分開管理）
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [sprayZones, setSprayZones] = useState<Zone[]>([]);
   const [zoneId, setZoneId] = useState<string | null>(null);
@@ -115,6 +116,9 @@ export default function AdminView() {
   const gym = gyms.find((g) => g.id === gymId);
   const zone = zones?.find((z) => z.id === zoneId) ?? null;
   const manager = isManagerOf(access, gymId);
+  // 可以管理的 Spray Wall：所在的館是自己能管理的館
+  const walls = SPRAY_WALLS.filter((w) => gyms.some((g) => g.id === w.gymId));
+  const spray = walls.find((w) => w.id === sprayId) ?? null;
   // 有平面圖的館：點圖選區域；圖上沒畫到的區域（例如新增的）放在下面的按鈕
   const plan = PLANS[gymId] ?? null;
   const offPlan = (zones ?? []).filter((z) => !plan?.zones[z.code]);
@@ -196,13 +200,14 @@ export default function AdminView() {
     <>
       <p className="mt-0 mb-3 text-meta text-muted">你的身分：{roleLabel(access, gymId)}</p>
 
-      {gyms.length > 1 && (
+      {(gyms.length > 1 || walls.length > 0) && (
         <ChipRow>
           {gyms.map((g) => (
             <Chip
               key={g.id}
-              pressed={g.id === gymId}
+              pressed={!spray && g.id === gymId}
               onClick={() => {
+                setSprayId(null);
                 setGymId(g.id);
                 setZones(null);
                 setZoneId(null);
@@ -213,6 +218,33 @@ export default function AdminView() {
           ))}
         </ChipRow>
       )}
+      {walls.length > 0 && (
+        <>
+          <p className="mt-0 mb-1.5 text-meta text-muted">Spray Wall（獨立管理）</p>
+          <ChipRow>
+            {walls.map((w) => (
+              <Chip
+                key={w.id}
+                pressed={spray?.id === w.id}
+                onClick={() => {
+                  setSprayId(w.id);
+                  setGymId(w.gymId);
+                }}
+              >
+                {w.name}
+              </Chip>
+            ))}
+          </ChipRow>
+        </>
+      )}
+
+      {spray ? (
+        <>
+          <SprayAdmin key={spray.id} wall={spray} />
+          <ShareQr />
+        </>
+      ) : (
+        <>
 
       <SetBox>
         {manager ? (
@@ -380,12 +412,13 @@ export default function AdminView() {
         </>
       )}
 
-      {sprayZones.length > 0 && <SprayPhotoPanel zones={sprayZones} onChanged={() => void loadZones()} />}
       {gym && <VideoPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <AuditPanel gymId={gymId} gymName={gym.name} />}
       {access.is_owner && <ScoringPanel />}
       <ShareQr />
+        </>
+      )}
 
       <Sheet open={!!confirm} onClose={() => setConfirm(null)}>
         {confirm?.kind === "photo" && zone && (

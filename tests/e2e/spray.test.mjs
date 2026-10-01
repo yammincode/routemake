@@ -107,5 +107,22 @@ test("Spray Wall：岩友出路線、員工出岩館路線與下架", async () =
   await s.waitForTimeout(600);
   assert.ok(mine.archived_at, "員工下架岩友路線");
   assert.ok(mock.db.audit.some((a) => a.action === "route.archive" && a.target_id === mine.id), "寫操作紀錄");
+  // ---- 管理後台：Spray Wall 跟岩館分開 ----
+  mock.db.routes.push({ ...mine, id: crypto.randomUUID(), name: "第二條", archived_at: null, code: "S-09" });
+  await s.goto(BASE + "/admin", { waitUntil: "networkidle" });
+  await s.waitForTimeout(1000);
+  assert.ok(!(await s.textContent("main")).includes("公版照片"), "岩館畫面沒有 Spray Wall");
+  await s.click('main button:text-is("明德 SPRAY WALL")');
+  await s.waitForTimeout(800);
+  const admin = await s.textContent("main");
+  assert.ok(admin.includes("明德 SPRAY WALL 公版照片") && admin.includes("教練的路線"), "Spray Wall 獨立管理：照片與岩館路線");
+  assert.ok(!admin.includes("開放顧客留言") && !admin.includes("整區換線"), "不會出現岩館的設定");
+  await s.click('main [role=tab]:has-text("岩友路線")');
+  await s.waitForTimeout(500);
+  const item = s.locator("main li", { hasText: "第二條" });
+  await item.locator('button:text-is("下架")').click();
+  await item.locator('button:text-is("確定下架？")').click();
+  await s.waitForTimeout(500);
+  assert.ok(mock.db.routes.find((r) => r.name === "第二條").archived_at, "後台下架岩友路線");
   assert.deepEqual([...C.errors, ...S.errors], []);
 });
