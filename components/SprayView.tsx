@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Empty, PageTitle } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { HoldLegend, RouteThumb, SprayRow } from "@/components/ui/Spray";
+import { ScrollList } from "@/components/ui/ScrollList";
 import { Tabs } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
 import { NoPhoto, WallPhoto } from "@/components/ui/Wall";
@@ -196,32 +197,25 @@ export default function SprayView({ wall }: { wall: SprayWall }) {
           {grade != null || sort === "mine" ? "沒有符合的路線。" : kind === "gym" ? "教練還沒出岩館路線。" : "還沒有岩友路線，出第一條吧！"}
         </Empty>
       ) : (
-        <>
-          <ul className="m-0 grid list-none gap-2.5 p-0">
-            {list.map((r) => (
-              <SprayRow
-                key={r.id}
-                grade={r.grade}
-                name={r.name ?? r.code}
-                meta={`${r.author ?? "攀岩者"} 出的・${ago(r.created_at)}`}
-                sends={r.sends}
-                likes={r.likes}
-                done={["flash", "send"].includes(mine[r.id]?.status ?? "")}
-                thumb={
-                  photo && r.holds?.length ? (
-                    <RouteThumb src={photo} holds={r.holds} ratio={zone.photo_width && zone.photo_height ? zone.photo_height / zone.photo_width : 0.75} />
-                  ) : undefined
-                }
-                onClick={() => setOpen(r)}
-              />
-            ))}
-          </ul>
-          {more && (
-            <Button className="mt-3" onClick={() => void load(list.length)}>
-              載入更多
-            </Button>
-          )}
-        </>
+        <ScrollList more={more} onMore={() => load(list.length)}>
+          {list.map((r) => (
+            <SprayRow
+              key={r.id}
+              grade={r.grade}
+              name={r.name ?? r.code}
+              meta={`${r.author ?? "攀岩者"} 出的・${ago(r.created_at)}`}
+              sends={r.sends}
+              likes={r.likes}
+              done={["flash", "send"].includes(mine[r.id]?.status ?? "")}
+              thumb={
+                photo && r.holds?.length ? (
+                  <RouteThumb src={photo} holds={r.holds} ratio={zone.photo_width && zone.photo_height ? zone.photo_height / zone.photo_width : 0.75} />
+                ) : undefined
+              }
+              onClick={() => setOpen(r)}
+            />
+          ))}
+        </ScrollList>
       )}
 
       <RouteSheet

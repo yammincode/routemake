@@ -126,3 +126,34 @@ test("Spray Wall：岩友出路線、員工出岩館路線與下架", async () =
   assert.ok(mock.db.routes.find((r) => r.name === "第二條").archived_at, "後台下架岩友路線");
   assert.deepEqual([...C.errors, ...S.errors], []);
 });
+
+test("Spray Wall：路線多時在框內滑動，滑到底自動載入下一批", async () => {
+  const mock = createMock();
+  const me = mock.addUser("climber88", "password1", { nickname: "小安" });
+  const sw = mock.db.zones.find((z) => z.gym_id === "mingde" && z.kind === "spray");
+  sw.photo_path = "mingde/zones/S-1.jpg";
+  mock.db.files[sw.photo_path] = fs.readFileSync(WALL);
+  for (let i = 0; i < 25; i++) {
+    const r = mock.addRoute(sw, i % 8, "紅", [], 50, 50, new Date(Date.now() - i * 60000).toISOString());
+    Object.assign(r, { kind: "community", name: `岩友路線${i + 1}`, created_by: me, holds: [{ x: 20, y: 80, t: "s" }, { x: 60, y: 20, t: "t" }] });
+  }
+
+  const C = await phone(browser, mock);
+  const c = C.page;
+  await login(c, "climber88", "password1", "/spray/mingde-sw");
+  await c.waitForTimeout(800);
+  await c.click('main [role=tab]:has-text("岩友路線")');
+  await c.waitForTimeout(800);
+  const box = c.locator("main [data-scroll-list]");
+  assert.equal(await box.locator("li").count(), 20, "一次先載入 20 條");
+  const size = await box.evaluate((el) => ({ h: el.clientHeight, sh: el.scrollHeight }));
+  assert.ok(size.h <= 480 && size.sh > size.h, "列表在固定高度的框裡滑動");
+  assert.equal(await c.locator('main button:has-text("載入更多")').count(), 0, "不用按載入更多");
+
+  await box.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await c.waitForTimeout(1200);
+  assert.equal(await box.locator("li").count(), 25, "滑到底自動載入剩下的路線");
+  assert.equal(new Set(await box.locator("li").allTextContents()).size, 25, "不會重複載入");
+  assert.deepEqual(C.errors, []);
+  await C.ctx.close();
+});

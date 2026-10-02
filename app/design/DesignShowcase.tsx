@@ -6,6 +6,7 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { SortList } from "@/components/ui/SortList";
+import { ScrollList } from "@/components/ui/ScrollList";
 import { Tabs } from "@/components/ui/Tabs";
 import { HoldLegend, HoldMarks, HoldTools, RouteThumb, SprayRow } from "@/components/ui/Spray";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
@@ -426,7 +427,7 @@ export default function DesignShowcase() {
           />
         </div>
         <HoldLegend />
-        <ul className="m-0 grid list-none gap-2.5 p-0">
+        <ScrollList>
           <SprayRow
             grade={4}
             name="下雨天的指力"
@@ -438,7 +439,10 @@ export default function DesignShowcase() {
             onClick={() => toast("打開路線")}
           />
           <SprayRow grade={1} name="晚餐前的熱身" meta="阿明 出的・今天" sends={0} likes={1} onClick={() => toast("打開路線")} />
-        </ul>
+          {[3, 5, 2, 6].map((g, i) => (
+            <SprayRow key={g} grade={g} name={`框內滑動 ${i + 1}`} meta="路線多時整頁不會拉長" sends={i} likes={i} onClick={() => toast("打開路線")} />
+          ))}
+        </ScrollList>
       </Block>
 
       <Block title="人物卡">
