@@ -181,3 +181,49 @@ export function DailyBars({
     </div>
   );
 }
+
+// 趨勢直條圖（使用狀況：最近 30 天每天幾人使用）：一天一條，點一下（或滑過）顯示當天數字；0 的日子只畫底線
+export function TrendBars({
+  items,
+  selected,
+  onSelect,
+  label,
+}: {
+  items: { key: string; tick: string; title: string; value: number }[];
+  selected: number | null;
+  onSelect: (i: number) => void;
+  label: string;
+}) {
+  const max = Math.max(1, ...items.map((x) => x.value));
+  const n = items.length;
+  const ticks = [0, Math.round((n - 1) / 3), Math.round(((n - 1) * 2) / 3), n - 1].filter((v, i, a) => a.indexOf(v) === i);
+  return (
+    <div>
+      <div className="mb-1 h-5 text-center text-meta text-muted">{selected != null && items[selected] ? items[selected].title : "點一下長條看當天數字"}</div>
+      <div className="flex h-28 items-end border-b border-line" role="group" aria-label={label}>
+        {items.map((x, i) => (
+          <button
+            key={x.key}
+            aria-label={x.title}
+            aria-pressed={selected === i}
+            onClick={() => onSelect(i)}
+            onMouseEnter={() => onSelect(i)}
+            className="flex h-full flex-1 items-end justify-center px-px"
+          >
+            <span
+              className={`block w-full max-w-6 rounded-t-[4px] ${x.value ? (selected === i ? "bg-ink" : "bg-accent") : "h-0"}`}
+              style={x.value ? { height: `${Math.max(4, (x.value / max) * 100)}%` } : undefined}
+            />
+          </button>
+        ))}
+      </div>
+      <div className="relative mt-1 h-4 text-tiny text-muted">
+        {ticks.map((i) => (
+          <span key={i} className="absolute -translate-x-1/2 font-num" style={{ left: `${((i + 0.5) / n) * 100}%` }}>
+            {items[i]?.tick}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}

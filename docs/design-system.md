@@ -104,7 +104,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Tabs.tsx` | `Tabs`（路線卡片的紀錄／影片／留言分頁） |
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |
 | `Video.tsx` | `VideoStrip`（橫向滑動縮圖）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`（顧客分享影片） |
-| `Stats.tsx` | `DailyBars`、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |
+| `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
 | `Toast.tsx` | `ToastProvider`、`useToast` |
 | `Icon.tsx` | `Icon`（flash、send、project、chat、lock、down、video、play） |

@@ -16,7 +16,7 @@ import { Check, ColorPicker, GradePicker, Label, Rating, Segmented, TagPicker, T
 import { NewRouteCard, NewRouteRow, ResetList, SoonBox, ZoneCard, ZoneList } from "@/components/ui/Gym";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
-import { CalendarHeat, DailyBars, Delta, GradeBars, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow } from "@/components/ui/Stats";
+import { CalendarHeat, DailyBars, Delta, GradeBars, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoPickButton, VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
@@ -105,6 +105,7 @@ export default function DesignShowcase() {
   const [liked, setLiked] = useState(false);
   const [demoTab, setDemoTab] = useState<"log" | "video" | "comment">("log");
   const [rate, setRate] = useState<number | null>(3);
+  const [trendPick, setTrendPick] = useState<number | null>(null);
   const [holdType, setHoldType] = useState<"s" | "h" | "t">("s");
   const [holdSize, setHoldSize] = useState<1 | 2 | 3>(2);
   const [order, setOrder] = useState(["A 區", "比賽牆", "B 區", "C 區"]);
@@ -398,6 +399,18 @@ export default function DesignShowcase() {
           <CommentItem name="阿明" ago="3 天前" body="起步右腳踩高一點" likes={1} onLike={() => toast("👍")} />
         </CommentList>
         <p className="-mt-1.5 mb-0 text-tiny text-muted">共 3 則，左右滑動看更多</p>
+      </Block>
+
+      <Block title="使用狀況（後台）">
+        <TrendBars
+          label="最近 30 天每天使用人數"
+          items={Array.from({ length: 30 }, (_, i) => {
+            const v = Math.round(8 + 6 * Math.sin(i / 3) + (i % 7 === 5 ? 9 : 0));
+            return { key: String(i), tick: `9/${i + 1}`, title: `9/${i + 1}：${v} 人使用`, value: v };
+          })}
+          selected={trendPick}
+          onSelect={setTrendPick}
+        />
       </Block>
 
       <Block title="Spray Wall">

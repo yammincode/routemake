@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
-import { SB, createMock } from "./mock-supabase.mjs";
+import { SB, createMock, taipeiDay } from "./mock-supabase.mjs";
 
 export const BASE = process.env.BASE_URL ?? "http://localhost:3100";
 export const WALL = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "wall.png");
@@ -46,4 +46,4 @@ export async function login(page, username, password = "password1", next) {
   await page.waitForTimeout(600);
 }
 
-export { createMock };
+export { createMock, taipeiDay };

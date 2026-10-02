@@ -17,10 +17,11 @@
 | `setup/step8-zone-order.sql` | migration 0012：店長拖曳整理區域順序（reorder_zones） | 已套用 |
 | `setup/step9-gym-zones.sql` | migration 0013：萬華、中和、南港、新店開放並建立區域；明德比賽牆分四段、新增 Spray Wall；10 月換線日 | 已套用 |
 | `setup/step10-comment-likes.sql` | migration 0014：留言按讚 👍（comment_likes） | 已套用 |
-| `setup/step11-one-comment.sql` | migration 0015：每人每條路線一則留言（重複的保留最新一則）、edit_comment() 編輯留言 | 待套用 |
-| `setup/step12-profile-card.sql` | migration 0016：人物卡（預設不公開、自我介紹擋聯絡方式、能力值依完攀計算＋自評、店長可清除） | 待套用 |
-| `setup/step13-yds.sql` | migration 0017：上攀 YDS 等級（區域等級制、YDS 分數表、最高難度分抱石／上攀）；中和抱石區以外改 YDS | 待套用 |
-| `setup/step14-spray-wall.sql` | migration 0018：Spray Wall（明德、南港）：岩館／岩友路線、圈圈標記、路線按讚、列表；岩友路線不算積分 | 待套用 |
+| `setup/step11-one-comment.sql` | migration 0015：每人每條路線一則留言（重複的保留最新一則）、edit_comment() 編輯留言 | 已套用 |
+| `setup/step12-profile-card.sql` | migration 0016：人物卡（預設不公開、自我介紹擋聯絡方式、能力值依完攀計算＋自評、店長可清除） | 已套用 |
+| `setup/step13-yds.sql` | migration 0017：上攀 YDS 等級（區域等級制、YDS 分數表、最高難度分抱石／上攀）；中和抱石區以外改 YDS | 已套用 |
+| `setup/step14-spray-wall.sql` | migration 0018：Spray Wall（明德、南港）：岩館／岩友路線、圈圈標記、路線按讚、列表；岩友路線不算積分 | 已套用 |
+| `setup/step15-usage.sql` | migration 0019：使用狀況（每人每天記一次打開、usage_stats() 活躍人數／趨勢／各館比較／熱門路線） | 待套用 |
 
 ## 規則摘要
 
@@ -38,6 +39,7 @@
 | scoring_rules | 所有人 | 只有老闆 | 不開放 |
 | route_videos | 所有人 | 登入且有暱稱；路線未下架、留言開啟；路徑要是 `{館}/{路線}/{本人}/檔名`；不能修改 | `delete_video()`：本人或該館員工（員工刪除寫操作紀錄）；路線下架時自動刪除 |
 | comment_likes | 所有人 | 登入且有暱稱；留言未刪除；每人每則一個讚；不能修改 | 只能收回自己的讚 |
+| app_opens | 沒有人能直接讀寫 | 只能用 `record_open()` 記自己今天有打開 | 不開放 |
 | Storage `zone-photos` | 公開 | `{館}/zones/` 員工、`{館}/floorplan/` 店長 | 同左 |
 | Storage `route-videos` | 公開 | 同 route_videos；每支 50 MB、mp4／mov／webm；每人 24 小時 10 支 | 本人或該館員工 |
 

@@ -45,6 +45,7 @@ export function createMock() {
     ascents: [],
     comments: [],
     routeLikes: [], // route_likes
+    opens: [], // app_opens
     likes: [], // comment_likes
     audit: [],
     files: {},
@@ -304,6 +305,28 @@ export function createMock() {
       const key = a.p_sort === "sends" ? "sends" : a.p_sort === "likes" ? "likes" : null;
       rows.sort((x, y) => (key ? y[key] - x[key] : 0) || y.created_at.localeCompare(x.created_at));
       return J(route, 200, rows.slice(a.p_offset, a.p_offset + a.p_limit));
+    }
+    if (fn === "record_open") {
+      if (!uid) return J(route, 401, { message: "JWT" });
+      const day = taipeiDay();
+      const ex = db.opens.find((o) => o.user_id === uid && o.day === day);
+      if (ex) ex.gym_id = a.p_gym ?? ex.gym_id;
+      else db.opens.push({ user_id: uid, day, gym_id: a.p_gym ?? null });
+      return J(route, 200, null);
+    }
+    if (fn === "usage_stats") {
+      if (a.p_gym == null ? !isOwner(uid) : !isMgr(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有店長可以看使用狀況" });
+      const opens = db.opens.filter((o) => a.p_gym == null || o.gym_id === a.p_gym);
+      const days = Array.from({ length: 30 }, (_, i) => taipeiDay(i - 29));
+      const sends = db.ascents.filter((x) => x.status !== "project");
+      return J(route, 200, {
+        registered: db.profiles.length, new7: db.profiles.length,
+        today: new Set(opens.filter((o) => o.day === taipeiDay()).map((o) => o.user_id)).size,
+        week: new Set(opens.map((o) => o.user_id)).size, month: new Set(opens.map((o) => o.user_id)).size, sends30: sends.length,
+        daily: days.map((d) => ({ day: d, users: new Set(opens.filter((o) => o.day === d).map((o) => o.user_id)).size, sends: sends.filter((s) => s.climbed_on === d).length })),
+        gyms: a.p_gym == null ? db.gyms.filter((g) => g.is_live).map((g) => ({ gym: g.id, name: g.name, users: new Set(db.opens.filter((o) => o.gym_id === g.id).map((o) => o.user_id)).size, sends: 0 })) : null,
+        top_routes: [],
+      });
     }
     if (fn === "lookup_user") {
       const p = db.profiles.find((x) => x.username === a.p_username.toLowerCase());

@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { authErrorMessage, usernameToEmail, type Access } from "@/lib/auth";
 import { clearCache } from "@/lib/offline";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { markOpen } from "@/lib/usage";
 
 type AuthState = {
   ready: boolean; // 已經讀完手機裡的登入狀態
@@ -75,10 +76,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setReady(true);
       await loadAccess(data.session);
+      if (data.session) void markOpen(null); // 使用狀況：今天有打開
     });
     const { data: sub } = sb.auth.onAuthStateChange((event, s) => {
       setSession(s);
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") void loadAccess(s);
+      if (event === "SIGNED_IN") void markOpen(null);
     });
     return () => sub.subscription.unsubscribe();
   }, [loadAccess]);

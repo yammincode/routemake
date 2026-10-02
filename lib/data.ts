@@ -538,6 +538,22 @@ export async function clearCardBio(userId: string, gym: string) {
   must(await supabase().rpc("clear_card_bio", { p_user: userId, p_gym: gym }));
 }
 
+// ---------- 使用狀況（店長看自己的館；老闆可看全部 gym = null） ----------
+export type UsageStats = {
+  registered: number;
+  new7: number;
+  today: number;
+  week: number;
+  month: number;
+  sends30: number;
+  daily: { day: string; users: number; sends: number }[];
+  gyms: { gym: string; name: string; users: number; sends: number }[] | null;
+  top_routes: { id: string; code: string; grade: number; color: string; name: string | null; zone: string; kind: string; n: number }[];
+};
+export async function getUsage(gym: string | null): Promise<UsageStats> {
+  return must(await supabase().rpc("usage_stats", { p_gym: gym }));
+}
+
 // ---------- Spray Wall ----------
 export type SprayKind = "gym" | "community";
 export type SpraySort = "new" | "sends" | "likes" | "mine";

@@ -8,6 +8,7 @@ import ScoringPanel from "@/components/admin/ScoringPanel";
 import ShareQr from "@/components/admin/ShareQr";
 import SprayAdmin from "@/components/admin/SprayAdmin";
 import StaffPanel from "@/components/admin/StaffPanel";
+import UsagePanel from "@/components/admin/UsagePanel";
 import VideoPanel from "@/components/admin/VideoPanel";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Empty, Tip } from "@/components/ui/Card";
@@ -413,6 +414,7 @@ export default function AdminView() {
       )}
 
       {gym && <VideoPanel gymId={gymId} gymName={gym.name} />}
+      {manager && gym && <UsagePanel key={gymId} gymId={gymId} gymName={gym.name} owner={access.is_owner} />}
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <AuditPanel gymId={gymId} gymName={gym.name} />}
       {access.is_owner && <ScoringPanel />}

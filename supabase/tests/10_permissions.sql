@@ -798,6 +798,40 @@ reset role;
 select tests.ok('Spray：換照片後路線全部下架', not exists (select 1 from public.routes r join public.zones z on z.id = r.zone_id where z.gym_id = 'mingde' and z.code = 'S' and r.archived_at is null));
 
 -- ---------------------------------------------------------------------
+-- 使用狀況
+-- ---------------------------------------------------------------------
+set role authenticated; select tests.login(:A);
+select tests.lives('使用狀況：記錄今天有打開', $q$select public.record_open('mingde')$q$);
+select tests.lives('使用狀況：同一天再打開不會出錯', $q$select public.record_open('g2')$q$);
+select tests.throws('使用狀況：不能直接讀打開紀錄', 'select * from public.app_opens');
+select tests.throws('使用狀況：顧客不能看', $q$select public.usage_stats('mingde')$q$);
+reset role;
+select tests.ok('使用狀況：每人每天只有一筆、記最後看的館', (select count(*) = 1 and max(gym_id) = 'g2' from public.app_opens where user_id = :A));
+set role anon; select tests.login(null);
+select tests.throws('使用狀況：未登入不能記錄', $q$select public.record_open('mingde')$q$);
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.lives('使用狀況：亂填館名也不會出錯（記成空的）', $q$select public.record_open('nope')$q$);
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.throws('使用狀況：定線員不能看', $q$select public.usage_stats('mingde')$q$);
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.ok('使用狀況：店長看得到自己的館',
+  (select (u ->> 'month')::int >= 1 and jsonb_array_length(u -> 'daily') = 30 and u -> 'gyms' = 'null'::jsonb from public.usage_stats('mingde') u),
+  public.usage_stats('mingde')::text);
+select tests.throws('使用狀況：店長不能看別館', $q$select public.usage_stats('g2')$q$);
+select tests.throws('使用狀況：店長不能看全部館', $q$select public.usage_stats(null)$q$);
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.ok('使用狀況：老闆看得到全部館（有各館比較、註冊人數）',
+  (select (u ->> 'registered')::int = (select count(*) from public.profiles) and jsonb_array_length(u -> 'gyms') = 5
+          and (u ->> 'today')::int >= 2 from public.usage_stats(null) u),
+  public.usage_stats(null)::text);
+select tests.ok('使用狀況：萬華今天有 1 人打開', (select (g ->> 'users')::int >= 1 from jsonb_array_elements(public.usage_stats(null) -> 'gyms') g where g ->> 'gym' = 'g2'));
+reset role;
+
+-- ---------------------------------------------------------------------
 -- 結果
 -- ---------------------------------------------------------------------
 \o
