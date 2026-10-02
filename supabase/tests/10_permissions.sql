@@ -126,6 +126,9 @@ select tests.throws('難度超過 V10 會被擋', format('insert into public.rou
 select tests.throws('評語超過 40 字會被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, setter_note) values (%L, 1, ''紅'', 1, 1, repeat(''字'', 41))', (select v from ids where k = 'zoneA')));
 select tests.throws('起步點超出照片範圍會被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 1, ''紅'', 101, 1)', (select v from ids where k = 'zoneA')));
 select tests.throws('不存在的風格標籤會被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, style_tags) values (%L, 1, ''紅'', 1, 1, ''{飛天}'')', (select v from ids where k = 'zoneA')));
+select tests.throws('不存在的岩點顏色會被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 1, ''金'', 1, 1)', (select v from ids where k = 'zoneA')));
+select tests.ok('岩點顏色可以選灰、蒂芬妮',
+  (select pg_get_constraintdef(oid) from pg_constraint where conname = 'routes_hold_color_check') like '%灰%蒂芬妮%');
 -- 區域：定線員只能改照片和換線日
 select tests.ok('定線員：可以改照片和換線日',
   tests.rows(format('update public.zones set photo_path = ''mingde/zones/a.jpg'', next_reset_on = public.taipei_today() + 5 where id = %L', (select v from ids where k = 'zoneA'))) = 1);

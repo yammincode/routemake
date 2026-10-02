@@ -40,7 +40,8 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
   };
   await add(0.25, 0.4, "藍", 4, ["動態", "指力"], "最後一手要果斷");
   await add(0.6, 0.55, "紅", 2, [], "");
-  await add(0.8, 0.3, "黃", 6, [], "");
+  await add(0.8, 0.3, "蒂芬妮", 6, [], "");
+  assert.equal(mock.db.routes.find((r) => r.code === "A-03").hold_color, "蒂芬妮", "可以選新的蒂芬妮色");
   const codes = mock.db.routes.map((r) => r.code).sort();
   assert.deepEqual(codes, ["A-01", "A-02", "A-03"], "編號自動產生");
   assert.ok((await a.locator("main ul li", { hasText: "A-01" }).textContent()).includes("50分"), "路線列顯示分數");

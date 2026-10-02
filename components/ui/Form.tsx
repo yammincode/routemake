@@ -74,7 +74,7 @@ export function Segmented<T extends number | string>({
 // 岩點顏色選擇（原型 .swatches）
 export function ColorPicker({ value, onChange }: { value: HoldColor; onChange: (c: HoldColor) => void }) {
   return (
-    <div className="grid grid-cols-9 gap-1.5">
+    <div className="grid grid-cols-6 gap-2">
       {HOLD_COLOR_NAMES.map((c) => (
         <button
           key={c}

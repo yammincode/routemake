@@ -154,7 +154,7 @@ export default function DesignShowcase() {
           <Swatch name="卡片" varName="--surface" />
           <Swatch name="凹陷底色" varName="--sunk" />
         </div>
-        <div className="mt-3 grid grid-cols-9 gap-1.5">
+        <div className="mt-3 grid grid-cols-6 gap-2">
           {HOLD_COLOR_NAMES.map((c) => (
             <div key={c} className="grid justify-items-center gap-1 text-tiny text-muted">
               <HoldDot color={c} className="size-7" />

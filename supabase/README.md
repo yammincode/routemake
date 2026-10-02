@@ -22,6 +22,7 @@
 | `setup/step13-yds.sql` | migration 0017：上攀 YDS 等級（區域等級制、YDS 分數表、最高難度分抱石／上攀）；中和抱石區以外改 YDS | 已套用 |
 | `setup/step14-spray-wall.sql` | migration 0018：Spray Wall（明德、南港）：岩館／岩友路線、圈圈標記、路線按讚、列表；岩友路線不算積分 | 已套用 |
 | `setup/step15-usage.sql` | migration 0019：使用狀況（每人每天記一次打開、usage_stats() 活躍人數／趨勢／各館比較／熱門路線） | 待套用 |
+| `setup/step16-hold-colors.sql` | migration 0020：岩點顏色新增灰、蒂芬妮 | 待套用 |
 
 ## 規則摘要
 

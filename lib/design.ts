@@ -1,6 +1,6 @@
 // 路線相關的固定選項（來源：原型）
 
-export type HoldColor = "紅" | "橙" | "黃" | "綠" | "藍" | "紫" | "粉" | "黑" | "白";
+export type HoldColor = "紅" | "橙" | "黃" | "綠" | "藍" | "紫" | "粉" | "黑" | "白" | "灰" | "蒂芬妮";
 export type Status = "flash" | "send" | "project";
 
 // 岩點顏色：順序即選色盤順序
@@ -14,11 +14,13 @@ export const HOLD_COLORS: Record<HoldColor, string> = {
   粉: "#F07BB5",
   黑: "#1A1A1A",
   白: "#FAFAFA",
+  灰: "#8E9196",
+  蒂芬妮: "#81D8D0",
 };
 export const HOLD_COLOR_NAMES = Object.keys(HOLD_COLORS) as HoldColor[];
 
 // 淺色岩點上的文字要用深色
-const LIGHT_HOLDS: HoldColor[] = ["黃", "白", "粉"];
+const LIGHT_HOLDS: HoldColor[] = ["黃", "白", "粉", "蒂芬妮"];
 export const holdTextColor = (c: HoldColor) => (LIGHT_HOLDS.includes(c) ? "#17201C" : "#fff");
 
 export const GRADES = Array.from({ length: 11 }, (_, i) => i); // V0–V10
