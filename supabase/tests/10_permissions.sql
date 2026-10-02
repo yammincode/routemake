@@ -221,6 +221,21 @@ reset role;
 set role anon; select tests.login(null);
 select tests.ok('zone_progress：未登入時完成數為 0', (select route_count = 2 and done_count = 0 from public.zone_progress('mingde') where code = 'A'));
 reset role;
+set role authenticated; select tests.login(:A);
+select tests.ok('zone_view：一次拿到區域、場館、2 條路線、自己全部的紀錄',
+  (select v -> 'z' ->> 'code' = 'A' and v -> 'g' ->> 'id' = 'mingde' and jsonb_array_length(v -> 'rs') = 2
+          and (select count(*) from jsonb_object_keys(v -> 'as')) = (select count(*) from public.ascents a join public.routes r on r.id = a.route_id where r.zone_id = (select v from ids where k = 'zoneA') and r.archived_at is null)
+          and (select count(*) from jsonb_object_keys(v -> 'as')) > 0
+     from public.zone_view((select v from ids where k = 'zoneA')) v));
+select tests.ok('zone_view：路線依難度排序', (select (v -> 'rs' -> 0 ->> 'grade')::int <= (v -> 'rs' -> 1 ->> 'grade')::int from public.zone_view((select v from ids where k = 'zoneA')) v));
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.ok('zone_view：顧客乙拿不到別人的紀錄和心得', (select v -> 'as' = '{}'::jsonb and jsonb_array_length(v -> 'rs') = 2 from public.zone_view((select v from ids where k = 'zoneA')) v));
+reset role;
+set role anon; select tests.login(null);
+select tests.ok('zone_view：未登入沒有紀錄', (select v -> 'as' = '{}'::jsonb and jsonb_array_length(v -> 'rs') = 2 from public.zone_view((select v from ids where k = 'zoneA')) v));
+select tests.ok('zone_view：不存在的區域回傳空的', (select v -> 'z' = 'null'::jsonb or v ->> 'z' is null from public.zone_view(gen_random_uuid()) v));
+reset role;
 
 -- ---------------------------------------------------------------------
 -- 留言
@@ -241,6 +256,10 @@ select tests.throws('顧客乙：不能刪顧客甲的留言', format('select pu
 reset role;
 insert into ids select 'cA', id from public.comments where user_id = :A;
 insert into ids select 'cB', id from public.comments where user_id = :B;
+set role anon; select tests.login(null);
+select tests.ok('zone_view：留言數和實際留言一樣（2 則）',
+  (select (v -> 'cs' ->> (select v::text from ids where k = 'r1'))::int = 2 from public.zone_view((select v from ids where k = 'zoneA')) v));
+reset role;
 
 set role anon; select tests.login(null);
 select tests.ok('未登入：看得到 2 則留言與暱稱',

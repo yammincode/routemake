@@ -11,10 +11,14 @@ let pending: Promise<ScoringRules | null> | null = null;
 const listeners = new Set<(r: ScoringRules) => void>();
 
 function load() {
-  pending ??= withCache("scoring", getScoringRules)
+  const apply = (data: ScoringRules) => {
+    cached = data;
+    listeners.forEach((l) => l(data));
+  };
+  // 先用手機裡上次的規則顯示分數，抓到最新的再換掉
+  pending ??= withCache("scoring", getScoringRules, apply)
     .then(({ data }) => {
-      cached = data;
-      listeners.forEach((l) => l(data));
+      apply(data);
       return data;
     })
     .catch(() => null)

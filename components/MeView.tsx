@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import PointsPanel from "@/components/PointsPanel";
 import RouteSheet from "@/components/RouteSheet";
@@ -48,16 +48,28 @@ export default function MeView({ gymId }: { gymId: string }) {
   const [open, setOpen] = useState<MonthAscent | null>(null);
   const uid = session?.user.id;
 
+  // 第一次載入時先顯示手機裡上次的資料，抓到最新的再換掉
+  const firstMonth = useRef(true);
+  const firstWall = useRef(true);
   const loadMonth = useCallback(async () => {
     if (!uid) return;
-    try {
-      const { data } = await withCache(`me:${uid}:${ym.y}-${ym.m}`, async () => {
-        const [s, l, p] = await Promise.all([getMonthlyStats(ym.y, ym.m), getMonthAscents(ym.y, ym.m), getPointsSummary(ym.y, ym.m)]);
-        return { s, l, p };
-      });
+    type Data = { s: MonthStats; l: MonthAscent[]; p: PointsSummary | null };
+    const apply = (data: Data) => {
       setStats(data.s);
       setList(data.l);
       setPoints(data.p ?? null);
+    };
+    try {
+      const { data } = await withCache<Data>(
+        `me:${uid}:${ym.y}-${ym.m}`,
+        async () => {
+          const [s, l, p] = await Promise.all([getMonthlyStats(ym.y, ym.m), getMonthAscents(ym.y, ym.m), getPointsSummary(ym.y, ym.m)]);
+          return { s, l, p };
+        },
+        firstMonth.current ? apply : undefined
+      );
+      firstMonth.current = false;
+      apply(data);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -66,13 +78,22 @@ export default function MeView({ gymId }: { gymId: string }) {
 
   const loadWall = useCallback(async () => {
     if (!uid) return;
-    try {
-      const { data } = await withCache(`wall:${uid}:${gymId}`, async () => {
-        const [g, routes] = await Promise.all([getGym(gymId), getGymActiveRoutes(gymId)]);
-        return { g, routes, mine: await getMyAscents(routes.map((r) => r.id)) };
-      });
+    type Data = { g: Gym; routes: Route[]; mine: Record<string, Ascent> };
+    const apply = (data: Data) => {
       setGym(data.g);
       setWall({ routes: data.routes, mine: overlayPending(data.mine, uid) });
+    };
+    try {
+      const { data } = await withCache<Data>(
+        `wall:${uid}:${gymId}`,
+        async () => {
+          const [g, routes] = await Promise.all([getGym(gymId), getGymActiveRoutes(gymId)]);
+          return { g, routes, mine: await getMyAscents(routes.map((r) => r.id)) };
+        },
+        firstWall.current ? apply : undefined
+      );
+      firstWall.current = false;
+      apply(data);
     } catch (e) {
       setError((e as Error).message);
     }

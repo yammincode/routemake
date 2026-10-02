@@ -29,7 +29,12 @@ export const isNetworkError = (e: unknown) =>
   (typeof navigator !== "undefined" && !navigator.onLine) || /連不上網路|fetch|network|load failed/i.test((e as Error)?.message ?? "");
 
 // 先抓最新資料並存起來；抓不到（離線）就用上次存的
-export async function withCache<T>(key: string, fetcher: () => Promise<T>): Promise<{ data: T; stale: boolean }> {
+// 有 onCached 時，手機裡有上次的資料就先交給畫面顯示（不用等網路），抓到最新的再更新
+export async function withCache<T>(key: string, fetcher: () => Promise<T>, onCached?: (data: T) => void): Promise<{ data: T; stale: boolean }> {
+  if (onCached) {
+    const cached = read<T>(PREFIX + key);
+    if (cached != null) onCached(cached);
+  }
   try {
     const data = await fetcher();
     write(PREFIX + key, data);

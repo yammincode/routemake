@@ -116,6 +116,24 @@ export async function getActiveRoutes(zoneId: string): Promise<Route[]> {
     await supabase().from("routes").select(ROUTE_COLS).eq("zone_id", zoneId).is("archived_at", null).order("grade").order("code")
   );
 }
+// 區域頁需要的資料一次拿齊（區域、場館、路線、自己的紀錄、留言數），只問資料庫一次
+export type ZoneData = { z: Zone; g: Gym; rs: Route[]; as: Record<string, Ascent>; cs: Record<string, number> };
+export async function getZoneView(zoneId: string): Promise<ZoneData> {
+  const r = await supabase().rpc("zone_view", { p_zone: zoneId });
+  // 資料庫還沒套用 step17（沒有 zone_view）時，改用原本分開問的方式
+  if (r.error?.code === "PGRST202") return getZoneViewSlow(zoneId);
+  const d = must(r) as ZoneData | null;
+  if (!d?.z) throw new Error("找不到這個區域");
+  return d;
+}
+async function getZoneViewSlow(zoneId: string): Promise<ZoneData> {
+  const z = await getZone(zoneId);
+  const [g, rs] = await Promise.all([getGym(z.gym_id), getActiveRoutes(zoneId)]);
+  const ids = rs.map((r) => r.id);
+  const uid = (await supabase().auth.getSession()).data.session?.user.id;
+  const [as, cs] = await Promise.all([uid ? getMyAscents(ids) : Promise.resolve({}), getCommentCounts(ids)]);
+  return { z, g, rs, as, cs };
+}
 // 場館 7 天內的新路線
 export async function getNewRoutes(gym: string): Promise<(Route & { zone_name: string })[]> {
   const since = new Date(Date.now() - 7 * 86400000).toISOString();

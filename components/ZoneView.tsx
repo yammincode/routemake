@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
@@ -11,16 +11,13 @@ import { dueText } from "@/components/ui/Gym";
 import { CommentCount, Points, RouteList, RouteRow, Tags } from "@/components/ui/Route";
 import { NoPhoto, Pin, WallPhoto } from "@/components/ui/Wall";
 import {
-  getActiveRoutes,
-  getCommentCounts,
-  getGym,
-  getMyAscents,
-  getZone,
+  getZoneView,
   photoUrl,
   type Ascent,
   type Gym,
   type Route,
   type Zone,
+  type ZoneData,
 } from "@/lib/data";
 import { ago, daysUntil, isNew } from "@/lib/date";
 import { gradeLabel, type HoldColor, STYLE_TAGS } from "@/lib/design";
@@ -46,20 +43,20 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
   const rules = useScoring();
   const uid = session?.user.id;
 
+  // 第一次載入時先顯示手機裡上次的資料，抓到最新的再換掉
+  const first = useRef(true);
   const load = useCallback(async () => {
-    try {
-      const { data } = await withCache(`zone:${zoneId}:${uid ?? "guest"}`, async () => {
-        const z = await getZone(zoneId);
-        const [g, rs] = await Promise.all([getGym(z.gym_id), getActiveRoutes(zoneId)]);
-        const ids = rs.map((r) => r.id);
-        const [as, cs] = await Promise.all([uid ? getMyAscents(ids) : Promise.resolve({} as Record<string, Ascent>), getCommentCounts(ids)]);
-        return { z, g, rs, as, cs };
-      });
+    const apply = (data: ZoneData) => {
       setZone(data.z);
       setGym(data.g);
       setRoutes(data.rs);
       setAscents(overlayPending(data.as, uid));
       setCounts(data.cs);
+    };
+    try {
+      const { data } = await withCache(`zone:${zoneId}:${uid ?? "guest"}`, () => getZoneView(zoneId), first.current ? apply : undefined);
+      first.current = false;
+      apply(data);
       setError(null);
     } catch (e) {
       setError((e as Error).message);

@@ -174,6 +174,21 @@ export function createMock() {
       const p = prof(uid);
       return J(route, 200, p ? { id: p.id, username: p.username, nickname: p.nickname, avatar_url: null, is_owner: p.is_owner, roles: db.staff_roles.filter((s) => s.user_id === uid).map((s) => ({ gym_id: s.gym_id, role: s.role })) } : null);
     }
+    if (fn === "zone_view") {
+      const z = db.zones.find((x) => x.id === a.p_zone);
+      if (!z) return J(route, 200, { z: null, g: null, rs: [], as: {}, cs: {} });
+      const g = db.gyms.find((x) => x.id === z.gym_id);
+      const rs = db.routes.filter((r) => r.zone_id === z.id && !r.archived_at).sort((x, y) => x.grade - y.grade || x.code.localeCompare(y.code));
+      const ids = new Set(rs.map((r) => r.id));
+      const pick = (o, ks) => Object.fromEntries(ks.map((k) => [k, o[k] ?? null]));
+      return J(route, 200, {
+        z: { ...pick(z, ["id", "gym_id", "code", "name", "photo_path", "photo_width", "photo_height", "next_reset_on", "sort", "grade_system"]), kind: z.kind ?? "wall" },
+        g: pick(g, ["id", "name", "is_live", "comments_enabled", "sort"]),
+        rs: rs.map((r) => ({ kind: "gym", name: null, description: null, holds: null, created_by: null, ...r })),
+        as: Object.fromEntries(db.ascents.filter((x) => x.user_id === uid && ids.has(x.route_id)).map((x) => [x.route_id, pick(x, ["id", "route_id", "status", "climbed_on", "feel", "grade_feel", "private_note"])])),
+        cs: db.comments.filter((c) => !c.deleted_at && ids.has(c.route_id)).reduce((m, c) => ((m[c.route_id] = (m[c.route_id] ?? 0) + 1), m), {}),
+      });
+    }
     if (fn === "zone_progress")
       return J(route, 200, db.zones.filter((z) => z.gym_id === a.p_gym && z.kind !== "spray").sort((x, y) => x.sort - y.sort).map((z) => {
         const rs = db.routes.filter((r) => r.zone_id === z.id && !r.archived_at);

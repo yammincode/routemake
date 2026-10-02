@@ -32,6 +32,7 @@ import {
   type Zone,
 } from "@/lib/data";
 import { ago } from "@/lib/date";
+import { withCache } from "@/lib/offline";
 import { gradeLabel, GRADES } from "@/lib/design";
 import type { SprayWall } from "@/lib/gyms";
 
@@ -63,19 +64,29 @@ export default function SprayView({ wall }: { wall: SprayWall }) {
   const uid = session?.user.id;
 
   useEffect(() => {
-    Promise.all([getSprayZone(wall.gymId, wall.zoneCode), getGym(wall.gymId)])
-      .then(([z, g]) => {
-        setZone(z);
-        setGym(g);
-      })
+    const apply = ([z, g]: [Zone, Gym]) => {
+      setZone(z);
+      setGym(g);
+    };
+    // 先顯示手機裡上次的公版照片和設定，抓到最新的再換掉
+    withCache(`spray:${wall.gymId}:${wall.zoneCode}`, () => Promise.all([getSprayZone(wall.gymId, wall.zoneCode), getGym(wall.gymId)]), apply)
+      .then(({ data }) => apply(data))
       .catch((e) => setError((e as Error).message));
   }, [wall.gymId, wall.zoneCode]);
 
+  // first：換篩選後第一次載入，先顯示手機裡上次的同一份列表
+  const zoneId = zone?.id;
   const load = useCallback(
-    async (offset: number) => {
-      if (!zone) return;
+    async (offset: number, first = false) => {
+      if (!zoneId) return;
       try {
-        const rows = await getSprayList(zone.id, kind, grade, sort === "mine" && !uid ? "new" : sort, offset);
+        const s = sort === "mine" && !uid ? "new" : sort;
+        const get = () => getSprayList(zoneId, kind, grade, s, offset);
+        // 只存「全部難度」的第一頁，免得手機空間被各種篩選組合塞滿
+        const rows =
+          offset || grade != null
+            ? await get()
+            : (await withCache(`spray-list:${zoneId}:${kind}:${s}:${uid ?? "guest"}`, get, first ? (c) => setList(c) : undefined)).data;
         setList((cur) => (offset ? [...(cur ?? []), ...rows] : rows));
         setMore(rows.length === SPRAY_PAGE);
         if (uid) {
@@ -86,13 +97,13 @@ export default function SprayView({ wall }: { wall: SprayWall }) {
         toast((e as Error).message);
       }
     },
-    [zone, kind, grade, sort, uid, toast]
+    [zoneId, kind, grade, sort, uid, toast]
   );
 
   useEffect(() => {
     void Promise.resolve().then(() => {
       setList(null);
-      return load(0);
+      return load(0, true);
     });
   }, [load]);
 

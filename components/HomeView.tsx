@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
@@ -29,16 +29,27 @@ export default function HomeView({ gymId }: { gymId: string }) {
   const [open, setOpen] = useState<(Route & { zone_name: string }) | null>(null);
   const uid = session?.user.id;
 
+  // 第一次載入時先顯示手機裡上次的資料，抓到最新的再換掉
+  const first = useRef(true);
   const load = useCallback(async () => {
-    try {
-      const { data } = await withCache(`home:${gymId}:${uid ?? "guest"}`, async () => {
-        const [g, z, n] = await Promise.all([getGym(gymId), getZoneProgress(gymId), getNewRoutes(gymId)]);
-        return { g, z, n, a: uid ? await getMyAscents(n.map((r) => r.id)) : {} };
-      });
+    type Data = { g: Gym; z: ZoneProgress[]; n: (Route & { zone_name: string })[]; a: Record<string, Ascent> };
+    const apply = (data: Data) => {
       setGym(data.g);
       setZones(data.z);
       setFresh(data.n);
       setAscents(overlayPending(data.a, uid));
+    };
+    try {
+      const { data } = await withCache<Data>(
+        `home:${gymId}:${uid ?? "guest"}`,
+        async () => {
+          const [g, z, n] = await Promise.all([getGym(gymId), getZoneProgress(gymId), getNewRoutes(gymId)]);
+          return { g, z, n, a: uid ? await getMyAscents(n.map((r) => r.id)) : {} };
+        },
+        first.current ? apply : undefined
+      );
+      first.current = false;
+      apply(data);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
