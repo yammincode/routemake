@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AccountCard from "@/components/AccountCard";
+import { AppVersion } from "@/components/ui/Version";
 import MeGym from "./MeGym";
 
 export default function MePage() {
@@ -14,6 +15,7 @@ export default function MePage() {
         {" · "}
         <Link href="/rules" className="underline">留言與影片規範</Link>
       </p>
+      <AppVersion className="mt-3" />
     </>
   );
 }

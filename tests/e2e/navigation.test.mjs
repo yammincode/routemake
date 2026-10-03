@@ -1,5 +1,6 @@
 // 入口頁 → 選擇攀岩館 → 館 → 區域，返回與上一頁
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { after, before, test } from "node:test";
 import { BASE, createMock, launch, phone } from "./helpers.mjs";
 
@@ -13,6 +14,8 @@ test("入口頁、選館、返回都照順序", async () => {
   await page.goto(BASE + "/", { waitUntil: "networkidle" });
   assert.equal(await page.locator("nav").count(), 0, "入口頁不顯示分頁列");
   assert.ok(await page.isVisible('img[alt="原岩攀岩館 T-UP CLIMBING"]'), "入口頁有原岩 Logo");
+  const version = fs.readFileSync(new URL("../../lib/version.ts", import.meta.url), "utf8").match(/VERSION = "([\d.]+)"/)[1];
+  assert.equal(await page.textContent("[data-app-version]"), `v${version} 試用版`, "入口頁顯示版本號（不是 Netlify 建置的顯示試用版）");
 
   await page.click('main a[href="/gyms"]');
   await page.waitForURL("**/gyms");

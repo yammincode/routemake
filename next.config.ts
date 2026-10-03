@@ -9,6 +9,8 @@ const withSerwist = withSerwistInit({
 });
 
 const nextConfig: NextConfig = {
+  // Netlify 建置的才是正式版；其他（自己電腦的試用版、測試）版本號旁顯示「試用版」
+  env: { NEXT_PUBLIC_RELEASE: process.env.NETLIFY === "true" ? "1" : "0" },
   // 試用版：讓同一個 Wi-Fi 的手機用電腦的 IP（例如 192.168.1.23:3000）連進來
   allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*"],
   // 試用版（next dev）用 Turbopack；Serwist 只在正式建置（webpack）時產生 Service Worker

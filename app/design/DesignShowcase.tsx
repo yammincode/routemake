@@ -7,6 +7,7 @@ import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/C
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { SortList } from "@/components/ui/SortList";
 import { ScrollList } from "@/components/ui/ScrollList";
+import { AppVersion } from "@/components/ui/Version";
 import { Tabs } from "@/components/ui/Tabs";
 import { HoldLegend, HoldMarks, HoldTools, RouteThumb, SprayRow } from "@/components/ui/Spray";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
@@ -496,6 +497,7 @@ export default function DesignShowcase() {
           <Grade grade={4} />
           <span className="text-meta text-muted">色條＋難度</span>
         </div>
+        <AppVersion className="mt-3" />
       </Block>
 
       <Sheet open={!!sheetRoute} onClose={() => setSheetRoute(null)}>

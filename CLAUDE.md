@@ -14,6 +14,7 @@
   - 修改集中做完再 push，不要一個小改動就 push
   - 使用者在自己電腦用 scripts/trial.ps1 跑試用版確認
   - 使用者說「更新正式版」時，才把開發分支合併到 main 並 push（這是唯一會部署的動作）
+  - 每次更新正式版：先把 lib/version.ts 的版本號加 0.1、日期改成當天並 commit，測試通過後才合併到 main；回報時說明這次的版本號和改了什麼
 - push 前跑 npm run test:db、npm run build、npm run test:e2e，全部通過才 push；新功能要補測試（supabase/tests、tests/e2e）
 
 ## 技術規則
