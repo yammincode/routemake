@@ -57,13 +57,24 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
   await a.waitForTimeout(400);
   assert.equal(mock.db.zones[0].next_reset_on, "2099-12-31");
 
-  await a.fill("#staffname", "SetterX");
-  await a.click("text=查詢");
-  await a.waitForTimeout(400);
-  assert.ok((await a.textContent("main")).includes("暱稱：阿定"));
-  await a.click("text=指派為定線長");
+  // 指派員工：打暱稱自動搜尋 → 點一下選人 → 指派；列表上直接改角色
+  await a.fill("#staffsearch", "阿");
+  await a.waitForTimeout(800);
+  await a.locator("main li button", { hasText: "帳號 setterx" }).click();
+  assert.ok((await a.textContent("main")).includes("要指派：阿定"));
+  await a.click('main button:has-text("指派為明德館定線長")');
   await a.waitForTimeout(600);
   assert.ok((await a.textContent("main")).includes("阿定定線長"));
+  assert.equal(await a.inputValue("#staffsearch"), "", "指派後清空搜尋");
+  await a.fill("#staffsearch", "setterx");
+  await a.waitForTimeout(800);
+  assert.ok((await a.locator("main li button", { hasText: "帳號 setterx" }).textContent()).includes("已是定線長"), "搜尋結果顯示已是員工");
+  await a.fill("#staffsearch", "");
+  await a.click('main button:has-text("改成店長")');
+  await a.waitForTimeout(600);
+  assert.equal(mock.db.staff_roles.find((r) => r.gym_id === "mingde" && mock.db.profiles.find((p) => p.id === r.user_id)?.username === "setterx").role, "manager", "列表上直接改成店長");
+  await a.click('main button:has-text("改成定線長")');
+  await a.waitForTimeout(600);
 
   // 操作紀錄
   await a.reload({ waitUntil: "networkidle" });

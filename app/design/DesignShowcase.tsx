@@ -8,6 +8,7 @@ import { Chip, ChipRow } from "@/components/ui/Chip";
 import { SortList } from "@/components/ui/SortList";
 import { ScrollList } from "@/components/ui/ScrollList";
 import { AppVersion } from "@/components/ui/Version";
+import { PickList } from "@/components/ui/PickList";
 import { Tabs } from "@/components/ui/Tabs";
 import { HoldLegend, HoldMarks, HoldTools, RouteThumb, SprayRow } from "@/components/ui/Spray";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
@@ -112,6 +113,7 @@ export default function DesignShowcase() {
   const [holdSize, setHoldSize] = useState<1 | 2 | 3>(2);
   const [order, setOrder] = useState(["A 區", "比賽牆", "B 區", "C 區"]);
   const [pickColor, setPickColor] = useState<HoldColor>("紅");
+  const [pickPerson, setPickPerson] = useState<string | null>("a");
   const [pickGrade, setPickGrade] = useState(3);
   const [pickTags, setPickTags] = useState<string[]>(["技巧"]);
   const [toggle, setToggle] = useState(true);
@@ -498,6 +500,17 @@ export default function DesignShowcase() {
           <span className="text-meta text-muted">色條＋難度</span>
         </div>
         <AppVersion className="mt-3" />
+      </Block>
+
+      <Block title="搜尋結果選取（指派員工）">
+        <PickList
+          items={[
+            { id: "a", title: "小安", sub: "帳號 climber88" },
+            { id: "b", title: "阿定", sub: "帳號 setterx", tag: "已是定線長" },
+          ]}
+          value={pickPerson}
+          onPick={setPickPerson}
+        />
       </Block>
 
       <Sheet open={!!sheetRoute} onClose={() => setSheetRoute(null)}>

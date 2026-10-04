@@ -282,11 +282,13 @@ export async function getStaff(gym: string): Promise<Staff[]> {
   ) as unknown as (Omit<Staff, "nickname"> & { profiles: { nickname: string | null } | null })[];
   return rows.map(({ profiles, ...s }) => ({ ...s, nickname: profiles?.nickname ?? null }));
 }
-export async function lookupUser(username: string): Promise<{ id: string; nickname: string | null }> {
-  return must(await supabase().rpc("lookup_user", { p_username: username }));
+// 店長、老闆指派員工時搜尋會員（暱稱或帳號名稱），附上對方在這間館的角色
+export type UserHit = { id: string; username: string; nickname: string | null; role: "setter" | "manager" | null };
+export async function searchUsers(query: string, gym: string): Promise<UserHit[]> {
+  return must(await supabase().rpc("search_users", { p_query: query, p_gym: gym })) ?? [];
 }
-export async function assignStaff(username: string, gym: string, role: "setter" | "manager") {
-  must(await supabase().rpc("assign_staff", { p_username: username, p_gym: gym, p_role: role }));
+export async function assignStaffUser(userId: string, gym: string, role: "setter" | "manager") {
+  must(await supabase().rpc("assign_staff_user", { p_user: userId, p_gym: gym, p_role: role }));
 }
 export async function removeStaff(userId: string, gym: string) {
   must(await supabase().rpc("remove_staff", { p_user: userId, p_gym: gym }));

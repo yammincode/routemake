@@ -40,7 +40,22 @@ export default function AccountCard() {
       <div className="flex items-center justify-between pt-3">
         <span>
           <b className="block text-section">{access?.nickname ?? "…"}</b>
-          <small className="text-meta text-muted">帳號 {access?.username ?? ""}</small>
+          <small className="text-meta text-muted">
+            帳號 <b data-username>{access?.username ?? ""}</b>
+            {access?.username && (
+              <button
+                className="ml-2 text-accent underline"
+                onClick={() =>
+                  navigator.clipboard
+                    ?.writeText(access.username ?? "")
+                    .then(() => toast("已複製帳號名稱，可以傳給店長"))
+                    .catch(() => toast(`帳號名稱：${access.username}`))
+                }
+              >
+                複製
+              </button>
+            )}
+          </small>
         </span>
         <Link href="/welcome?next=/me" className="text-note text-muted underline">
           改暱稱

@@ -24,6 +24,7 @@
 | `setup/step15-usage.sql` | migration 0019：使用狀況（每人每天記一次打開、usage_stats() 活躍人數／趨勢／各館比較／熱門路線） | 已套用 |
 | `setup/step16-hold-colors.sql` | migration 0020：岩點顏色新增灰、蒂芬妮 | 已套用 |
 | `setup/step17-speed.sql` | migration 0021：加快速度（zone_view() 區域頁一次拿齊資料、紀錄表依路線索引） | 已套用 |
+| `setup/step18-staff-search.sql` | migration 0022：指派員工更直覺（search_users() 用暱稱／帳號搜尋、assign_staff_user() 直接指派或改角色） | 待套用 |
 
 ## 規則摘要
 

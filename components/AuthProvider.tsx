@@ -102,7 +102,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback(async (username: string, password: string) => {
     if (!supabaseConfigured()) return NOT_READY;
     const { data, error } = await supabase().auth.signUp({ email: usernameToEmail(username), password });
-    if (error) return authErrorMessage(error);
+    if (error) {
+      // 上一次其實已經註冊成功（例如網路慢以為卡住又按一次）：密碼一樣就直接登入
+      const msg = authErrorMessage(error);
+      if (msg.startsWith("這個帳號名稱已經有人使用")) {
+        const again = await supabase().auth.signInWithPassword({ email: usernameToEmail(username), password });
+        if (!again.error) return null;
+      }
+      return msg;
+    }
     if (!data.session) return "註冊完成，但無法自動登入：請管理員確認 Supabase 已關閉「Confirm email」";
     return null;
   }, []);

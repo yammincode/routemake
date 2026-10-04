@@ -347,6 +347,22 @@ export function createMock() {
       const p = db.profiles.find((x) => x.username === a.p_username.toLowerCase());
       return p ? J(route, 200, { id: p.id, nickname: p.nickname }) : J(route, 404, { code: "P0002", message: "找不到這個帳號，請對方先註冊" });
     }
+    if (fn === "search_users") {
+      if (!(isOwner(uid) || db.staff_roles.some((s) => s.user_id === uid && s.role === "manager"))) return J(route, 403, { code: "42501", message: "沒有權限" });
+      const q = (a.p_query ?? "").trim().toLowerCase();
+      if (!q || (q.length < 2 && /^[ -~]*$/.test(q))) return J(route, 200, []);
+      const hits = db.profiles.filter((p) => p.username.includes(q) || (p.nickname ?? "").toLowerCase().includes(q)).slice(0, 5);
+      return J(route, 200, hits.map((p) => ({ id: p.id, username: p.username, nickname: p.nickname, role: db.staff_roles.find((s) => s.user_id === p.id && s.gym_id === a.p_gym)?.role ?? null })));
+    }
+    if (fn === "assign_staff_user") {
+      const p = db.profiles.find((x) => x.id === a.p_user);
+      if (!(isOwner(uid) || (a.p_role === "setter" && isMgr(uid, a.p_gym)))) return J(route, 403, { code: "42501", message: "沒有權限" });
+      if (!isOwner(uid) && db.staff_roles.some((s) => s.user_id === p.id && s.gym_id === a.p_gym && s.role === "manager")) return J(route, 403, { code: "42501", message: "店長的角色只有老闆能修改" });
+      db.staff_roles = db.staff_roles.filter((s) => !(s.user_id === p.id && s.gym_id === a.p_gym));
+      db.staff_roles.push({ user_id: p.id, gym_id: a.p_gym, role: a.p_role });
+      audit(uid, a.p_gym, "staff.assign", p.id, { role: a.p_role, nickname: p.nickname, username: p.username });
+      return J(route, 200, p.id);
+    }
     if (fn === "assign_staff") {
       const p = db.profiles.find((x) => x.username === a.p_username);
       if (!(isOwner(uid) || (a.p_role === "setter" && isMgr(uid, a.p_gym)))) return J(route, 403, { code: "42501", message: "沒有權限" });
