@@ -11,7 +11,7 @@ import { DEFAULT_GYM_PATH, lastGymPath } from "@/lib/gyms";
 const TABS = [
   { href: "gym", label: "館內路線", match: (p: string) => p.startsWith("/zone") || p.startsWith("/gym") || p.startsWith("/spray") },
   { href: "/card", label: "人物卡", match: (p: string) => p.startsWith("/card") },
-  { href: "/me", label: "我的紀錄", match: (p: string) => p.startsWith("/me") },
+  { href: "/me", label: "我的紀錄", match: (p: string) => p.startsWith("/me") || p.startsWith("/feedback") },
   { href: "/admin", label: "管理後台", match: (p: string) => p.startsWith("/admin") },
 ];
 

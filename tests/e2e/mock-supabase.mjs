@@ -46,6 +46,7 @@ export function createMock() {
     comments: [],
     routeLikes: [], // route_likes
     opens: [], // app_opens
+    feedback: [],
     likes: [], // comment_likes
     audit: [],
     files: {},
@@ -347,6 +348,11 @@ export function createMock() {
       const p = db.profiles.find((x) => x.username === a.p_username.toLowerCase());
       return p ? J(route, 200, { id: p.id, nickname: p.nickname }) : J(route, 404, { code: "P0002", message: "找不到這個帳號，請對方先註冊" });
     }
+    if (fn === "feedback_list") {
+      if (!isOwner(uid)) return J(route, 403, { code: "42501", message: "只有老闆可以看所有回饋" });
+      const rows = db.feedback.filter((f) => !a.p_status || f.status === a.p_status).sort((x, y) => y.created_at.localeCompare(x.created_at));
+      return J(route, 200, rows.map((f) => ({ ...f, nickname: prof(f.user_id)?.nickname ?? null, username: prof(f.user_id)?.username ?? null })));
+    }
     if (fn === "search_users") {
       if (!(isOwner(uid) || db.staff_roles.some((s) => s.user_id === uid && s.role === "manager"))) return J(route, 403, { code: "42501", message: "沒有權限" });
       const q = (a.p_query ?? "").trim().toLowerCase();
@@ -512,6 +518,21 @@ export function createMock() {
         return empty(route, 201);
       }
       if (m === "DELETE") { const del = filt(mine, sp); db.ascents = db.ascents.filter((a) => !del.includes(a)); return empty(route); }
+    }
+    if (t === "feedback") {
+      if (!uid) return J(route, 401, { message: "JWT" });
+      if (m === "GET") return out(filt(db.feedback.filter((f) => f.user_id === uid || isOwner(uid)), sp).sort((x, y) => y.created_at.localeCompare(x.created_at)));
+      if (m === "POST") {
+        const dayAgo = new Date(Date.now() - 86400000).toISOString();
+        if (db.feedback.filter((f) => f.user_id === uid && f.created_at > dayAgo).length >= 5) return J(route, 400, { code: "54000", message: "今天已經送出 5 則回饋，明天再來，謝謝你！" });
+        db.feedback.push({ id: uuid(), ...body, body: body.body.trim(), contact: body.contact?.trim() || null, user_id: uid, status: "new", created_at: now() });
+        return empty(route, 201);
+      }
+      if (m === "PATCH") {
+        if (!isOwner(uid)) return J(route, 200, []);
+        filt(db.feedback, sp).forEach((f) => Object.assign(f, { status: body.status }));
+        return empty(route, 204);
+      }
     }
     if (t === "comments") {
       if (m === "GET") {

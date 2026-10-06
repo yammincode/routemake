@@ -11,6 +11,8 @@ export default function MePage() {
         <AccountCard />
       </div>
       <p className="mt-4 text-center text-meta text-muted">
+        <Link href="/feedback" className="font-bold text-accent underline">💬 意見回饋</Link>
+        {" · "}
         <Link href="/privacy" className="underline">隱私權政策</Link>
         {" · "}
         <Link href="/rules" className="underline">留言與影片規範</Link>

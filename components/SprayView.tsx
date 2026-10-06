@@ -22,6 +22,7 @@ import {
   getSprayZone,
   likeRoute,
   photoUrl,
+  thumbUrl,
   SPRAY_PAGE,
   unlikeRoute,
   type Ascent,
@@ -108,6 +109,7 @@ export default function SprayView({ wall }: { wall: SprayWall }) {
   }, [load]);
 
   const photo = zone ? photoUrl(zone.photo_path) : null;
+  const thumb = zone ? thumbUrl(zone.photo_path) : null;
 
   const patch = (id: string, p: Partial<SprayRoute>) => {
     setList((l) => l?.map((r) => (r.id === id ? { ...r, ...p } : r)) ?? null);
@@ -220,7 +222,7 @@ export default function SprayView({ wall }: { wall: SprayWall }) {
               done={["flash", "send"].includes(mine[r.id]?.status ?? "")}
               thumb={
                 photo && r.holds?.length ? (
-                  <RouteThumb src={photo} holds={r.holds} ratio={zone.photo_width && zone.photo_height ? zone.photo_height / zone.photo_width : 0.75} />
+                  <RouteThumb src={thumb ?? photo} fallback={photo} holds={r.holds} ratio={zone.photo_width && zone.photo_height ? zone.photo_height / zone.photo_width : 0.75} />
                 ) : undefined
               }
               onClick={() => setOpen(r)}

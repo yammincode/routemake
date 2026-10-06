@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Hold } from "@/lib/data";
 import { Grade } from "./Route";
+import { imgFallback } from "@/components/ui/Gym";
 
 // Spray Wall 圈圈的顏色、名稱、大小（直徑佔照片寬度的百分比）
 export const HOLD_TYPES = [
@@ -118,7 +119,7 @@ export function HoldTools({
 }
 
 // 路線縮圖：公版照片放大到這條路線的範圍（所有圈圈的外框），顯示圈圈；ratio＝照片高／寬
-export function RouteThumb({ src, holds, ratio = 0.75, size = 56 }: { src: string; holds: Hold[]; ratio?: number; size?: number }) {
+export function RouteThumb({ src, fallback, holds, ratio = 0.75, size = 56 }: { src: string; fallback?: string; holds: Hold[]; ratio?: number; size?: number }) {
   const xs = holds.map((h) => h.x);
   const ys = holds.map((h) => h.y);
   const pad = 6;
@@ -136,7 +137,7 @@ export function RouteThumb({ src, holds, ratio = 0.75, size = 56 }: { src: strin
     <span aria-hidden className="relative block flex-none overflow-hidden rounded-cell bg-line" style={{ width: size, height: size }}>
       <span className="absolute" style={{ width: w, height: h, left, top }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt="" loading="lazy" draggable={false} className="block size-full select-none" />
+        <img src={src} alt="" loading="lazy" draggable={false} onError={(e) => imgFallback(e.currentTarget, fallback)} className="block size-full select-none" />
         <HoldMarks holds={holds} mini />
       </span>
     </span>

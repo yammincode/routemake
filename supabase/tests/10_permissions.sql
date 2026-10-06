@@ -869,6 +869,46 @@ select tests.ok('使用狀況：萬華今天有 1 人打開', (select (g ->> 'us
 reset role;
 
 -- ---------------------------------------------------------------------
+-- 意見回饋
+-- ---------------------------------------------------------------------
+set role anon; select tests.login(null);
+select tests.throws('未登入：不能送回饋', $q$insert into public.feedback (kind, body) values ('idea', '想要夜間模式')$q$);
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.lives('顧客甲：可以送回饋', $q$insert into public.feedback (kind, body, contact, gym_id, app_version, device) values ('idea', '  想要夜間模式  ', ' line: abc ', 'mingde', '1.1', 'iPhone')$q$);
+select tests.ok('回饋：內容去頭尾空白、狀態從未讀開始、本人是送出者',
+  (select body = '想要夜間模式' and contact = 'line: abc' and status = 'new' and user_id = :A from public.feedback));
+select tests.lives('回饋：寫別人的 id 也會變成自己', format($q$insert into public.feedback (user_id, kind, body) values (%L, 'bug', '冒用')$q$, :B));
+select tests.ok('回饋：冒用的那則仍記在本人名下', (select user_id = :A from public.feedback where body = '冒用'));
+select tests.throws('回饋：內容不能空白', $q$insert into public.feedback (kind, body) values ('bug', '   ')$q$);
+select tests.throws('回饋：內容最多 1000 字', $q$insert into public.feedback (kind, body) values ('bug', repeat('字', 1001))$q$);
+select tests.throws('回饋：類型只能是建議／問題／其他', $q$insert into public.feedback (kind, body) values ('spam', 'x')$q$);
+select tests.lives('回饋：第 3–5 則', $q$insert into public.feedback (kind, body) select 'bug', '第' || g || '則' from generate_series(3, 5) g$q$);
+select tests.throws('回饋：24 小時最多 5 則', $q$insert into public.feedback (kind, body) values ('other', '第六則')$q$);
+select tests.ok('回饋：本人看得到自己送的 5 則', (select count(*) from public.feedback) = 5);
+select tests.ok('回饋：本人不能改狀態', tests.rows($q$update public.feedback set status = 'done'$q$) = 0);
+select tests.ok('回饋：本人不能刪除', tests.rows($q$delete from public.feedback$q$) = 0 and (select count(*) from public.feedback) = 5);
+select tests.throws('回饋：顧客不能看全部回饋', $q$select * from public.feedback_list(null)$q$);
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.ok('顧客乙：看不到別人的回饋', (select count(*) from public.feedback) = 0);
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.ok('店長：看不到回饋', (select count(*) from public.feedback) = 0);
+select tests.throws('店長：不能用 feedback_list', $q$select * from public.feedback_list(null)$q$);
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.ok('老闆：看得到全部回饋，附暱稱和帳號',
+  (select count(*) = 5 and bool_and(nickname = '阿甲' and username = 'climber_a') from public.feedback_list(null)));
+select tests.ok('老闆：可以把回饋標成處理中', tests.rows($q$update public.feedback set status = 'doing' where body = '想要夜間模式'$q$) = 1);
+select tests.ok('老闆：依狀態篩選', (select count(*) from public.feedback_list('doing')) = 1 and (select count(*) from public.feedback_list('new')) = 4);
+select tests.throws('老闆：不能改回饋內容', $q$update public.feedback set body = '改掉' where body = '想要夜間模式'$q$);
+reset role;
+
+select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
+  (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));
+
+-- ---------------------------------------------------------------------
 -- 結果
 -- ---------------------------------------------------------------------
 \o

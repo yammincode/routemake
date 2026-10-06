@@ -1,5 +1,6 @@
 "use client";
 
+import FeedbackPanel from "@/components/admin/FeedbackPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteEditor, { type EditTarget } from "@/components/admin/RouteEditor";
@@ -30,6 +31,7 @@ import {
   getGyms,
   getZoneProgress,
   getZones,
+  makeMissingThumbs,
   photoUrl,
   reorderZones,
   setGymComments,
@@ -413,11 +415,33 @@ export default function AdminView() {
         </>
       )}
 
+      {manager && gym && (
+        <SetBox>
+          <p className="mt-3 mb-1 text-meta text-muted">區域列表、Spray Wall 列表改用小縮圖，比較省流量。新上傳的照片會自動產生；之前上傳的舊照片按一次就補齊。</p>
+          <LinkButton
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const n = await makeMissingThumbs(await getZones(gymId));
+                toast(n ? `已補上 ${n} 張縮圖` : "所有照片都已經有縮圖了");
+              } catch (e) {
+                toast((e as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "處理中…" : "幫舊照片產生縮圖"}
+          </LinkButton>
+        </SetBox>
+      )}
       {gym && <VideoPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <UsagePanel key={gymId} gymId={gymId} gymName={gym.name} owner={access.is_owner} />}
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <AuditPanel gymId={gymId} gymName={gym.name} />}
       {access.is_owner && <ScoringPanel />}
+      {access.is_owner && <FeedbackPanel />}
       <ShareQr />
         </>
       )}

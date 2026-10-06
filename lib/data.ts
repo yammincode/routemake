@@ -90,6 +90,10 @@ function must<T>(r: { data: T | null; error: { message?: string; code?: string }
 
 export const photoUrl = (path: string | null) =>
   path ? supabase().storage.from("zone-photos").getPublicUrl(path).data.publicUrl : null;
+// 小縮圖（約 720 寬、幾十 KB）：跟原圖放在一起，檔名多 .thumb；舊照片還沒有縮圖時畫面會自動改用原圖
+export const THUMB_WIDTH = 720;
+export const thumbPath = (path: string) => path.replace(/\.jpg$/i, ".thumb.jpg");
+export const thumbUrl = (path: string | null) => (path && /\.jpg$/i.test(path) ? photoUrl(thumbPath(path)) : photoUrl(path));
 
 // ---------- 讀取 ----------
 export async function getGyms(): Promise<Gym[]> {
@@ -253,7 +257,7 @@ export async function archiveZone(zoneId: string): Promise<number> {
 }
 
 // 照片：瀏覽器先壓到寬 1600px 的 JPEG 再上傳
-export async function shrinkImage(file: File, maxWidth = 1600): Promise<{ blob: Blob; width: number; height: number }> {
+export async function shrinkImage(file: Blob, maxWidth = 1600): Promise<{ blob: Blob; width: number; height: number }> {
   const bmp = await createImageBitmap(file);
   const scale = Math.min(1, maxWidth / bmp.width);
   const width = Math.round(bmp.width * scale);
@@ -271,8 +275,28 @@ export async function uploadZonePhoto(zone: Zone, file: File) {
   const path = `${zone.gym_id}/zones/${zone.code}-${Date.now()}.jpg`;
   const up = await supabase().storage.from("zone-photos").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000" });
   if (up.error) throw new Error(up.error.message.includes("row-level") ? "沒有權限上傳照片" : "照片上傳失敗，請再試一次");
+  await uploadThumb(path, blob).catch(() => undefined); // 縮圖失敗不影響，畫面會改用原圖
   await updateZone(zone.id, { photo_path: path, photo_width: width, photo_height: height });
   return path;
+}
+async function uploadThumb(path: string, image: Blob) {
+  const { blob } = await shrinkImage(image, THUMB_WIDTH);
+  const up = await supabase().storage.from("zone-photos").upload(thumbPath(path), blob, { contentType: "image/jpeg", cacheControl: "31536000", upsert: true });
+  if (up.error) throw new Error(up.error.message);
+}
+// 幫還沒有縮圖的舊照片補上縮圖（店長在後台按一次）；回傳補了幾張
+export async function makeMissingThumbs(zones: Zone[]): Promise<number> {
+  let n = 0;
+  for (const z of zones) {
+    if (!z.photo_path || !/\.jpg$/i.test(z.photo_path)) continue;
+    const head = await fetch(photoUrl(thumbPath(z.photo_path))!, { method: "HEAD", cache: "no-store" }).catch(() => null);
+    if (head?.ok) continue;
+    const full = await fetch(photoUrl(z.photo_path)!);
+    if (!full.ok) continue;
+    await uploadThumb(z.photo_path, await full.blob());
+    n++;
+  }
+  return n;
 }
 
 // 員工
@@ -440,10 +464,14 @@ function videoDuration(file: File): Promise<number | null> {
 }
 
 // 上傳前檢查：格式、大小、長度；回傳要用的副檔名、格式與長度
-export async function checkVideo(file: File): Promise<{ ext: string; type: string; duration: number | null }> {
+function videoKind(file: File): { ext: string; type: string } {
   const fromName = file.name.split(".").pop()?.toLowerCase() ?? "";
   const ext = VIDEO_TYPES[fromName] ? fromName : Object.keys(VIDEO_TYPES).find((k) => VIDEO_TYPES[k] === file.type);
   if (!ext) throw new Error("只能分享 MP4、MOV 或 WebM 影片");
+  return { ext, type: VIDEO_TYPES[ext] };
+}
+export async function checkVideo(file: File): Promise<{ ext: string; type: string; duration: number | null }> {
+  const { ext } = videoKind(file);
   if (file.size > VIDEO_MAX_BYTES) throw new Error(`影片 ${Math.ceil(file.size / 1048576)} MB，超過 50 MB，請先剪短再分享`);
   const duration = await videoDuration(file);
   if (duration != null && duration > VIDEO_MAX_SECONDS + 0.5) throw new Error(`影片 ${Math.round(duration)} 秒，最長 60 秒，請先剪短再分享`);
@@ -455,9 +483,12 @@ export async function uploadVideo(
   gymId: string,
   routeId: string,
   file: File,
-  info: { caption: string | null; status: Status | null }
+  info: { caption: string | null; status: Status | null },
+  source?: File // 壓縮前的原檔：長度從原檔讀（壓縮後的檔有時讀不到長度）
 ) {
-  const { ext, type, duration } = await checkVideo(file);
+  const { duration } = await checkVideo(source ?? file);
+  const { ext, type } = videoKind(file);
+  if (file.size > VIDEO_MAX_BYTES) throw new Error(`影片 ${Math.ceil(file.size / 1048576)} MB，超過 50 MB，請先剪短再分享`);
   const since = new Date(Date.now() - 86400000).toISOString();
   const recent = await supabase().from("route_videos").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", since);
   if ((recent.count ?? 0) >= VIDEO_DAILY_LIMIT) throw new Error(`每人 24 小時內最多分享 ${VIDEO_DAILY_LIMIT} 支影片，明天再來`);
@@ -601,4 +632,36 @@ export async function likeRoute(id: string) {
 }
 export async function unlikeRoute(id: string) {
   must(await supabase().from("route_likes").delete().eq("route_id", id));
+}
+
+// ---------- 意見回饋 ----------
+export type FeedbackKind = "idea" | "bug" | "other";
+export type FeedbackStatus = "new" | "doing" | "done";
+export type Feedback = {
+  id: string;
+  kind: FeedbackKind;
+  body: string;
+  status: FeedbackStatus;
+  created_at: string;
+  contact?: string | null;
+  gym_id?: string | null;
+  app_version?: string | null;
+  device?: string | null;
+  nickname?: string | null;
+  username?: string | null;
+};
+export async function sendFeedback(f: { kind: FeedbackKind; body: string; contact: string | null; gym_id: string | null; app_version: string; device: string }) {
+  must(await supabase().from("feedback").insert(f));
+}
+// 自己送過的（老闆也只看自己的；全部回饋在管理後台看）
+export async function getMyFeedback(userId: string): Promise<Feedback[]> {
+  return must(
+    await supabase().from("feedback").select("id,kind,body,status,created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(20)
+  );
+}
+export async function getFeedbackList(status: FeedbackStatus | null): Promise<Feedback[]> {
+  return must(await supabase().rpc("feedback_list", { p_status: status })) ?? [];
+}
+export async function setFeedbackStatus(id: string, status: FeedbackStatus) {
+  must(await supabase().from("feedback").update({ status }).eq("id", id));
 }

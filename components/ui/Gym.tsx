@@ -21,19 +21,25 @@ export function ProgressBar({ done, total }: { done: number; total: number }) {
 }
 
 // 區域卡片（原型 .zcard）
+// 縮圖載入失敗（舊照片還沒有縮圖）就改用原圖
+export function imgFallback(img: HTMLImageElement, fallback?: string) {
+  if (fallback && img.src !== fallback) img.src = fallback;
+}
+
 export function ZoneCard({
   photo,
+  fallback,
   name,
   done,
   total,
   resetDays,
   ...rest
-}: ComponentProps<"button"> & { photo: string; name: string; done: number; total: number; resetDays: number | null }) {
+}: ComponentProps<"button"> & { photo: string; fallback?: string; name: string; done: number; total: number; resetDays: number | null }) {
   const soon = resetDays != null && resetDays <= 7;
   return (
     <button className="flex w-full items-center gap-3.5 rounded-card bg-surface p-2.5 text-left shadow-card" {...rest}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={photo} alt="" className="h-[72px] w-24 flex-none rounded-field bg-line object-cover" />
+      <img src={photo} alt="" loading="lazy" onError={(e) => imgFallback(e.currentTarget, fallback)} className="h-[72px] w-24 flex-none rounded-field bg-line object-cover" />
       <span className="grid min-w-0 flex-1 gap-0.5">
         <span className="text-section font-bold">{name}</span>
         <span className="flex items-center gap-2 font-num text-[16px] leading-[1.3] font-semibold text-muted">

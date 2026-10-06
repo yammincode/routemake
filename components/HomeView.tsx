@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Empty, PageTitle, SectionTitle } from "@/components/ui/Card";
 import FloorPlan from "@/components/ui/FloorPlan";
 import { NewRouteCard, NewRouteRow, ResetList, ZoneCard, ZoneList } from "@/components/ui/Gym";
-import { getGym, getMyAscents, getNewRoutes, getZoneProgress, photoUrl, type Ascent, type Gym, type Route, type ZoneProgress } from "@/lib/data";
+import { getGym, getMyAscents, getNewRoutes, getZoneProgress, photoUrl, thumbUrl, type Ascent, type Gym, type Route, type ZoneProgress } from "@/lib/data";
 import { ago, daysUntil, md } from "@/lib/date";
 import { PLANS } from "@/lib/floorplan";
 import { saveLastGym, SPRAY_WALLS, sprayPath } from "@/lib/gyms";
@@ -120,7 +120,8 @@ export default function HomeView({ gymId }: { gymId: string }) {
         {zones.map((z) => (
           <ZoneCard
             key={z.zone_id}
-            photo={photoUrl(z.photo_path) ?? PLACEHOLDER}
+            photo={thumbUrl(z.photo_path) ?? PLACEHOLDER}
+            fallback={photoUrl(z.photo_path) ?? undefined}
             name={z.name}
             done={z.done_count}
             total={z.route_count}

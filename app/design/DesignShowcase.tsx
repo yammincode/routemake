@@ -8,6 +8,7 @@ import { Chip, ChipRow } from "@/components/ui/Chip";
 import { SortList } from "@/components/ui/SortList";
 import { ScrollList } from "@/components/ui/ScrollList";
 import { AppVersion } from "@/components/ui/Version";
+import { FeedbackItem, FeedbackList } from "@/components/ui/Feedback";
 import { PickList } from "@/components/ui/PickList";
 import { Tabs } from "@/components/ui/Tabs";
 import { HoldLegend, HoldMarks, HoldTools, RouteThumb, SprayRow } from "@/components/ui/Spray";
@@ -500,6 +501,20 @@ export default function DesignShowcase() {
           <span className="text-meta text-muted">色條＋難度</span>
         </div>
         <AppVersion className="mt-3" />
+      </Block>
+
+      <Block title="意見回饋">
+        <FeedbackList>
+          <FeedbackItem kind="idea" status="new" when="今天" meta="小安（帳號 climber88）・v1.1・明德館・iPhone iOS 18.1・Safari">
+            希望可以看到每條路線的完攀率
+          </FeedbackItem>
+          <FeedbackItem kind="bug" status="doing" when="2 天前">
+            在 LINE 裡打開會一直要重新登入
+          </FeedbackItem>
+          <FeedbackItem kind="other" status="done" when="1 週前">
+            謝謝你們做這個 App！
+          </FeedbackItem>
+        </FeedbackList>
       </Block>
 
       <Block title="搜尋結果選取（指派員工）">
