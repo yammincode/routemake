@@ -8,6 +8,7 @@ import { Check, Label, TextField } from "@/components/ui/Form";
 import { ClosedNotice } from "@/components/ui/Comments";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoPickButton, VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
+import { compressMinBytes, compressType, compressVideo } from "@/lib/video";
 import { checkVideo, deleteVideo, getVideos, uploadVideo, videoUrl, type Route, type Video } from "@/lib/data";
 import { ago } from "@/lib/date";
 import type { Status } from "@/lib/design";
@@ -40,6 +41,7 @@ export default function RouteVideos({
   const [caption, setCaption] = useState("");
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [squeeze, setSqueeze] = useState<number | null>(null); // 壓縮進度 0–1
   const [playing, setPlaying] = useState<number | null>(null);
 
   useEffect(() => {
@@ -82,13 +84,19 @@ export default function RouteVideos({
     if (!session || !file || !consent) return;
     setBusy(true);
     try {
-      await uploadVideo(session.user.id, gymId, r.id, file, { caption: caption.trim() || null, status: myStatus });
+      // 先在手機上壓成 720p（不支援或沒變小就傳原檔）；要在點擊當下直接開始，iPhone 才允許播放
+      const willSqueeze = file.size >= compressMinBytes() && !!compressType();
+      if (willSqueeze) setSqueeze(0);
+      const small = willSqueeze ? await compressVideo(file, setSqueeze) : null;
+      setSqueeze(null);
+      await uploadVideo(session.user.id, gymId, r.id, small ?? file, { caption: caption.trim() || null, status: myStatus }, small ? file : undefined);
       reset();
       setVideos(await getVideos(r.id));
       toast("已分享影片");
     } catch (e) {
       toast((e as Error).message);
     }
+    setSqueeze(null);
     setBusy(false);
   };
 
@@ -133,7 +141,7 @@ export default function RouteVideos({
             <VideoPickButton onPick={pick} disabled={busy}>
               分享攀爬影片
             </VideoPickButton>
-            <p className="mt-1.5 mb-0 text-tiny text-muted">最長 60 秒、50 MB 以內；這條路線換線時影片會一起刪除</p>
+            <p className="mt-1.5 mb-0 text-tiny text-muted">最長 60 秒、50 MB 以內，手機支援時會先壓縮成 720p；這條路線換線時影片會一起刪除</p>
           </>
         ) : (
           <>
@@ -144,7 +152,7 @@ export default function RouteVideos({
               影片裡的其他人都同意入鏡，內容符合<Link href="/rules" className="underline">分享規範</Link>
             </Check>
             <Button variant="primary" className="mt-3.5" disabled={!consent || busy} onClick={upload}>
-              {busy ? "上傳中，請不要關閉畫面…" : "上傳影片"}
+              {squeeze != null ? `壓縮中 ${Math.round(squeeze * 100)}%，請不要關閉畫面…` : busy ? "上傳中，請不要關閉畫面…" : "上傳影片"}
             </Button>
             {!busy && <LinkButton onClick={reset}>取消</LinkButton>}
           </>

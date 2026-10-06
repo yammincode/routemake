@@ -142,3 +142,74 @@ test("未登入看得到影片、要登入才能分享；留言關閉且沒有�
   assert.equal(await g.locator("[role=dialog] input[type=file]").count(), 0);
   assert.deepEqual(G.errors, []);
 });
+
+test("影片上傳前先壓縮成 720p（顯示進度），檔案變小、記錄壓縮後的大小", async () => {
+  const mock = createMock();
+  const me = mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zone = mock.db.zones[0];
+  const r1 = mock.addRoute(zone, 4, "藍");
+
+  // 做一支 1080p、高畫質的真影片（約 3 秒）
+  const maker = await browser.newPage();
+  const b64 = await maker.evaluate(async () => {
+    const c = document.createElement("canvas");
+    c.width = 1920;
+    c.height = 1080;
+    const g = c.getContext("2d");
+    const rec = new MediaRecorder(c.captureStream(30), { mimeType: "video/webm;codecs=vp8", videoBitsPerSecond: 12_000_000 });
+    const chunks = [];
+    rec.ondataavailable = (e) => chunks.push(e.data);
+    const stop = new Promise((r) => (rec.onstop = r));
+    rec.start(200);
+    const t0 = performance.now();
+    await new Promise((done) => {
+      const tick = () => {
+        const t = performance.now() - t0;
+        for (let i = 0; i < 400; i++) {
+          g.fillStyle = `hsl(${(i * 37 + t / 3) % 360},70%,${30 + ((i * 13) % 50)}%)`;
+          g.fillRect((i * 97 + t) % 1920, (i * 53 + t / 2) % 1080, 60, 60);
+        }
+        if (t < 3000) requestAnimationFrame(tick);
+        else done();
+      };
+      tick();
+    });
+    rec.stop();
+    await stop;
+    const buf = await new Blob(chunks).arrayBuffer();
+    let s = "";
+    new Uint8Array(buf).forEach((x) => (s += String.fromCharCode(x)));
+    return btoa(s);
+  });
+  await maker.close();
+  const original = Buffer.from(b64, "base64");
+
+  const C = await phone(browser, mock);
+  const c = C.page;
+  await C.ctx.addInitScript(() => {
+    window.__RM_VIDEO_TYPES = ["video/webm;codecs=vp8,opus"]; // 測試瀏覽器沒有 H.264，改用 WebM 走一遍壓縮流程
+    window.__RM_VIDEO_MIN = 100_000;
+  });
+  await login(c, "climber88", "password1", `/zone?id=${zone.id}`);
+  await c.waitForTimeout(600);
+  await c.locator("main ul li button", { hasText: "A1-01" }).click();
+  await c.waitForTimeout(500);
+  const dialog = c.locator("[role=dialog]");
+  await dialog.locator('[role=tab]:has-text("影片")').click().catch(() => {});
+  await dialog.locator("input[type=file]").setInputFiles({ name: "climb.webm", mimeType: "video/webm", buffer: original });
+  await c.waitForTimeout(600);
+  await dialog.locator("input[type=checkbox]").check();
+  await dialog.locator('button:text-is("上傳影片")').click();
+  await c.waitForFunction(() => /壓縮中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
+  assert.match(await c.textContent("[role=dialog]"), /壓縮中 \d+%，請不要關閉畫面/, "顯示壓縮進度");
+  await c.waitForFunction(() => !document.body.textContent.includes("壓縮中"), null, { timeout: 20000 });
+  await c.waitForTimeout(1500);
+  assert.equal(mock.db.videos.length, 1, "上傳完成");
+  const v = mock.db.videos[0];
+  const sent = mock.db.vfiles[v.path].buf;
+  assert.ok(sent.length < original.length * 0.85, `壓縮後變小（${original.length} → ${sent.length}）`);
+  assert.ok(v.path.endsWith(".webm") && v.path.startsWith(`mingde/${r1.id}/${me}/`));
+  assert.ok(v.size_bytes < original.length * 0.85, "記錄的是壓縮後的大小");
+  assert.deepEqual(C.errors, []);
+  await C.ctx.close();
+});
