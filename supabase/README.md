@@ -25,6 +25,7 @@
 | `setup/step16-hold-colors.sql` | migration 0020：岩點顏色新增灰、蒂芬妮 | 已套用 |
 | `setup/step17-speed.sql` | migration 0021：加快速度（zone_view() 區域頁一次拿齊資料、紀錄表依路線索引） | 已套用 |
 | `setup/step18-staff-search.sql` | migration 0022：指派員工更直覺（search_users() 用暱稱／帳號搜尋、assign_staff_user() 直接指派或改角色） | 已套用 |
+| `setup/step19-nangang-zones.sql` | migration 0023：南港館細分 7 區（A→A1／A2／A3、B→B1／B2、C→C1／C2）；執行前要先把南港 A、B、C 整區換線 | 待套用 |
 
 ## 規則摘要
 

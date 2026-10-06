@@ -83,8 +83,8 @@ select tests.ok('初始資料：六間店、明德館 9 區（比賽牆分四段
   and (select count(*) from public.zones where gym_id = 'mingde' and plan_shape is not null) = 5);
 select tests.ok('開放館：明德、萬華、中和、南港、新店（中壢還沒）',
   (select array_agg(id order by id) from public.gyms where is_live) = '{g2,g3,g4,g5,mingde}');
-select tests.ok('各館區域數：萬華 6、中和 7、南港 3（＋Spray Wall）、新店 5',
-  (select array_agg(n order by gym_id) from (select gym_id, count(*) n from public.zones where gym_id <> 'mingde' group by gym_id) x) = '{6,7,4,5}');
+select tests.ok('各館區域數：萬華 6、中和 7、南港 7（＋Spray Wall）、新店 5',
+  (select array_agg(n order by gym_id) from (select gym_id, count(*) n from public.zones where gym_id <> 'mingde' group by gym_id) x) = '{6,7,8,5}');
 select tests.ok('明德館區域順序：A、比賽牆 1–4、B、C、D、Spray Wall',
   (select string_agg(name, '、' order by sort) from public.zones where gym_id = 'mingde') = 'A 區、比賽牆 1、比賽牆 2、比賽牆 3、比賽牆 4、B 區、C 區、D 區、Spray Wall');
 select tests.ok('換線日：比賽牆四段都是 10/6、新店上攀 E 區 10/18',
@@ -98,7 +98,7 @@ select tests.ok('新使用者自動建立 profiles 並存帳號名稱（轉小�
 -- 未登入的人
 -- ---------------------------------------------------------------------
 set role anon; select tests.login(null);
-select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 31);
+select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 35);
 select tests.ok('未登入：可以看暱稱', (select nickname from public.profiles where id = :A) = '甲');
 select tests.throws('未登入：讀不到手機號碼', 'select phone from public.profiles');
 select tests.throws('未登入：讀不到帳號名稱', 'select username from public.profiles');
@@ -337,6 +337,9 @@ select tests.ok('顧客：看不到操作紀錄', (select count(*) from public.a
 select tests.throws('顧客：不能寫操作紀錄', 'insert into public.audit_log (action) values (''x'')');
 select tests.throws('顧客：不能直接呼叫寫紀錄函式', 'select public.write_audit(''mingde'', ''x'', null, null)');
 reset role;
+
+select tests.ok('南港館細分成 7 區（A1–C2），沒有舊的 A／B／C',
+  (select array_agg(code order by sort) from public.zones where gym_id = 'g4' and kind = 'wall') = array['A1','A2','A3','B1','B2','C1','C2']);
 
 -- ---------------------------------------------------------------------
 -- 員工指派
