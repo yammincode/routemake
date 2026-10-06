@@ -22,7 +22,7 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
 
   await a.setInputFiles("input[type=file]", WALL);
   await a.waitForTimeout(1500);
-  assert.ok(await a.isVisible('main img[alt="A 區照片"]'), "上傳照片後顯示岩牆");
+  assert.ok(await a.isVisible('main img[alt="A1 區照片"]'), "上傳照片後顯示岩牆");
 
   const wall = a.locator("main div.cursor-crosshair");
   const add = async (fx, fy, color, grade, tags, note) => {
@@ -41,12 +41,12 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
   await add(0.25, 0.4, "藍", 4, ["動態", "指力"], "最後一手要果斷");
   await add(0.6, 0.55, "紅", 2, [], "");
   await add(0.8, 0.3, "蒂芬妮", 6, [], "");
-  assert.equal(mock.db.routes.find((r) => r.code === "A-03").hold_color, "蒂芬妮", "可以選新的蒂芬妮色");
+  assert.equal(mock.db.routes.find((r) => r.code === "A1-03").hold_color, "蒂芬妮", "可以選新的蒂芬妮色");
   const codes = mock.db.routes.map((r) => r.code).sort();
-  assert.deepEqual(codes, ["A-01", "A-02", "A-03"], "編號自動產生");
-  assert.ok((await a.locator("main ul li", { hasText: "A-01" }).textContent()).includes("50分"), "路線列顯示分數");
+  assert.deepEqual(codes, ["A1-01", "A1-02", "A1-03"], "編號自動產生");
+  assert.ok((await a.locator("main ul li", { hasText: "A1-01" }).textContent()).includes("50分"), "路線列顯示分數");
 
-  await a.locator("main ul li button", { hasText: "A-03" }).click();
+  await a.locator("main ul li button", { hasText: "A1-03" }).click();
   await a.click("[role=dialog] >> text=下架這條路線");
   assert.match(await a.textContent("[role=dialog] button.text-warn"), /再按一次/, "下架要按兩次");
   await a.click("[role=dialog] button.text-warn");
@@ -79,7 +79,7 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
   // 操作紀錄
   await a.reload({ waitUntil: "networkidle" });
   await a.waitForTimeout(1200);
-  assert.ok(/下架 A 區 A-03/.test(await a.textContent("main")), "操作紀錄：下架");
+  assert.ok(/下架 A1 區 A1-03/.test(await a.textContent("main")), "操作紀錄：下架");
   assert.ok(/指派 阿定 為定線長/.test(await a.textContent("main")), "操作紀錄：指派員工");
 
   // ---- 顧客 ----
@@ -89,7 +89,7 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
   await c.waitForTimeout(500);
   assert.match(await c.textContent("main p"), /牆上 2 條路線/);
   await login(c, "climber88", "password1", "/gym/mingde");
-  await c.locator('svg[role=img] g[aria-label^="A 區"] text').first().click();
+  await c.locator('svg[role=img] g[aria-label^="A1 區"] text').first().click();
   await c.waitForURL("**/zone?id=**");
   await c.waitForTimeout(800);
   assert.equal(await c.locator('main button[aria-label^="V"]').count(), 2, "照片上 2 個起步點");
@@ -109,7 +109,7 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
   await c.keyboard.press("Escape");
   await c.waitForTimeout(300);
 
-  await c.locator("main ul li button", { hasText: "A-01" }).click();
+  await c.locator("main ul li button", { hasText: "A1-01" }).click();
   await c.waitForTimeout(500);
   await c.click('[role=dialog] [role=tab]:has-text("留言")');
   await c.fill('[role=dialog] textarea[placeholder^="公開留言"]', "腳踩對就很簡單");

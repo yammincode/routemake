@@ -16,7 +16,7 @@ test("一則留言：留過後只能編輯或刪除再留；三則以上左右�
   const c = C.page;
   await login(c, "climber88", "password1", `/zone?id=${zone.id}`);
   await c.waitForTimeout(500);
-  await c.locator("main ul li button", { hasText: "A-01" }).click();
+  await c.locator("main ul li button", { hasText: "A1-01" }).click();
   await c.waitForTimeout(500);
   await c.click('[role=dialog] [role=tab]:has-text("留言")');
 
@@ -51,7 +51,7 @@ test("一則留言：留過後只能編輯或刪除再留；三則以上左右�
   }
   await c.keyboard.press("Escape");
   await c.waitForTimeout(300);
-  await c.locator("main ul li button", { hasText: "A-01" }).click();
+  await c.locator("main ul li button", { hasText: "A1-01" }).click();
   await c.waitForTimeout(700);
   await c.click('[role=dialog] [role=tab]:has-text("留言")');
   const strip = c.locator("[role=dialog] div.snap-x", { hasText: "重新留言" });

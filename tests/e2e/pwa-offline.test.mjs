@@ -39,7 +39,7 @@ test("離線：看路線、記錄排隊、連線後送出；快取裡沒有 Supa
   await ctx.setOffline(true);
   await page.goto(BASE + "/zone?id=" + zA.id);
   await page.waitForTimeout(1500);
-  assert.equal(await page.textContent("h1"), "A 區", "離線打得開區域頁");
+  assert.equal(await page.textContent("h1"), "A1 區", "離線打得開區域頁");
   assert.match(await page.locator("[role=status]").first().textContent(), /沒有網路/);
   await page.click('main button[aria-label^="V4"]');
   await page.click('[role=dialog] button:has-text("Flash")');

@@ -25,7 +25,7 @@ test("我的紀錄：統計、積分、成長比較、改計分規則後重算",
   await login(page, "climber88", "password1", "/zone?id=" + zA.id);
   await page.waitForTimeout(800);
   const rows = (await page.locator("main ul li").allTextContents()).map((t) => t.replace(/\s+/g, ""));
-  assert.ok(rows.some((t) => t.includes("A-0150分")) && rows.some((t) => t.includes("A-0332分")) && rows.some((t) => t.includes("A-0491分")), "路線分數（含風格加成上限）");
+  assert.ok(rows.some((t) => t.includes("A1-0150分")) && rows.some((t) => t.includes("A1-0332分")) && rows.some((t) => t.includes("A1-0491分")), "路線分數（含風格加成上限）");
 
   await page.goto(page.url().replace(/\/zone.*/, "/me"), { waitUntil: "networkidle" });
   await page.waitForTimeout(1200);

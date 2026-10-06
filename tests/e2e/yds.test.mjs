@@ -11,7 +11,7 @@ test("YDS：上攀區顯示 5.11a、記錄後我的紀錄顯示最高難度；�
   const mock = createMock();
   mock.addUser("climber88", "password1", { nickname: "小安" });
   mock.addUser("boss", "password1", { nickname: "老闆", is_owner: true });
-  const zA = mock.db.zones.find((z) => z.gym_id === "g3" && z.code === "A");
+  const zA = mock.db.zones.find((z) => z.gym_id === "g3" && z.code === "A1");
   mock.addRoute(zA, 108, "紅", ["耐力"]);
   mock.addRoute(zA, 104, "藍");
 
@@ -42,11 +42,11 @@ test("YDS：上攀區顯示 5.11a、記錄後我的紀錄顯示最高難度；�
   await b.waitForTimeout(800);
   await b.click('main button:text-is("中和館")');
   await b.waitForTimeout(800);
-  await b.locator('svg[role=img] g[aria-label^="A 區"] text').first().click();
+  await b.locator('svg[role=img] g[aria-label^="A1 區"] text').first().click();
   await b.waitForTimeout(500);
   assert.equal(await b.getAttribute('main button:text-is("上攀 YDS")', "aria-pressed"), "true", "等級制是上攀 YDS");
   assert.ok(await b.locator('main button:text-is("抱石 V 級")').isDisabled(), "有路線時不能切換");
-  await b.locator("main ul li button", { hasText: "A-01" }).click();
+  await b.locator("main ul li button", { hasText: "A1-01" }).click();
   await b.waitForTimeout(400);
   assert.equal(await b.getAttribute('[role=dialog] button:text-is("5.11a")', "aria-pressed"), "true", "後台用 YDS 選難度");
   assert.equal(await b.locator('[role=dialog] button:text-is("V4")').count(), 0);

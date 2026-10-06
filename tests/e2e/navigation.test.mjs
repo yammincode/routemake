@@ -28,7 +28,7 @@ test("入口頁、選館、返回都照順序", async () => {
   await page.waitForTimeout(600);
   assert.equal(await page.textContent("main h1"), "今天爬哪一區？");
 
-  await page.locator("main button", { hasText: "A 區" }).first().click();
+  await page.locator("main button", { hasText: "A1 區" }).first().click();
   await page.waitForURL("**/zone?id=**");
   await page.click('main button:has-text("明德館")');
   await page.waitForURL("**/gym/mingde");

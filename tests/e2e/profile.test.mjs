@@ -21,7 +21,7 @@ test("人物卡：設定、公開、從留言點名字查看、店長清除", as
   const openCard = async (page) => {
     await page.goto(`${process.env.BASE_URL ?? "http://localhost:3100"}/zone?id=${zone.id}`, { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
-    await page.locator("main ul li button", { hasText: "A-01" }).click();
+    await page.locator("main ul li button", { hasText: "A1-01" }).click();
     await page.waitForTimeout(700);
     await page.click('[role=dialog] [role=tab]:has-text("留言")');
     await page.click('[role=dialog] button:text-is("小安")');

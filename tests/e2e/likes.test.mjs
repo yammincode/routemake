@@ -21,7 +21,7 @@ test("留言按讚與收回；未登入按讚會去登入", async () => {
   const g = G.page;
   await g.goto(`${BASE}/zone?id=${zone.id}`, { waitUntil: "networkidle" });
   await g.waitForTimeout(500);
-  await g.locator("main ul li button", { hasText: "A-01" }).click();
+  await g.locator("main ul li button", { hasText: "A1-01" }).click();
   await g.waitForTimeout(600);
   const gl = g.locator('[role=dialog] button[aria-label^="按讚"]');
   assert.equal((await gl.textContent()).replace(/\s/g, ""), "👍1", "未登入看得到讚數");
@@ -33,7 +33,7 @@ test("留言按讚與收回；未登入按讚會去登入", async () => {
   const c = C.page;
   await login(c, "climber88", "password1", `/zone?id=${zone.id}`);
   await c.waitForTimeout(500);
-  await c.locator("main ul li button", { hasText: "A-01" }).click();
+  await c.locator("main ul li button", { hasText: "A1-01" }).click();
   await c.waitForTimeout(600);
   await c.locator('[role=dialog] button[aria-label^="按讚"]').click();
   await c.waitForTimeout(500);

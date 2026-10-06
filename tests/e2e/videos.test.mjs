@@ -25,7 +25,7 @@ test("顧客分享影片、刪除自己的；員工刪影片並記錄；下架�
   const c = C.page;
   await login(c, "climber88", "password1", `/zone?id=${zone.id}`);
   await c.waitForTimeout(600);
-  await c.locator("main ul li button", { hasText: "A-01" }).click();
+  await c.locator("main ul li button", { hasText: "A1-01" }).click();
   await c.waitForTimeout(600);
   const dialog = c.locator("[role=dialog]");
   const thumbs = dialog.locator('button[aria-label^="播放"]');
@@ -95,7 +95,7 @@ test("顧客分享影片、刪除自己的；員工刪影片並記錄；下架�
   await s.locator('main button[aria-label^="播放 阿明"]').click();
   const sv = s.locator('[aria-label="影片播放"]');
   await sv.waitFor();
-  assert.ok((await sv.textContent()).includes("A 區 A-01"), "後台播放顯示區域與路線");
+  assert.ok((await sv.textContent()).includes("A1 區 A1-01"), "後台播放顯示區域與路線");
   await sv.locator('button:text-is("刪除這支影片")').click();
   await s.waitForTimeout(200);
   assert.ok((await sv.textContent()).includes("再按一次"), "刪除要按兩次");
@@ -104,7 +104,7 @@ test("顧客分享影片、刪除自己的；員工刪影片並記錄；下架�
   assert.equal(mock.db.videos.length, 1);
   assert.ok(mock.db.audit.some((a) => a.action === "video.delete" && a.detail.author_nickname === "阿明"), "員工刪影片寫操作紀錄");
 
-  await s.locator("main ul li button", { hasText: "A-01" }).click();
+  await s.locator("main ul li button", { hasText: "A1-01" }).click();
   await s.click("[role=dialog] >> text=下架這條路線");
   assert.match(await s.textContent("[role=dialog] button.text-warn"), /影片會一起刪除/);
   await s.click("[role=dialog] button.text-warn");
@@ -127,7 +127,7 @@ test("未登入看得到影片、要登入才能分享；留言關閉且沒有�
   const g = G.page;
   await g.goto(`${BASE}/zone?id=${zone.id}`, { waitUntil: "networkidle" });
   await g.waitForTimeout(600);
-  await g.locator("main ul li button", { hasText: "A-01" }).click();
+  await g.locator("main ul li button", { hasText: "A1-01" }).click();
   await g.waitForTimeout(600);
   const text = await g.textContent("[role=dialog]");
   assert.ok(text.includes("看我的") || (await g.locator('[role=dialog] button[aria-label*="看我的"]').count()) === 1);
@@ -135,7 +135,7 @@ test("未登入看得到影片、要登入才能分享；留言關閉且沒有�
   assert.equal(await g.locator("[role=dialog] input[type=file]").count(), 0);
   await g.keyboard.press("Escape");
   await g.waitForTimeout(400);
-  await g.locator("main ul li button", { hasText: "A-02" }).click();
+  await g.locator("main ul li button", { hasText: "A1-02" }).click();
   await g.waitForTimeout(600);
   await g.click('[role=dialog] [role=tab]:has-text("影片")');
   assert.ok((await g.textContent("[role=dialog]")).includes("這條路線目前不開放分享影片"), "留言關閉、沒有影片：不能分享");

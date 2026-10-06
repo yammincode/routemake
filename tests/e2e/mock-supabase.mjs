@@ -23,22 +23,23 @@ export function createMock() {
       ["g5", "新店館", true],
       ["g6", "中壢館", false],
     ].map(([id, name, is_live], i) => ({ id, name, is_live, comments_enabled: true, sort: i + 1 })),
+    // 明德（同 migration 0025 細分後）
     zones: [
-      ["A", "A 區"],
-      ["W", "比賽牆"],
-      ["B", "B 區"],
-      ["C", "C 區"],
-      ["D", "D 區"],
+      ["A1", "A1 區"], ["A2", "A2 區"], ["A3", "A3 區"], ["A4", "A4 區"],
+      ["W1", "比賽牆 1"], ["W2", "比賽牆 2"], ["W3", "比賽牆 3"], ["W4", "比賽牆 4"],
+      ["B1", "B1 區"], ["B2", "B2 區"], ["B3", "B3 區"],
+      ["C1", "C1 區"], ["C2", "C2 區"], ["C3", "C3 區"],
+      ["D1", "D1 區"], ["D2", "D2 區"],
     ].map(([code, name], i) => ({ id: uuid(), gym_id: "mingde", code, name, sort: i + 1, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0, grade_system: "v" }))
       .concat(
         // Spray Wall（同 migration 0018）
         [["mingde", "S"], ["g4", "SW"]].map(([gym_id, code]) => ({ id: uuid(), gym_id, code, name: "Spray Wall", sort: 99, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0, grade_system: "v", kind: "spray" })),
-        // 其他館的區域（同 migration 0013；南港 0023 細分成 7 區）
+        // 其他館的區域（同 migration 0013；南港 0023、其他館 0025 細分）
         Object.entries({
-          g2: [["A", "A 區"], ["B", "B 區"], ["C", "C 區"], ["D", "D 區"], ["TR", "訓練區"], ["SL", "教學區 Slab"]],
-          g3: [["A", "A 區"], ["AB", "Auto-Belay"], ["B", "B 區"], ["C", "C 區"], ["D", "D 區"], ["SP", "速度牆"], ["BO", "抱石區"]],
+          g2: [["A", "A 區"], ["B1", "B1 區"], ["B2", "B2 區"], ["C1", "C1 區"], ["C2", "C2 區"], ["D1", "D1 區"], ["D2", "D2 區"], ["SL", "教學區 Slab"], ["TR", "訓練區"]],
+          g3: [["A1", "A1 區"], ["A2", "A2 區"], ["AB1", "Auto-Belay 1"], ["AB2", "Auto-Belay 2"], ["B", "B 區"], ["C", "C 區"], ["D", "D 區"], ["SP", "速度牆"], ["BO", "抱石區"]],
           g4: [["A1", "A1 區"], ["A2", "A2 區"], ["A3", "A3 區"], ["B1", "B1 區"], ["B2", "B2 區"], ["C1", "C1 區"], ["C2", "C2 區"]],
-          g5: [["A", "抱石 A 區"], ["B", "抱石 B 區"], ["C", "C 區"], ["D", "D 區"], ["E", "上攀 E 區"]],
+          g5: [["A1", "抱石 A1 區"], ["A2", "抱石 A2 區"], ["B1", "抱石 B1 區"], ["B2", "抱石 B2 區"], ["C1", "C1 區"], ["C2", "C2 區"], ["D", "D 區"], ["E", "上攀 E 區"]],
         }).flatMap(([gym_id, zs]) => zs.map(([code, name], i) => ({ id: uuid(), gym_id, code, name, sort: i + 1, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0, grade_system: gym_id === "g3" && code !== "BO" ? "yds" : "v" })))
       ),
     routes: [],

@@ -27,6 +27,7 @@
 | `setup/step18-staff-search.sql` | migration 0022：指派員工更直覺（search_users() 用暱稱／帳號搜尋、assign_staff_user() 直接指派或改角色） | 已套用 |
 | `setup/step19-nangang-zones.sql` | migration 0023：南港館細分 7 區（A→A1／A2／A3、B→B1／B2、C→C1／C2）；執行前要先把南港 A、B、C 整區換線 | 待套用 |
 | `setup/step20-feedback.sql` | migration 0024：意見回饋（feedback 表、每人每天 5 則、只有老闆看得到全部、feedback_list()） | 待套用 |
+| `setup/step21-zones-split.sql` | migration 0025：明德、新店、中和、萬華細分區域（萬華 D 右段＝教學區 Slab）；執行前要先把要切的區域整區換線 | 待套用 |
 
 ## 規則摘要
 
