@@ -15,6 +15,8 @@
   - 使用者在自己電腦用 scripts/trial.ps1 跑試用版確認
   - 使用者說「更新正式版」時，才把開發分支合併到 main 並 push（這是唯一會部署的動作）
   - 每次更新正式版：先把 lib/version.ts 的版本號加 0.1、日期改成當天並 commit，測試通過後才合併到 main；回報時說明這次的版本號和改了什麼
+- 驗收清單在 docs/驗收清單.md：每次新增或修改功能，同一個 commit 要更新清單裡對應的段落（自動測試、手機步驟、📱 只能真機確認的項目）
+- 使用者說「更新正式版」時，先列出「這次要請你在手機上確認的項目」（從驗收清單挑出這次改動相關的段落）
 - push 前跑 npm run test:db、npm run build、npm run test:e2e，全部通過才 push；新功能要補測試（supabase/tests、tests/e2e）
 
 ## 技術規則
