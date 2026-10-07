@@ -7,7 +7,7 @@ import RouteSheet from "@/components/RouteSheet";
 import SprayEditor from "@/components/SprayEditor";
 import { Button } from "@/components/ui/Button";
 import { Empty, PageTitle } from "@/components/ui/Card";
-import { Chip, ChipRow } from "@/components/ui/Chip";
+import { Chip, ChipRow, GradeChip } from "@/components/ui/Chip";
 import { HoldLegend, RouteThumb, SprayRow } from "@/components/ui/Spray";
 import { ScrollList } from "@/components/ui/ScrollList";
 import { Tabs } from "@/components/ui/Tabs";
@@ -34,7 +34,7 @@ import {
 } from "@/lib/data";
 import { ago } from "@/lib/date";
 import { withCache } from "@/lib/offline";
-import { gradeLabel, GRADES } from "@/lib/design";
+import { GRADES } from "@/lib/design";
 import type { SprayWall } from "@/lib/gyms";
 
 const SORTS: { key: SpraySort; label: string }[] = [
@@ -190,9 +190,7 @@ export default function SprayView({ wall }: { wall: SprayWall }) {
           全部
         </Chip>
         {GRADES.map((g) => (
-          <Chip key={g} num pressed={grade === g} onClick={() => setGrade(grade === g ? null : g)}>
-            {gradeLabel(g)}
-          </Chip>
+          <GradeChip key={g} grade={g} pressed={grade === g} onClick={() => setGrade(grade === g ? null : g)} />
         ))}
       </ChipRow>
       <ChipRow>

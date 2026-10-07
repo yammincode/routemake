@@ -1,12 +1,17 @@
 import type { ComponentProps, ReactNode } from "react";
-import { gradeLabel, HOLD_COLORS, isYds, STATUS_LABEL, type HoldColor, type Status } from "@/lib/design";
+import { gradeColor, gradeLabel, HOLD_COLORS, isYds, STATUS_LABEL, type HoldColor, type Status } from "@/lib/design";
 import Icon from "./Icon";
 
 // 難度數字（Barlow Condensed）
 // 難度：V4 或 5.10a（YDS 字比較長，縮小一點）
+// 難度：V 級塗成館內膠帶顏色（還沒定顏色的、YDS 用一般文字）
 export function Grade({ grade, className = "text-num-row w-[50px]" }: { grade: number; className?: string }) {
+  const c = gradeColor(grade);
   return (
-    <span className={`font-num font-bold ${className}`}>
+    <span
+      style={c ? { background: c.bg, color: c.fg } : undefined}
+      className={`font-num font-bold ${c ? "inline-block rounded-cell px-1 text-center shadow-[inset_0_0_0_1px_rgba(0,0,0,.18)]" : ""} ${className}`}
+    >
       {isYds(grade) ? <span className="text-[0.72em] tracking-[-0.02em]">{gradeLabel(grade)}</span> : gradeLabel(grade)}
     </span>
   );

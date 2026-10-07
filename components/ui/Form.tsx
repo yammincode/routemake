@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from "react";
-import { gradeLabel, gradesFor, HOLD_COLORS, HOLD_COLOR_NAMES, STYLE_TAGS, type GradeSystem, type HoldColor } from "@/lib/design";
+import { gradeColor, gradeLabel, gradesFor, HOLD_COLORS, HOLD_COLOR_NAMES, STYLE_TAGS, type GradeSystem, type HoldColor } from "@/lib/design";
 
 // 表單標籤
 export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
@@ -89,20 +89,28 @@ export function ColorPicker({ value, onChange }: { value: HoldColor; onChange: (
   );
 }
 
-// 難度選擇（原型 .grades）：抱石 V0–V10、上攀 YDS 5.6–5.13d
+// 難度選擇（原型 .grades）：抱石 VB、V0–V10（按鈕塗成館內膠帶顏色，選中的加框）、上攀 YDS 5.6–5.13d
 export function GradePicker({ value, onChange, system = "v" }: { value: number; onChange: (g: number) => void; system?: GradeSystem }) {
   return (
     <div className={`grid gap-1.5 ${system === "yds" ? "grid-cols-4" : "grid-cols-6"}`}>
-      {gradesFor(system).map((g) => (
-        <button
-          key={g}
-          aria-pressed={value === g}
-          onClick={() => onChange(g)}
-          className="rounded-cell border border-line py-1.5 font-num text-num-picker font-semibold aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-surface"
-        >
-          {gradeLabel(g)}
-        </button>
-      ))}
+      {gradesFor(system).map((g) => {
+        const c = gradeColor(g);
+        return (
+          <button
+            key={g}
+            aria-pressed={value === g}
+            onClick={() => onChange(g)}
+            style={c ? { background: c.bg, color: c.fg } : undefined}
+            className={`rounded-cell py-1.5 font-num text-num-picker font-semibold ${
+              c
+                ? "shadow-[inset_0_0_0_1px_rgba(0,0,0,.18)] aria-pressed:outline-3 aria-pressed:outline-offset-2 aria-pressed:outline-ink"
+                : "border border-line aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-surface"
+            }`}
+          >
+            {gradeLabel(g)}
+          </button>
+        );
+      })}
     </div>
   );
 }

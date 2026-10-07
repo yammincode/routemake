@@ -381,10 +381,11 @@ export type PointsSummary = {
   total: number;
 };
 export async function getScoringRules(): Promise<ScoringRules> {
-  return must(await supabase().from("scoring_rules").select("grade_points,yds_points,style_bonus,max_style_bonus,flash_multiplier").eq("id", 1).single());
+  return must(await supabase().from("scoring_rules").select("*").eq("id", 1).single());
 }
 export async function updateScoringRules(r: ScoringRules) {
-  must(await supabase().from("scoring_rules").update(r).eq("id", 1));
+  const { grade_points, vb_points, yds_points, style_bonus, max_style_bonus, flash_multiplier } = r;
+  must(await supabase().from("scoring_rules").update({ grade_points, vb_points, yds_points, style_bonus, max_style_bonus, flash_multiplier }).eq("id", 1));
 }
 export async function getPointsSummary(year: number, month: number): Promise<PointsSummary> {
   return must(await supabase().rpc("points_summary", { p_year: year, p_month: month }));

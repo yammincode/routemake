@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Header from "@/components/Header";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
-import { Chip, ChipRow } from "@/components/ui/Chip";
+import { Chip, ChipRow, GradeChip } from "@/components/ui/Chip";
 import { SortList } from "@/components/ui/SortList";
 import { ScrollList } from "@/components/ui/ScrollList";
 import { AppVersion } from "@/components/ui/Version";
@@ -25,7 +25,7 @@ import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoPickButton, VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
 import { fakeWall } from "@/lib/demo";
-import { FEEL, GRADE_FEEL, HOLD_COLOR_NAMES, type HoldColor, type Status } from "@/lib/design";
+import { FEEL, GRADE_FEEL, GRADES, HOLD_COLOR_NAMES, type HoldColor, type Status } from "@/lib/design";
 import { MINGDE_PLAN } from "@/lib/floorplan";
 import { LIVE_GYM } from "@/lib/gyms";
 
@@ -265,9 +265,7 @@ export default function DesignShowcase() {
             全部
           </Chip>
           {grades.map((g) => (
-            <Chip key={g} num pressed={grade === g} onClick={() => setGrade(g)}>
-              V{g}
-            </Chip>
+            <GradeChip key={g} grade={g} pressed={grade === g} onClick={() => setGrade(g)} />
           ))}
         </ChipRow>
         <ChipRow>
@@ -501,6 +499,14 @@ export default function DesignShowcase() {
           <span className="text-meta text-muted">色條＋難度</span>
         </div>
         <AppVersion className="mt-3" />
+      </Block>
+
+      <Block title="難度膠帶顏色（VB、V0–V10）">
+        <div className="flex flex-wrap gap-2">
+          {GRADES.map((g) => (
+            <Grade key={g} grade={g} className="text-num-row w-[50px]" />
+          ))}
+        </div>
       </Block>
 
       <Block title="意見回饋">

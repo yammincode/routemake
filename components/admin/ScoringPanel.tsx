@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/Form";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { updateScoringRules } from "@/lib/data";
-import { GRADES, STYLE_TAGS, YDS_GRADES } from "@/lib/design";
+import { gradeLabel, GRADES, STYLE_TAGS, YDS_GRADES } from "@/lib/design";
 import { ascentPoints, routePoints, type ScoringRules } from "@/lib/scoring";
 import { setScoringRules, useScoring } from "@/lib/useScoring";
 
@@ -46,12 +46,14 @@ function Editor({ rules }: { rules: ScoringRules }) {
         <div className="grid grid-cols-6 gap-1.5">
           {GRADES.map((g) => (
             <label key={g} className="grid gap-0.5 text-center">
-              <span className="font-num text-[15px] font-bold">V{g}</span>
+              <span className="font-num text-[15px] font-bold">{gradeLabel(g)}</span>
               <input
                 inputMode="numeric"
                 className={numField}
-                value={r.grade_points[g]}
-                onChange={(e) => setR({ ...r, grade_points: r.grade_points.map((v, i) => (i === g ? int(e.target.value) : v)) })}
+                value={g < 0 ? (r.vb_points ?? 0) : r.grade_points[g]}
+                onChange={(e) =>
+                  setR(g < 0 ? { ...r, vb_points: int(e.target.value) } : { ...r, grade_points: r.grade_points.map((v, i) => (i === g ? int(e.target.value) : v)) })
+                }
               />
             </label>
           ))}

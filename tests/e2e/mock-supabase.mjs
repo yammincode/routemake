@@ -55,6 +55,7 @@ export function createMock() {
     vfiles: {}, // route-videos 檔案：path -> { buf, owner, created_at }
     scoring: {
       grade_points: [10, 15, 20, 30, 40, 55, 70, 90, 110, 135, 160],
+      vb_points: 5,
       yds_points: [4, 5, 6, 8, 10, 11, 13, 15, 17, 20, 25, 30, 35, 40, 48, 55, 70, 80, 90, 110],
       style_bonus: { 力量: 10, 指力: 10, 動態: 15, 耐力: 10, 協調: 10, 技巧: 5, 平衡: 5, 腳法: 5, 柔軟: 5 },
       max_style_bonus: 30,
@@ -155,7 +156,8 @@ export function createMock() {
     const limit = Number(sp.get("limit"));
     return limit ? rows.slice(0, limit) : rows;
   };
-  const rawPoints = (r) => (r.grade >= 100 ? db.scoring.yds_points[r.grade - 100] : db.scoring.grade_points[r.grade]) * (100 + Math.min(db.scoring.max_style_bonus, r.style_tags.reduce((s, t) => s + (db.scoring.style_bonus[t] || 0), 0)));
+  const base = (g) => (g >= 100 ? db.scoring.yds_points[g - 100] : g < 0 ? db.scoring.vb_points : db.scoring.grade_points[g]);
+  const rawPoints = (r) => base(r.grade) * (100 + Math.min(db.scoring.max_style_bonus, r.style_tags.reduce((s, t) => s + (db.scoring.style_bonus[t] || 0), 0)));
   const points = (a) => {
     const r = db.routes.find((x) => x.id === a.route_id);
     if (a.status === "send") return Math.round(rawPoints(r) / 100);
@@ -285,7 +287,7 @@ export function createMock() {
       if (!p.card_public && !self) return J(route, 200, { nickname: p.nickname, public: false, self: false });
       const sends = db.ascents.filter((x) => x.user_id === a.p_user && x.status !== "project").map((x) => db.routes.find((r) => r.id === x.route_id));
       const axes = [["力量"], ["指力"], ["動態", "協調"], ["耐力"], ["技巧", "腳法", "平衡"], ["柔軟"]];
-      const raw = axes.map((t) => sends.filter((r) => r.style_tags.some((g) => t.includes(g))).reduce((n, r) => n + (r.grade >= 100 ? db.scoring.yds_points[r.grade - 100] : db.scoring.grade_points[r.grade]), 0));
+      const raw = axes.map((t) => sends.filter((r) => r.style_tags.some((g) => t.includes(g))).reduce((n, r) => n + base(r.grade), 0));
       const mx = Math.max(...raw);
       return J(route, 200, {
         nickname: p.nickname, public: !!p.card_public, self, bio: p.bio ?? null, years: p.climbing_years ?? null, home_gym: p.home_gym ?? null,

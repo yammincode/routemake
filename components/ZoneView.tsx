@@ -6,7 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
 import { BackLink, Empty } from "@/components/ui/Card";
-import { Chip, ChipRow } from "@/components/ui/Chip";
+import { Chip, ChipRow, GradeChip } from "@/components/ui/Chip";
 import { dueText } from "@/components/ui/Gym";
 import { CommentCount, Points, RouteList, RouteRow, Tags } from "@/components/ui/Route";
 import { NoPhoto, Pin, WallPhoto } from "@/components/ui/Wall";
@@ -140,9 +140,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
               全部
             </Chip>
             {grades.map((g) => (
-              <Chip key={g} num pressed={grade === g} onClick={() => setGrade(g)}>
-                {gradeLabel(g)}
-              </Chip>
+              <GradeChip key={g} grade={g} pressed={grade === g} onClick={() => setGrade(g)} />
             ))}
           </ChipRow>
           <ChipRow>

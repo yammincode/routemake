@@ -122,6 +122,9 @@ select tests.throws('定線員：不能在別館新增路線',
 select tests.throws('定線員：不能直接呼叫別館取號', format('select public.next_route_code(%L)', (select v from ids where k = 'zoneG2')));
 select tests.throws('定線員：不能改路線編號', 'update public.routes set code = ''Z-99''');
 select tests.throws('定線員：不能刪除路線（用下架）', 'delete from public.routes');
+select tests.throws('難度低於 VB 會被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, -2, ''紅'', 1, 1)', (select v from ids where k = 'zoneA')));
+select tests.ok('VB 是合法難度（grade = -1）', (select pg_get_constraintdef(oid) from pg_constraint where conname = 'routes_grade_check') like '%-1%');
+select tests.ok('VB 預設 5 分、比 V0 的 10 分低', public.route_points(-1, '{}') = 5 and public.route_points(0, '{}') = 10);
 select tests.throws('難度超過 V10 會被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 11, ''紅'', 1, 1)', (select v from ids where k = 'zoneA')));
 select tests.throws('評語超過 40 字會被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, setter_note) values (%L, 1, ''紅'', 1, 1, repeat(''字'', 41))', (select v from ids where k = 'zoneA')));
 select tests.throws('起步點超出照片範圍會被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 1, ''紅'', 101, 1)', (select v from ids where k = 'zoneA')));
