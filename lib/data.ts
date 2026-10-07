@@ -592,7 +592,10 @@ export async function clearCardBio(userId: string, gym: string) {
 
 // ---------- 使用狀況（店長看自己的館；老闆可看全部 gym = null） ----------
 export type UsageStats = {
+  since: string | null; // 統計起始日（null＝還沒設定，算全部）
   registered: number;
+  registered_since: number; // 起始日之後註冊
+  registered_before: number; // 起始日之前（測試期間）註冊
   new7: number;
   today: number;
   week: number;
@@ -604,6 +607,10 @@ export type UsageStats = {
 };
 export async function getUsage(gym: string | null): Promise<UsageStats> {
   return must(await supabase().rpc("usage_stats", { p_gym: gym }));
+}
+// 老闆：從今天重新開始統計（資料不刪，只是之後的數字從這天開始算）
+export async function resetUsageSince(): Promise<string> {
+  return must(await supabase().rpc("set_usage_since", { p_day: null }));
 }
 
 // ---------- Spray Wall ----------

@@ -1,6 +1,7 @@
 "use client";
 
 import FeedbackPanel from "@/components/admin/FeedbackPanel";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteEditor, { type EditTarget } from "@/components/admin/RouteEditor";
@@ -9,7 +10,6 @@ import ScoringPanel from "@/components/admin/ScoringPanel";
 import ShareQr from "@/components/admin/ShareQr";
 import SprayAdmin from "@/components/admin/SprayAdmin";
 import StaffPanel from "@/components/admin/StaffPanel";
-import UsagePanel from "@/components/admin/UsagePanel";
 import VideoPanel from "@/components/admin/VideoPanel";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Empty, Tip } from "@/components/ui/Card";
@@ -51,6 +51,7 @@ type Confirm = { kind: "photo"; file: File } | { kind: "reset" } | { kind: "zone
 
 // 管理後台：選場館、全館留言開關、區域設定與照片、在照片上標路線、整區換線、員工
 export default function AdminView() {
+  const router = useRouter();
   const { access } = useAuth();
   const toast = useToast();
   const rules = useScoring();
@@ -202,6 +203,11 @@ export default function AdminView() {
   return (
     <>
       <p className="mt-0 mb-3 text-meta text-muted">你的身分：{roleLabel(access, gymId)}</p>
+      {(access.is_owner || access.roles.some((r) => r.role === "manager")) && (
+        <Button className="mb-3" onClick={() => router.push("/admin/usage")}>
+          📊 使用狀況
+        </Button>
+      )}
 
       {(gyms.length > 1 || walls.length > 0) && (
         <ChipRow>
@@ -437,7 +443,6 @@ export default function AdminView() {
         </SetBox>
       )}
       {gym && <VideoPanel gymId={gymId} gymName={gym.name} />}
-      {manager && gym && <UsagePanel key={gymId} gymId={gymId} gymName={gym.name} owner={access.is_owner} />}
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <AuditPanel gymId={gymId} gymName={gym.name} />}
       {access.is_owner && <ScoringPanel />}

@@ -29,6 +29,7 @@
 | `setup/step20-feedback.sql` | migration 0024：意見回饋（feedback 表、每人每天 5 則、只有老闆看得到全部、feedback_list()） | 已套用 |
 | `setup/step21-zones-split.sql` | migration 0025：明德、新店、中和、萬華細分區域（萬華 D 右段＝教學區 Slab）；執行前要先把要切的區域整區換線 | 已套用 |
 | `setup/step22-grade-vb.sql` | migration 0026：新增 VB 難度（grade = -1）、VB 分數（預設 5 分） | 待套用 |
+| `setup/step23-usage-since.sql` | migration 0027：使用狀況「統計起始日」（usage_settings、set_usage_since()，usage_stats() 照起始日計算） | 待套用 |
 
 ## 規則摘要
 

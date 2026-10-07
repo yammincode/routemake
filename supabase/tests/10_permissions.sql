@@ -881,6 +881,23 @@ select tests.ok('使用狀況：老闆看得到全部館（有各館比較、註
   public.usage_stats(null)::text);
 select tests.ok('使用狀況：萬華今天有 1 人打開', (select (g ->> 'users')::int >= 1 from jsonb_array_elements(public.usage_stats(null) -> 'gyms') g where g ->> 'gym' = 'g2'));
 reset role;
+set role authenticated; select tests.login(:MG);
+select tests.throws('統計起始日：店長不能重新開始統計', $q$select public.set_usage_since(null)$q$);
+select tests.throws('統計起始日：不能直接改設定', $q$update public.usage_settings set since = '2000-01-01'$q$);
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.ok('統計起始日：一開始沒有設定、註冊都算在上線後', (select u ->> 'since' is null and (u ->> 'registered_before')::int = 0 from public.usage_stats(null) u));
+select tests.ok('統計起始日：老闆按「從今天重新開始」回傳今天', public.set_usage_since(null) = public.taipei_today());
+select tests.lives('統計起始日：設成明天（模擬剛重置）', $q$select public.set_usage_since(public.taipei_today() + 1)$q$);
+select tests.ok('統計起始日：之前的使用、完攀都不算，註冊算在測試期間',
+  (select (u ->> 'today')::int = 0 and (u ->> 'month')::int = 0 and (u ->> 'sends30')::int = 0
+          and (u ->> 'registered_since')::int = 0 and (u ->> 'registered_before')::int = (select count(*) from public.profiles)
+          and jsonb_array_length(u -> 'daily') = 30
+     from public.usage_stats(null) u), public.usage_stats(null)::text);
+select tests.ok('統計起始日：寫操作紀錄', exists (select 1 from public.audit_log where action = 'usage.reset'));
+select tests.lives('統計起始日：改回很久以前', $q$select public.set_usage_since('2000-01-01')$q$);
+select tests.ok('統計起始日：改回來後今天的使用又算進去', (select (u ->> 'today')::int >= 2 from public.usage_stats(null) u));
+reset role;
 
 -- ---------------------------------------------------------------------
 -- 意見回饋

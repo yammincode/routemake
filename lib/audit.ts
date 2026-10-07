@@ -1,6 +1,7 @@
 // 操作紀錄轉成一句看得懂的話
 import { ROLE_NAME, type Role } from "@/lib/auth";
 import type { AuditEntry } from "@/lib/data";
+import { gradeLabel } from "@/lib/design";
 
 export const AUDIT_FILTERS = [
   { key: "all", label: "全部", actions: [] as string[] },
@@ -9,7 +10,7 @@ export const AUDIT_FILTERS = [
   { key: "video", label: "影片", actions: ["video.delete"] },
   { key: "card", label: "人物卡", actions: ["card.clear"] },
   { key: "staff", label: "員工", actions: ["staff.assign", "staff.remove"] },
-  { key: "scoring", label: "計分", actions: ["scoring.update"] },
+  { key: "scoring", label: "計分／統計", actions: ["scoring.update", "usage.reset"] },
 ] as const;
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -19,7 +20,7 @@ export function describeAudit(a: AuditEntry): string {
   const person = str(d.nickname) || str(d.username) || "（帳號）";
   switch (a.action) {
     case "route.archive":
-      return `下架 ${str(d.zone) ? str(d.zone) + " " : ""}${str(d.code)}${typeof d.grade === "number" ? `（V${d.grade}${str(d.color) ? " " + str(d.color) + "色" : ""}）` : ""}`;
+      return `下架 ${str(d.zone) ? str(d.zone) + " " : ""}${str(d.code)}${typeof d.grade === "number" ? `（${gradeLabel(d.grade)}${str(d.color) ? " " + str(d.color) + "色" : ""}）` : ""}`;
     case "route.unarchive":
       return `恢復 ${str(d.zone) ? str(d.zone) + " " : ""}${str(d.code)}`;
     case "zone.archive_all":
@@ -42,6 +43,8 @@ export function describeAudit(a: AuditEntry): string {
       return `移除${ROLE_NAME[(str(d.role) || "setter") as Role]} ${person}`;
     case "scoring.update":
       return `修改計分規則（Flash ×${d.flash_multiplier ?? "–"}、風格加成上限 ${d.max_style_bonus ?? "–"}%）`;
+    case "usage.reset":
+      return `使用狀況重新開始統計（從 ${str(d.since).slice(5).replace("-", "/")} 開始）`;
     default:
       return a.action;
   }
