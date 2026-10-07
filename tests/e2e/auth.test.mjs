@@ -50,7 +50,7 @@ test("註冊流程與錯誤提示", async () => {
   await page.waitForTimeout(500);
   const main = await page.textContent("main");
   assert.ok(main.includes("小安") && main.includes("帳號 ter0123456"));
-  assert.match(await page.textContent("[data-app-version]"), /^v\d+\.\d+ 試用版$/, "我的紀錄頁最下面顯示版本號");
+  assert.equal(await page.locator("[data-app-version]").count(), 0, "一般會員看不到版本號");
 
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForTimeout(500);

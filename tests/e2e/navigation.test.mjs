@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { after, before, test } from "node:test";
-import { BASE, createMock, launch, phone } from "./helpers.mjs";
+import { BASE, createMock, launch, login, phone } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -15,7 +15,17 @@ test("入口頁、選館、返回都照順序", async () => {
   assert.equal(await page.locator("nav").count(), 0, "入口頁不顯示分頁列");
   assert.ok(await page.isVisible('img[alt="原岩攀岩館 T-UP CLIMBING"]'), "入口頁有原岩 Logo");
   const version = fs.readFileSync(new URL("../../lib/version.ts", import.meta.url), "utf8").match(/VERSION = "([\d.]+)"/)[1];
-  assert.equal(await page.textContent("[data-app-version]"), `v${version} 試用版`, "入口頁顯示版本號（不是 Netlify 建置的顯示試用版）");
+  assert.equal(await page.locator("[data-app-version]").count(), 0, "版本號只有老闆看得到");
+  mock.addUser("boss", "password1", { nickname: "老闆", is_owner: true });
+  const O = await phone(browser, mock);
+  await login(O.page, "boss", "password1", "/");
+  await O.page.goto(BASE + "/", { waitUntil: "networkidle" });
+  await O.page.waitForTimeout(600);
+  assert.equal(await O.page.textContent("[data-app-version]"), `v${version} 試用版`, "老闆在入口頁看得到版本號（不是 Netlify 建置的顯示試用版）");
+  await O.page.goto(BASE + "/me", { waitUntil: "networkidle" });
+  await O.page.waitForTimeout(600);
+  assert.ok(await O.page.isVisible("[data-app-version]"), "老闆在我的紀錄也看得到");
+  await O.ctx.close();
 
   await page.click('main a[href="/gyms"]');
   await page.waitForURL("**/gyms");
