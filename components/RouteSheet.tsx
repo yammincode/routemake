@@ -104,6 +104,7 @@ function RouteBody({
   const [gfeel, setGfeel] = useState<number | null>(ascent?.grade_feel ?? null);
   const [note, setNote] = useState(ascent?.private_note ?? "");
   const [busy, setBusy] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [draft, setDraft] = useState("");
   const [tab, setTab] = useState<"log" | "video" | "comment" | null>(null);
@@ -141,9 +142,9 @@ function RouteBody({
     }
     setBusy(false);
   };
-  const current = (s: Status) => ({
+  const current = (s: Status, day = date) => ({
     status: s,
-    climbed_on: date || todayYmd(),
+    climbed_on: day || todayYmd(),
     feel: s === "project" ? null : feel,
     grade_feel: s === "project" ? null : gfeel,
     private_note: note.trim() || null,
@@ -157,18 +158,24 @@ function RouteBody({
       setDetails(true);
       return;
     }
+    // 從「嘗試中」改成完攀／Flash：日期改成今天（不然分數會記到第一次嘗試那天）
+    const wasProject = status === "project" && s !== "project";
+    const day = wasProject ? todayYmd() : date;
     setStatus(s);
+    setDate(day);
     const pts = rules ? ascentPoints(r.grade, r.style_tags, s, rules) : 0;
     // 岩友路線不算積分
     const msg =
       r.kind === "community"
         ? `已記錄：${STATUS_LABEL[s]}（岩友路線不算積分）`
         : s === "flash"
-          ? `Flash！漂亮 +${pts} 分`
+          ? wasProject
+            ? `Flash +${pts} 分（試過幾次才爬完，一般記「完攀」）`
+            : `Flash！漂亮 +${pts} 分`
           : s === "send"
             ? `完攀 +${pts} 分`
             : "已記錄：嘗試中";
-    await persist(current(s), msg);
+    await persist(current(s, day), msg);
   };
 
   const save = async () => {
@@ -177,7 +184,9 @@ function RouteBody({
     setDetails(false);
   };
 
+  // 清除紀錄要按兩次：心得會一起刪掉，不能復原
   const clear = async () => {
+    if (!confirmClear) return setConfirmClear(true);
     setBusy(true);
     try {
       await clearAscent(r.id);
@@ -378,8 +387,8 @@ function RouteBody({
               </>
             )}
             {ascent && (
-              <LinkButton disabled={busy} onClick={clear}>
-                清除紀錄
+              <LinkButton disabled={busy} onClick={clear} className={confirmClear ? "font-bold text-warn" : ""}>
+                {confirmClear ? "確定清除？心得也會一起刪掉，再按一次" : "清除紀錄"}
               </LinkButton>
             )}
           </>

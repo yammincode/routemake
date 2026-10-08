@@ -62,7 +62,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, signupError: null, usageSince: null };
+  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -497,10 +497,17 @@ export function createMock() {
         if (!isStaff(uid, z.gym_id) && !community) return J(route, 403, { code: "42501", message: "沒有權限" });
         if (z.kind === "spray" && !(body.holds?.some((h) => h.t === "s") && body.holds?.some((h) => h.t === "t")))
           return J(route, 400, { code: "22023", message: "路線要有起攀（S）和完攀（T），圈圈最多 60 個" });
+        // 手機產生的 id 重送：跟資料庫一樣回「已經有這筆」
+        if (body.id && db.routes.some((x) => x.id === body.id)) return J(route, 409, { code: "23505", message: 'duplicate key value violates unique constraint "routes_pkey"' });
         z.route_seq++;
         const first = body.holds?.find((h) => h.t === "s");
         const r = { id: uuid(), code: `${z.code}-${String(z.route_seq).padStart(2, "0")}`, style_tags: [], setter_note: null, comments_enabled: true, created_at: now(), archived_at: null, kind: "gym", created_by: uid, ...body, ...(first ? { pin_x: first.x, pin_y: first.y } : {}) };
         db.routes.push(r);
+        // 測試用：資料存進去了，但手機沒收到回覆（訊號差）
+        if (state.dropRouteReply) {
+          state.dropRouteReply = false;
+          return route.abort("connectionreset");
+        }
         return out([r]);
       }
       if (m === "PATCH") {

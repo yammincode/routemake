@@ -36,7 +36,11 @@ test("一則留言：留過後只能編輯或刪除再留；三則以上左右�
   assert.equal(mock.db.comments.filter((x) => !x.deleted_at).length, 1, "編輯不會多一則");
 
   await c.click('[role=dialog] button:text-is("刪除")');
+  await c.waitForTimeout(300);
+  assert.equal(mock.db.comments.filter((x) => !x.deleted_at).length, 1, "刪除要按兩次：按一次還在");
+  await c.click('[role=dialog] button:text-is("確定刪除？再按一次")');
   await c.waitForTimeout(500);
+  assert.equal(mock.db.comments.filter((x) => !x.deleted_at).length, 0, "按第二次才刪除");
   await c.fill('[role=dialog] textarea[placeholder^="公開留言"]', "重新留言");
   await c.click('[role=dialog] button:text-is("送出")');
   await c.waitForTimeout(500);

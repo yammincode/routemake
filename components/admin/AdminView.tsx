@@ -202,7 +202,11 @@ export default function AdminView() {
 
   return (
     <>
-      <p className="mt-0 mb-3 text-meta text-muted">你的身分：{roleLabel(access, gymId)}</p>
+      {/* 目前在管理哪一館（頁首不放館名：後台不是在看某一館） */}
+      <p className="mt-0 mb-3 text-sub">
+        正在管理 <b>{spray ? spray.name : (gym?.name ?? "")}</b>
+        <span className="text-meta text-muted">・你的身分：{roleLabel(access, gymId)}</span>
+      </p>
       {(access.is_owner || access.roles.some((r) => r.role === "manager")) && (
         <Button className="mb-3" onClick={() => router.push("/admin/usage")}>
           📊 使用狀況

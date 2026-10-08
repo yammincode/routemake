@@ -145,3 +145,26 @@ test(TITLE_UP, async () => {
   assert.deepEqual(O.errors, []);
   await O.ctx.close();
 });
+
+test("找不到頁面、畫面出錯：中文說明，不是英文白畫面", async () => {
+  const mock = createMock();
+  const { page } = await phone(browser, mock);
+  for (const path of ["/no-such-page", "/gym/nope"]) {
+    const res = await page.goto(BASE + path, { waitUntil: "networkidle" });
+    assert.equal(res.status(), 404, path);
+    assert.ok((await page.textContent("main")).includes("找不到這個頁面"), `${path} 顯示中文`);
+  }
+  await page.click('main button:text-is("回到選擇攀岩館")');
+  await page.waitForURL("**/gyms");
+
+  // 資料壞掉讓畫面出錯：顯示「出了點問題」和「重新整理」「回報問題」
+  const zA = mock.db.zones[0];
+  mock.addRoute(zA, 3, "藍", [], 50, 50).style_tags = null;
+  await page.goto(BASE + "/zone?id=" + zA.id, { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  const main = await page.textContent("main");
+  assert.ok(main.includes("出了點問題") && !/Application error|client-side exception/.test(main), "中文錯誤畫面");
+  assert.ok(await page.isVisible('main button:text-is("重新整理")'));
+  await page.click('main button:text-is("回報問題")');
+  await page.waitForURL("**/feedback");
+});

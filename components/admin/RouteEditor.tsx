@@ -7,7 +7,7 @@ import { CommentItem, CommentList } from "@/components/ui/Comments";
 import { ColorPicker, GradePicker, Label, TagPicker, TextField, Toggle } from "@/components/ui/Form";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/Toast";
-import { archiveRoute, createRoute, deleteComment, getComments, updateRoute, type Comment, type Route, type Zone } from "@/lib/data";
+import { archiveRoute, createRoute, deleteComment, getComments, newId, updateRoute, type Comment, type Route, type Zone } from "@/lib/data";
 import { ago } from "@/lib/date";
 import type { HoldColor } from "@/lib/design";
 
@@ -33,6 +33,8 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
   const [busy, setBusy] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [comments, setComments] = useState<Comment[] | null>(null);
+  // 這次新增的路線 id：訊號差重按時沿用，資料庫才認得是同一條
+  const [routeId] = useState(newId);
 
   useEffect(() => {
     if (r) getComments(r.id).then(setComments).catch(() => setComments([]));
@@ -47,7 +49,7 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
         await updateRoute(r.id, input);
         toast("已儲存");
       } else if ("x" in target) {
-        const created = await createRoute(zone.id, input, target.x, target.y);
+        const created = await createRoute(zone.id, input, target.x, target.y, routeId);
         toast(`已新增 ${created.code}（${gradeLabel(grade)} ${color}色）`);
       }
       onChanged();
@@ -100,7 +102,7 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
       <TextField id="rnote" maxLength={40} value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如：最後一手要果斷" />
       <Toggle checked={cm} onChange={setCm} label="開放這條路線留言" hint="關閉後也不能分享影片" />
       <Button variant="primary" disabled={busy} onClick={save}>
-        {r ? "儲存變更" : "新增路線"}
+        {busy ? "儲存中…" : r ? "儲存變更" : "新增路線"}
       </Button>
       {r && (
         <>

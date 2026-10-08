@@ -36,18 +36,9 @@ export default function StaffGate({ children }: { children: ReactNode }) {
   }
   if (!isStaffOf(access))
     return (
-      <>
-        <Empty>
-          這個帳號（<b className="text-ink">{access?.username}</b>）還沒有管理權限。請店長在管理後台「員工」輸入這個帳號名稱，指派為定線長或店長。
-        </Empty>
-        <p className="mt-3 text-note text-muted">
-          老闆第一次使用：在 Supabase 的 SQL Editor 執行
-          <code className="mt-1 block rounded-cell bg-sunk px-2 py-1.5 text-meta break-all text-ink">
-            update public.profiles set is_owner = true where username = &apos;{access?.username}&apos;;
-          </code>
-          執行後回到這裡重新整理。
-        </p>
-      </>
+      <Empty>
+        管理後台是給原岩員工用的。如果你是新來的定線長或店長，請店長在管理後台「員工」輸入你的帳號（<b className="text-ink">{access?.username}</b>），指派完成後重新整理這頁。
+      </Empty>
     );
   return <>{children}</>;
 }

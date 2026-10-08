@@ -1,5 +1,6 @@
-// 管理後台標路線、指派員工、操作紀錄；顧客看平面圖、記錄 Flash、留言、篩選；整區換線
+// 管理後台標路線、指派員工、操作紀錄；顧客看平面圖、記錄 Flash、留言、篩選；整區換線；訊號差不會多一條路線
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { after, before, test } from "node:test";
 import { BASE, WALL, createMock, launch, login, phone } from "./helpers.mjs";
 
@@ -75,6 +76,14 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
   assert.equal(mock.db.staff_roles.find((r) => r.gym_id === "mingde" && mock.db.profiles.find((p) => p.id === r.user_id)?.username === "setterx").role, "manager", "列表上直接改成店長");
   await a.click('main button:has-text("改成定線長")');
   await a.waitForTimeout(600);
+  // 移除員工要按兩次
+  const isStaff = () => mock.db.staff_roles.some((r) => mock.db.profiles.find((p) => p.id === r.user_id)?.username === "setterx");
+  await a.click('main button:text-is("移除")');
+  await a.waitForTimeout(300);
+  assert.ok(isStaff(), "按一次還沒移除");
+  await a.click('main button:text-is("確定移除？再按一次")');
+  await a.waitForTimeout(600);
+  assert.ok(!isStaff(), "按第二次才移除");
 
   // 操作紀錄
   await a.reload({ waitUntil: "networkidle" });
@@ -160,4 +169,42 @@ test("操作紀錄：店長看得到，篩選可用；定線長看不到", async
   await S.page.waitForTimeout(1000);
   assert.ok(!(await S.page.textContent("main")).includes("操作紀錄"), "定線長看不到操作紀錄");
   assert.deepEqual([...M.errors, ...S.errors], []);
+});
+
+test("訊號差：新增路線沒收到回覆，再按一次不會多一條；存檔時顯示儲存中", async () => {
+  const mock = createMock();
+  mock.addUser("boss", "password1", { nickname: "老闆", is_owner: true });
+  const zA = mock.db.zones[0];
+  mock.db.files["mingde/zones/A-1.jpg"] = fs.readFileSync(WALL);
+  zA.photo_path = "mingde/zones/A-1.jpg";
+  const { page: a, errors } = await phone(browser, mock);
+  await login(a, "boss", "password1", "/admin");
+  await a.waitForTimeout(800);
+  const wall = a.locator("main div.cursor-crosshair");
+  await wall.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  const bb = await wall.boundingBox();
+  await a.mouse.click(bb.x + bb.width * 0.5, bb.y + bb.height * 0.5);
+  await a.waitForTimeout(300);
+
+  // 網路慢：按鈕顯示「儲存中…」
+  await a.route("**/rest/v1/routes**", async (r) => {
+    if (r.request().method() === "POST") await new Promise((res) => setTimeout(res, 1200));
+    await r.fallback();
+  });
+  // 資料存進去了，但手機沒收到回覆
+  mock.state.dropRouteReply = true;
+  await a.click('[role=dialog] button:text-is("新增路線")');
+  await a.waitForTimeout(400);
+  assert.equal(await a.locator('[role=dialog] button:text-is("儲存中…")').count(), 1, "存檔時按鈕顯示儲存中");
+  await a.waitForTimeout(1500);
+  assert.equal(mock.db.routes.length, 1, "其實已經存進去");
+  assert.ok(await a.isVisible('[role=dialog] button:text-is("新增路線")'), "手機以為失敗：面板還開著，可以再按");
+
+  await a.click('[role=dialog] button:text-is("新增路線")');
+  await a.waitForTimeout(1800);
+  assert.equal(mock.db.routes.length, 1, "再按一次不會多一條");
+  assert.match(await a.locator("[role=status]").last().textContent(), /已新增 A1-01/);
+  assert.equal(await a.locator("[role=dialog]").count(), 0, "新增完成，面板關閉");
+  assert.equal(await a.locator("main ul li").count(), 1, "列表只有一條");
+  assert.deepEqual(errors, []);
 });

@@ -1,4 +1,4 @@
-// 難度膠帶顏色與 VB：後台選難度的按鈕塗成膠帶顏色；可以新增 VB 路線（分數比 V0 低）；顧客的難度篩選也有顏色
+// 難度膠帶顏色與 VB：後台選難度的按鈕塗成膠帶顏色；可以新增 VB 路線（分數比 V0 低）；顧客的難度篩選也有顏色；區域頁「顏色和分數怎麼看」
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { after, before, test } from "node:test";
@@ -56,4 +56,26 @@ test("難度按鈕用膠帶顏色、新增 VB 路線、顧客用顏色篩選", a
   assert.ok((await c.locator("main ul li").first().textContent()).includes("VB"));
   assert.deepEqual([...A.errors, ...C.errors], []);
   await Promise.all([A.ctx.close(), C.ctx.close()]);
+});
+
+test("區域頁「顏色和分數怎麼看」：第一次展開，按知道了收起來，重新進來還是收著", async () => {
+  const mock = createMock();
+  const zA = mock.db.zones[0];
+  mock.addRoute(zA, 3, "藍", [], 50, 50);
+  const { page, errors } = await phone(browser, mock);
+  await page.goto(BASE + "/zone?id=" + zA.id, { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  const note = page.locator("main [role=note]");
+  const text = await note.textContent();
+  assert.ok(text.includes("顏色是岩點的顏色") && text.includes("例如 V3") && text.includes("膠帶的顏色"), "說明圓點和膠帶顏色");
+  assert.match(text, /Flash：第一次嘗試就完攀，分數 ×1\.2/, "Flash 和倍數");
+  await page.click('main [role=note] button:text-is("知道了")');
+  assert.equal(await note.count(), 0, "按知道了收起來");
+  assert.ok(await page.isVisible('main button:has-text("顏色和分數怎麼看")'), "收成一行小字");
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  assert.equal(await note.count(), 0, "重新進來還是收著");
+  await page.click('main button:has-text("顏色和分數怎麼看")');
+  assert.equal(await note.count(), 1, "點一下可以再看");
+  assert.deepEqual(errors, []);
 });

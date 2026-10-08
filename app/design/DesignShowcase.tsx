@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow, GradeChip } from "@/components/ui/Chip";
+import { HowTo } from "@/components/ui/HowTo";
 import { SortList } from "@/components/ui/SortList";
 import { ScrollList } from "@/components/ui/ScrollList";
 import { AppVersion } from "@/components/ui/Version";
@@ -260,6 +261,11 @@ export default function DesignShowcase() {
           ))}
           {temp && <TempPin x={temp.x} y={temp.y} />}
         </WallPhoto>
+        <HowTo
+          id="design"
+          title="顏色和分數怎麼看"
+          lines={["照片上的圓點：顏色是岩點的顏色，數字是難度", "難度標籤（例如 V3）的顏色是牆上膠帶的顏色", "Flash：第一次嘗試就完攀，分數 ×1.2"]}
+        />
         <ChipRow>
           <Chip num pressed={grade == null} onClick={() => setGrade(null)}>
             全部

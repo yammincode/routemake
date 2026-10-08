@@ -98,7 +98,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Wall.tsx` | `WallPhoto`（`hideable`：左上角「隱藏路線／顯示路線」按鈕，只用在顧客區域頁）、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`、`ZoneList`、`ProgressBar`、`ResetList`、`NewRouteRow`、`NewRouteCard`、`GymRow`、`SoonBox`、`dueText` |
 | `FloorPlan.tsx` | `FloorPlan` |
-| `Comments.tsx` | `CommentItem`（含 👍 按讚）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
+| `Comments.tsx` | `CommentItem`（含 👍 按讚；刪除要按兩次）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
 | `Spray.tsx` | `HoldMarks`（照片上的圈圈：起攀 S 綠、路線點 藍、完攀 T 紅）、`HoldLegend`、`HoldTools`（選種類與大小）、`SprayRow`、`RouteThumb`（列表縮圖，放大到路線範圍）、`HOLD_TYPES`、`HOLD_SIZES` |
 | `Profile.tsx` | `Avatar`（暱稱第一個字）、`HexChart`（六角形能力表）、`ProfileCardView`（人物卡） |
 | `Tabs.tsx` | `Tabs`（路線卡片的紀錄／影片／留言分頁） |
@@ -106,7 +106,10 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Video.tsx` | `VideoStrip`（橫向滑動縮圖）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`（顧客分享影片） |
 | `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
+| `HowTo.tsx` | `HowTo`（「怎麼看」說明：第一次展開，按「知道了」收成一行，記在這支手機） |
 | `Toast.tsx` | `ToastProvider`、`useToast` |
 | `Icon.tsx` | `Icon`（flash、send、project、chat、lock、down、video、play） |
 
-頁面層級：`components/Header.tsx`（Logo＋場館切換）、`components/TabBar.tsx`（底部三個分頁）。
+頁面層級：`components/Header.tsx`（Logo＋場館切換；管理後台不給館，只有 Logo）、`components/TabBar.tsx`（底部三個分頁）、`components/ErrorScreen.tsx`（出錯、找不到頁面的中文畫面）。
+
+刪除、清除、移除這類不能復原的操作一律按兩次：第一次按鈕文字變成「確定○○？再按一次」。

@@ -16,7 +16,7 @@ const safeNext = (n: string | null) => {
   return p.startsWith("/welcome") ? lastGymPath() : p;
 };
 
-// 第一次登入填暱稱（也用來改暱稱）；預設帶入帳號名稱
+// 第一次登入填暱稱（也用來改暱稱）；暱稱會公開顯示，所以不帶入、也不能跟登入帳號一樣（別人知道帳號就能猜密碼）
 export default function NicknameForm() {
   const { ready, session, access, setNickname } = useAuth();
   const router = useRouter();
@@ -31,13 +31,15 @@ export default function NicknameForm() {
     if (ready && !session) router.replace(`/login?next=${encodeURIComponent(next)}`);
   }, [ready, session, next, router]);
 
-  const shown = value ?? access?.nickname ?? access?.username ?? "";
+  const shown = value ?? access?.nickname ?? "";
   const first = !access?.nickname;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const nick = shown.trim();
     if (nick.length < 1 || nick.length > 16) return setError("暱稱要 1–16 個字");
+    if (access?.username && nick.toLowerCase() === access.username.toLowerCase())
+      return setError("暱稱會公開顯示，請不要用登入帳號（別人知道帳號就能猜密碼）");
     setBusy(true);
     const err = await setNickname(nick);
     setBusy(false);
@@ -55,7 +57,7 @@ export default function NicknameForm() {
         <SetBox>
           <Label htmlFor="nickname">暱稱</Label>
           <TextField id="nickname" maxLength={16} value={shown} onChange={(e) => setValue(e.target.value)} placeholder="例如 小安" />
-          <Tip>1–16 個字，可以用中文</Tip>
+          <Tip>1–16 個字，可以用中文；會公開顯示，請不要用登入帳號</Tip>
         </SetBox>
         {error && (
           <p role="alert" className="mt-0 mb-3 text-note font-bold text-warn">

@@ -43,7 +43,12 @@ test("註冊流程與錯誤提示", async () => {
   await page.click("button[type=submit]");
   await page.waitForURL("**/welcome**");
   await page.waitForTimeout(400);
-  assert.equal(await page.inputValue("#nickname"), "ter0123456", "暱稱預設帶入帳號");
+  assert.equal(await page.inputValue("#nickname"), "", "暱稱不帶入登入帳號（暱稱會公開）");
+  await page.fill("#nickname", "TER0123456");
+  await page.click("button[type=submit]");
+  await page.waitForTimeout(300);
+  assert.match(await page.textContent("p[role=alert]"), /不要用登入帳號/, "暱稱不能跟登入帳號一樣");
+  assert.ok(page.url().includes("/welcome"), "還停在取暱稱");
   await page.fill("#nickname", "小安");
   await page.click("button[type=submit]");
   await page.waitForURL("**/me");
@@ -97,17 +102,28 @@ test("管理後台：未登入、沒權限、員工", async () => {
   await a.page.goto(BASE + "/admin", { waitUntil: "networkidle" });
   assert.ok((await a.page.textContent("main")).includes("請先登入"));
   await login(a.page, "climber88", "password1", "/admin");
-  assert.match(await a.page.textContent("main"), /ter|climber88.*還沒有管理權限/s);
-  assert.ok((await a.page.textContent("main code")).includes("where username = 'climber88'"), "顯示開通用的 SQL");
+  const denied = await a.page.textContent("main");
+  assert.ok(denied.includes("給原岩員工用") && denied.includes("climber88"), "顧客看到說明和自己的帳號");
+  assert.ok(!/SQL|update public|is_owner/.test(denied), "顧客看不到資料庫指令");
 
   const b = await phone(browser, mock);
   await login(b.page, "setter1", "password1", "/admin");
   await b.page.waitForTimeout(800);
   assert.ok(await b.page.isVisible("text=你的身分：定線長"));
+  assert.match(await b.page.textContent("main"), /正在管理\s*明德館/, "後台寫出正在管理哪一館");
   await b.page.goto(BASE + "/me", { waitUntil: "networkidle" });
   await b.page.waitForTimeout(500);
   assert.ok((await b.page.textContent("main")).includes("員工身分：明德館定線長"));
-  assert.deepEqual([...a.errors, ...b.errors], []);
+
+  // 別館的定線員：頁首不再寫「明德館」，看得到自己管的館
+  const g2 = mock.addUser("setter2", "password1", { nickname: "萬華定線" });
+  mock.db.staff_roles.push({ user_id: g2, gym_id: "g2", role: "setter" });
+  const c = await phone(browser, mock);
+  await login(c.page, "setter2", "password1", "/admin");
+  await c.page.waitForTimeout(800);
+  assert.match(await c.page.textContent("main"), /正在管理\s*萬華館/);
+  assert.equal(await c.page.locator('main button:has-text("明德館")').count(), 0, "後台頁首沒有「明德館」切換按鈕");
+  assert.deepEqual([...a.errors, ...b.errors, ...c.errors], []);
 });
 
 test("註冊：以為卡住又按一次會直接登入；太久沒回應會提示", async () => {
@@ -133,4 +149,35 @@ test("註冊：以為卡住又按一次會直接登入；太久沒回應會提�
   assert.equal(await B.page.textContent("button[type=submit]"), "註冊並登入", "按鈕可以再按");
   await B.ctx.close();
   await ctx.close();
+});
+
+test("登入頁：說明是路線專用帳號、明顯的註冊按鈕；看隱私權政策不會清掉打好的帳號密碼", async () => {
+  const mock = createMock();
+  const { page, errors } = await phone(browser, mock);
+  await page.goto(BASE + "/login?next=/me", { waitUntil: "networkidle" });
+  assert.ok((await page.textContent("main")).includes("跟入場的會員系統不同"), "說明跟會員系統是不同帳號");
+  await page.click('main button:text-is("第一次用？註冊帳號")');
+  assert.equal(await page.textContent("main h1"), "註冊帳號");
+  assert.ok((await page.textContent("main")).includes("請記下帳號和密碼"));
+  await page.fill("#username", "newbie01");
+  await page.fill("#password", "password1");
+
+  await page.click('main button:text-is("隱私權政策")');
+  assert.ok((await page.textContent("[role=dialog]")).includes("我們蒐集哪些資料"), "在面板裡看隱私權政策");
+  await page.click('[role=dialog] button:text-is("看完了，回到註冊")');
+  assert.equal(await page.inputValue("#username"), "newbie01", "帳號還在");
+  assert.equal(await page.inputValue("#password"), "password1", "密碼還在");
+  await page.click('main button:text-is("留言與影片規範")');
+  assert.ok((await page.textContent("[role=dialog]")).includes("歡迎這樣留言"));
+  await page.keyboard.press("Escape");
+  assert.ok(page.url().includes("/login"), "一直停在註冊頁");
+
+  // 直接打開說明頁：有「‹ 返回」（加到主畫面後沒有瀏覽器的上一頁）
+  for (const path of ["/privacy", "/rules"]) {
+    await page.goto(BASE + path, { waitUntil: "networkidle" });
+    assert.ok(await page.isVisible('main button:has-text("返回")'), `${path} 有返回`);
+  }
+  await page.click('main button:has-text("返回")');
+  await page.waitForURL((u) => u.pathname !== "/rules");
+  assert.deepEqual(errors, []);
 });

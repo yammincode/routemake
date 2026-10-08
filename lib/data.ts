@@ -229,15 +229,40 @@ export async function createZone(gym: string, code: string, name: string, sort: 
 export async function reorderZones(gym: string, ids: string[]) {
   must(await supabase().rpc("reorder_zones", { p_gym: gym, p_zones: ids }));
 }
+// 新的 id（UUID v4）：手機先產生，重送時資料庫認得是同一筆
+// 不用 crypto.randomUUID：試用版用 http://192.168… 開時瀏覽器不提供
+export function newId(): string {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 export type RouteInput = Pick<Route, "grade" | "hold_color" | "style_tags" | "setter_note" | "comments_enabled">;
-export async function createRoute(zoneId: string, input: RouteInput, x: number, y: number): Promise<Route> {
-  return must(
-    await supabase()
+const SAVE_WAIT_MS = 15000;
+// 新增路線：id 由手機產生（同一次新增重按都用同一個 id）
+// 訊號差時資料可能已經存進去、只是手機沒收到回覆：重按時資料庫回「已經有這筆」，就直接拿那一筆，不會多一條
+// 最多等 15 秒，不會一直卡在「儲存中」
+export async function createRoute(zoneId: string, input: RouteInput, x: number, y: number, id = newId()): Promise<Route> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), SAVE_WAIT_MS);
+  try {
+    const r = await supabase()
       .from("routes")
-      .insert({ zone_id: zoneId, ...input, pin_x: +x.toFixed(3), pin_y: +y.toFixed(3) })
+      .insert({ id, zone_id: zoneId, ...input, pin_x: +x.toFixed(3), pin_y: +y.toFixed(3) })
       .select(ROUTE_COLS)
-      .single()
-  );
+      .abortSignal(ctl.signal)
+      .single();
+    if (r.error?.code === "23505") {
+      const got = await supabase().from("routes").select(ROUTE_COLS).eq("id", id).maybeSingle();
+      if (got.data) return got.data as Route;
+    }
+    if (ctl.signal.aborted) throw new Error("網路太慢，請確認網路後再按一次（不會多一條）");
+    return must(r) as Route;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 export async function updateRoute(id: string, input: RouteInput) {
   must(await supabase().from("routes").update(input).eq("id", id));
@@ -493,7 +518,7 @@ export async function uploadVideo(
   const since = new Date(Date.now() - 86400000).toISOString();
   const recent = await supabase().from("route_videos").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", since);
   if ((recent.count ?? 0) >= VIDEO_DAILY_LIMIT) throw new Error(`每人 24 小時內最多分享 ${VIDEO_DAILY_LIMIT} 支影片，明天再來`);
-  const path = `${gymId}/${routeId}/${userId}/${crypto.randomUUID()}.${ext}`;
+  const path = `${gymId}/${routeId}/${userId}/${newId()}.${ext}`;
   const up = await supabase().storage.from("route-videos").upload(path, file, { contentType: type, cacheControl: "31536000" });
   if (up.error) {
     const m = up.error.message ?? "";

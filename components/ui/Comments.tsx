@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useState, type ReactNode } from "react";
 import Icon from "./Icon";
 
 // 留言（原型 .cmt）；likes／liked／onLike：👍 按讚（沒有 onLike 時只顯示讚數）；edited：顯示「已編輯」
@@ -25,6 +27,8 @@ export function CommentItem({
   liked?: boolean;
   onLike?: () => void;
 }) {
+  // 刪除要按兩次（刪了不能復原）
+  const [confirmDel, setConfirmDel] = useState(false);
   return (
     <div className="h-full rounded-btn bg-sunk px-3 py-2.5">
       <div className="flex items-center justify-between text-meta text-muted">
@@ -46,8 +50,8 @@ export function CommentItem({
             </button>
           )}
           {onDelete && (
-            <button onClick={onDelete} className="px-1 py-0.5 text-meta text-warn">
-              刪除
+            <button onClick={() => (confirmDel ? onDelete() : setConfirmDel(true))} className={`px-1 py-0.5 text-meta text-warn ${confirmDel ? "font-bold" : ""}`}>
+              {confirmDel ? "確定刪除？再按一次" : "刪除"}
             </button>
           )}
         </span>

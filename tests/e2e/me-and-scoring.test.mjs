@@ -58,3 +58,54 @@ test("我的紀錄：統計、積分、成長比較、改計分規則後重算",
   assert.ok((await tiles()).startsWith("94今天"), "改規則後重算：" + (await tiles()));
   assert.deepEqual([...errors, ...B.errors], []);
 });
+
+test("「嘗試中」之後完攀：日期改成今天、分數算今天；清除紀錄要按兩次", async () => {
+  const mock = createMock();
+  const me = mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zA = mock.db.zones[0];
+  const r4 = mock.addRoute(zA, 4, "藍", [], 50, 50);
+  const r2 = mock.addRoute(zA, 2, "紅", [], 20, 30);
+  mock.addAscent(me, r4, "project", taipeiDay(-6), { private_note: "卡在最後一手" });
+  mock.addAscent(me, r2, "project", taipeiDay(-3));
+  const { page, errors } = await phone(browser, mock);
+  await login(page, "climber88", "password1", "/zone?id=" + zA.id);
+  await page.waitForTimeout(800);
+  const asc = (r) => mock.db.ascents.find((a) => a.route_id === r.id);
+
+  // 上週試過、今天爬完：日期要改成今天（不然分數記到第一次嘗試那天）
+  await page.locator("main ul li button", { hasText: "藍色" }).click();
+  await page.click('[role=dialog] button:has-text("完攀")');
+  await page.waitForTimeout(600);
+  assert.equal(asc(r4).status, "send");
+  assert.equal(asc(r4).climbed_on, taipeiDay(0), "嘗試中改成完攀，日期是今天");
+  assert.equal(asc(r4).private_note, "卡在最後一手", "心得保留");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+
+  // 嘗試中改成 Flash：一樣記今天，並提醒試過幾次一般記完攀
+  await page.locator("main ul li button", { hasText: "紅色" }).click();
+  await page.click('[role=dialog] button:has-text("Flash")');
+  await page.waitForTimeout(600);
+  assert.equal(asc(r2).climbed_on, taipeiDay(0));
+  assert.match(await page.locator("[role=status]").last().textContent(), /一般記「完攀」/);
+
+  // 已經是完攀的紀錄再改狀態：日期不變（是更正，不是新的一次）
+  mock.addAscent(me, mock.addRoute(zA, 3, "綠", [], 70, 60), "send", taipeiDay(-2));
+  await page.keyboard.press("Escape");
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  await page.locator("main ul li button", { hasText: "綠色" }).click();
+  await page.click('[role=dialog] button:has-text("Flash")');
+  await page.waitForTimeout(600);
+  assert.equal(mock.db.ascents.find((a) => a.status === "flash" && a.climbed_on === taipeiDay(-2))?.status, "flash", "完攀改 Flash 日期不變");
+
+  // 清除紀錄要按兩次
+  await page.click('[role=dialog] button:text-is("清除紀錄")');
+  await page.waitForTimeout(300);
+  assert.equal(mock.db.ascents.length, 3, "按一次還沒清除");
+  assert.ok(await page.isVisible('[role=dialog] button:has-text("確定清除？心得也會一起刪掉，再按一次")'));
+  await page.click('[role=dialog] button:has-text("確定清除？")');
+  await page.waitForTimeout(600);
+  assert.equal(mock.db.ascents.length, 2, "按第二次才清除");
+  assert.deepEqual(errors, []);
+});

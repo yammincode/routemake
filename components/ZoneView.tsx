@@ -7,6 +7,7 @@ import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
 import { BackLink, Empty } from "@/components/ui/Card";
 import { Chip, ChipRow, GradeChip } from "@/components/ui/Chip";
+import { HowTo } from "@/components/ui/HowTo";
 import { dueText } from "@/components/ui/Gym";
 import { CommentCount, Points, RouteList, RouteRow, Tags } from "@/components/ui/Route";
 import { NoPhoto, Pin, WallPhoto } from "@/components/ui/Wall";
@@ -136,6 +137,17 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
 
       {routes.length > 0 && (
         <>
+          {/* 第一次來的人看不懂：圓點顏色、膠帶顏色、Flash、分數 */}
+          <HowTo
+            id="zone"
+            title="顏色和分數怎麼看"
+            lines={[
+              `照片上的圓點：顏色是岩點的顏色（下面的顏色篩選也是），數字是難度${zone.grade_system === "yds" ? "（10a 就是 5.10a）" : ""}`,
+              `難度標籤（例如 ${gradeLabel(grades[0])}）的顏色是牆上膠帶的顏色`,
+              `Flash：第一次嘗試就完攀${rules ? `，分數 ×${rules.flash_multiplier}` : ""}；試過幾次才爬完記「完攀」`,
+              "難度越高、風格標籤越多，分數越高",
+            ]}
+          />
           <ChipRow>
             <Chip num pressed={grade == null} onClick={() => setGrade(null)}>
               全部

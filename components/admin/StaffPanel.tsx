@@ -21,6 +21,7 @@ export default function StaffPanel({ gymId, gymName }: { gymId: string; gymName:
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<UserHit[] | null>(null);
   const [picked, setPicked] = useState<UserHit | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null); // 移除要按兩次
   const [role, setRole] = useState<Role>("setter");
   const [busy, setBusy] = useState(false);
   const owner = !!access?.is_owner;
@@ -109,8 +110,16 @@ export default function StaffPanel({ gymId, gymName }: { gymId: string; gymName:
                         改成{ROLE_NAME[other]}
                       </button>
                     )}
-                    <button className="text-meta text-warn" disabled={busy} onClick={() => void run(() => removeStaff(s.user_id, gymId), `已移除 ${s.nickname ?? ""}`)}>
-                      移除
+                    <button
+                      className={`text-meta text-warn ${confirmRemove === s.user_id ? "font-bold" : ""}`}
+                      disabled={busy}
+                      onClick={() =>
+                        confirmRemove === s.user_id
+                          ? void run(() => removeStaff(s.user_id, gymId), `已移除 ${s.nickname ?? ""}`).then(() => setConfirmRemove(null))
+                          : setConfirmRemove(s.user_id)
+                      }
+                    >
+                      {confirmRemove === s.user_id ? "確定移除？再按一次" : "移除"}
                     </button>
                   </span>
                 )}

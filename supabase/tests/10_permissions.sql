@@ -117,6 +117,27 @@ select tests.lives('定線員：第二條路線',
 select tests.ok('路線編號自動產生 A1-01、A1-02',
   (select array_agg(code order by code) from public.routes) = array['A1-01', 'A1-02']);
 select tests.ok('路線建立者自動填入', (select bool_and(created_by = :ST) from public.routes));
+-- 訊號差重按：App 先產生路線 id，同一個 id 第二次新增會被擋，不會多一條（測完整段復原，不影響後面的路線數）
+do $$
+declare
+  v_id uuid := gen_random_uuid();
+  v_zone uuid := (select v from ids where k = 'zoneA');
+  v_ok boolean := false;
+begin
+  begin
+    insert into public.routes (id, zone_id, grade, hold_color, pin_x, pin_y) values (v_id, v_zone, 2, '黃', 10, 10);
+    begin
+      insert into public.routes (id, zone_id, grade, hold_color, pin_x, pin_y) values (v_id, v_zone, 2, '黃', 10, 10);
+    exception when unique_violation then
+      v_ok := true;
+    end;
+    v_ok := v_ok and (select count(*) from public.routes where id = v_id) = 1;
+    raise exception 'rollback';
+  exception when others then
+    if sqlerrm <> 'rollback' then v_ok := false; end if;
+  end;
+  perform tests.ok('定線員：App 產生的路線 id 重送會被擋（訊號差重按不會多一條）', v_ok);
+end $$;
 select tests.throws('定線員：不能在別館新增路線',
   format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 1, ''紅'', 1, 1)', (select v from ids where k = 'zoneG2')));
 select tests.throws('定線員：不能直接呼叫別館取號', format('select public.next_route_code(%L)', (select v from ids where k = 'zoneG2')));

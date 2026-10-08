@@ -8,8 +8,8 @@ import Icon from "@/components/ui/Icon";
 import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { GYMS, gymPath, saveLastGym, SPRAY_WALLS, sprayPath, type Gym } from "@/lib/gyms";
 
-// 頁首：左上 Logo，右上場館切換（原型 .hd）
-export default function Header({ gym }: { gym: Gym }) {
+// 頁首：左上 Logo，右上場館切換（原型 .hd）；沒給 gym（管理後台）只有 Logo，館名由後台自己顯示
+export default function Header({ gym }: { gym?: Gym }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -19,6 +19,12 @@ export default function Header({ gym }: { gym: Gym }) {
     router.push(gymPath(g.id));
   };
 
+  if (!gym)
+    return (
+      <div className="mb-2.5 flex items-center justify-between">
+        <Logo />
+      </div>
+    );
   return (
     <>
       <div className="mb-2.5 flex items-center justify-between">

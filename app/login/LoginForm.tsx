@@ -1,15 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { lastGymPath } from "@/lib/gyms";
 import { backOr, safeInternalPath } from "@/lib/nav";
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { PrivacyContent, RulesContent } from "@/components/LegalDocs";
 import { Button } from "@/components/ui/Button";
 import { BackLink, PageTitle, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { Label, TextField } from "@/components/ui/Form";
+import Sheet, { SheetTitle } from "@/components/ui/Sheet";
 import { SetBox } from "@/components/ui/Stats";
 import { isValidUsername, PASSWORD_MIN, USERNAME_RULE } from "@/lib/auth";
 
@@ -47,6 +48,8 @@ export default function LoginForm() {
   const [showPw, setShowPw] = useState(mode === "signup");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 隱私權政策、規範用彈出面板看，不離開這頁（離開再回來，打好的帳號密碼會不見）
+  const [doc, setDoc] = useState<"privacy" | "rules" | null>(null);
 
   // 已經登入就直接回去
   useEffect(() => {
@@ -79,6 +82,11 @@ export default function LoginForm() {
       <PageTitle sub={mode === "login" ? "登入後就能記錄完攀、寫心得和留言" : "取一個帳號名稱，設定密碼就能開始使用"}>
         {mode === "login" ? "登入" : "註冊帳號"}
       </PageTitle>
+      <Tip>
+        {mode === "login"
+          ? "這是原岩路線專用的帳號，跟入場的會員系統不同；第一次使用請先註冊。"
+          : "這是原岩路線專用的帳號，跟入場的會員系統不同。請記下帳號和密碼，忘記時要請櫃檯協助。"}
+      </Tip>
       <ChipRow>
         <Chip pressed={mode === "login"} onClick={() => switchMode("login")}>
           登入
@@ -149,14 +157,32 @@ export default function LoginForm() {
         </Button>
       </form>
       {mode === "login" ? (
-        <Tip>忘記密碼請洽櫃檯。</Tip>
+        <>
+          <Button className="mt-3" onClick={() => switchMode("signup")}>
+            第一次用？註冊帳號
+          </Button>
+          <Tip>忘記密碼請洽櫃檯。</Tip>
+        </>
       ) : (
         <Tip>
           註冊即表示你同意
-          <Link href="/privacy" className="text-accent underline">隱私權政策</Link>和
-          <Link href="/rules" className="text-accent underline">留言與影片規範</Link>。
+          <button type="button" className="text-accent underline" onClick={() => setDoc("privacy")}>
+            隱私權政策
+          </button>
+          和
+          <button type="button" className="text-accent underline" onClick={() => setDoc("rules")}>
+            留言與影片規範
+          </button>
+          。
         </Tip>
       )}
+      <Sheet open={doc != null} onClose={() => setDoc(null)}>
+        <SheetTitle>{doc === "rules" ? "留言與影片規範" : "隱私權政策"}</SheetTitle>
+        {doc === "rules" ? <RulesContent /> : <PrivacyContent />}
+        <Button className="mt-6" onClick={() => setDoc(null)}>
+          看完了，回到註冊
+        </Button>
+      </Sheet>
     </>
   );
 }

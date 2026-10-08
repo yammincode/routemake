@@ -3,7 +3,6 @@ import UsageView from "@/components/admin/UsageView";
 import Header from "@/components/Header";
 import StaffGate from "@/components/StaffGate";
 import { PageTitle } from "@/components/ui/Card";
-import { LIVE_GYM } from "@/lib/gyms";
 
 export const metadata: Metadata = { title: "使用狀況 | 原岩路線" };
 
@@ -11,7 +10,7 @@ export const metadata: Metadata = { title: "使用狀況 | 原岩路線" };
 export default function UsagePage() {
   return (
     <>
-      <Header gym={LIVE_GYM} />
+      <Header />
       <PageTitle sub="有多少人在用、用得多不多">使用狀況</PageTitle>
       <StaffGate>
         <UsageView />
