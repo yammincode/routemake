@@ -88,9 +88,11 @@ test("照片雙指放大、還原", async () => {
   assert.deepEqual(errors, []);
 });
 
-test("隱藏路線點：只看岩牆、點不到、放大時也能切換、篩選的淡化保留", async () => {
+test("隱藏路線點：看不到也點不到、放大時可切換、篩選淡化保留、沒路線不顯示、重新進來會顯示、不擋右下角的路線點", async () => {
   const mock = createMock();
   const zA = seed(mock);
+  // 起步點在右下角的路線（按鈕不能擋住它）
+  mock.addRoute(zA, 3, "黃", [], 90, 92);
   const zB = mock.db.zones[1];
   mock.db.files["mingde/zones/A-2.jpg"] = fs.readFileSync(WALL);
   zB.photo_path = "mingde/zones/A-2.jpg";
@@ -109,6 +111,16 @@ test("隱藏路線點：只看岩牆、點不到、放大時也能切換、篩�
   const hide = page.locator('main button:text-is("隱藏路線")');
   const show = page.locator('main button:text-is("顯示路線")');
 
+  // 右下角的標記點得到（不會被按鈕擋住）
+  await wall.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  const corner = await page.locator('main button[aria-label^="V3"]').boundingBox();
+  await page.mouse.click(corner.x + corner.width / 2, corner.y + corner.height / 2);
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator("[role=dialog]").count(), 1, "右下角的標記點得到");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator("[role=dialog]").count(), 0);
+
   // 先篩選 V2，V4 的標記變淡
   await page.click('main button[aria-pressed]:text-is("V2")');
   assert.match(await pin.getAttribute("class"), /opacity-\[0\.16\]/);
@@ -116,12 +128,12 @@ test("隱藏路線點：只看岩牆、點不到、放大時也能切換、篩�
   const box = await pin.boundingBox();
 
   // 隱藏：標記看不到、點原本的位置也不會打開路線
-  assert.equal(await hide.getAttribute("aria-pressed"), "false");
   await hide.click();
   await page.waitForTimeout(300);
   assert.equal(await pin.isVisible(), false, "標記隱藏");
   assert.equal(await page.locator('main button[aria-label^="V2"]').isVisible(), false);
-  assert.equal(await show.getAttribute("aria-pressed"), "true");
+  assert.equal(await hide.count(), 0, "按鈕變成「顯示路線」");
+  assert.equal(await show.count(), 1);
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(300);
   assert.equal(await page.locator("[role=dialog]").count(), 0, "隱藏時點不到標記");

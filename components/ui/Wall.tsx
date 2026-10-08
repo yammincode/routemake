@@ -57,7 +57,8 @@ export function TempPin({ x, y }: { x: number; y: number }) {
 
 // 區域照片＋標記：可雙指放大（1–4 倍）、放大後單指拖曳、點兩下還原；標記大小不跟著放大
 // setter=true 時顯示虛線框，點空白處回傳百分比座標（放大時一樣準）
-// hideable=true 時右下角有「隱藏路線」按鈕，按了標記淡出、點不到，只看岩牆（不記住，重新進來會顯示）
+// hideable=true 時左上角有「隱藏路線」按鈕，按了標記淡出、點不到，只看岩牆（不記住，重新進來會顯示）
+// 放左上角：起步點多在照片下半部，右上角是放大時的「還原」
 export function WallPhoto({
   src,
   alt,
@@ -183,12 +184,11 @@ export function WallPhoto({
       )}
       {hideable && (
         <button
-          aria-pressed={hidden}
           onClick={(e) => {
             e.stopPropagation();
             setHidden((h) => !h);
           }}
-          className="absolute right-2 bottom-2 rounded-full bg-ink/80 px-3 py-1 text-meta font-bold text-surface"
+          className="absolute top-2 left-2 rounded-full bg-ink/80 px-3 py-1 text-meta font-bold text-surface"
         >
           {hidden ? "顯示路線" : "隱藏路線"}
         </button>
