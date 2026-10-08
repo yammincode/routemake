@@ -36,6 +36,7 @@ import { ago } from "@/lib/date";
 import { withCache } from "@/lib/offline";
 import { GRADES } from "@/lib/design";
 import type { SprayWall } from "@/lib/gyms";
+import { herePath } from "@/lib/nav";
 
 const SORTS: { key: SpraySort; label: string }[] = [
   { key: "new", label: "最新" },
@@ -117,7 +118,7 @@ export default function SprayView({ wall }: { wall: SprayWall }) {
   };
 
   const toggleLike = async (r: SprayRoute) => {
-    if (!session) return router.push(`/login?next=${encodeURIComponent(location.pathname)}`);
+    if (!session) return router.push(`/login?next=${encodeURIComponent(herePath())}`);
     patch(r.id, { liked: !r.liked, likes: r.likes + (r.liked ? -1 : 1) });
     try {
       await (r.liked ? unlikeRoute(r.id) : likeRoute(r.id));
@@ -179,7 +180,7 @@ export default function SprayView({ wall }: { wall: SprayWall }) {
           </Button>
         ) : (
           kind === "community" && (
-            <Button className="mb-3" onClick={() => router.push(`/login?next=${encodeURIComponent(location.pathname)}`)}>
+            <Button className="mb-3" onClick={() => router.push(`/login?next=${encodeURIComponent(herePath())}`)}>
               登入後出路線
             </Button>
           )

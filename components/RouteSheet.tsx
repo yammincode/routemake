@@ -19,6 +19,7 @@ import { isStaffOf } from "@/lib/auth";
 import { clearAscent, deleteComment, editComment, getComments, likeComment, postComment, saveAscent, unlikeComment, type Ascent, type Comment, type Route } from "@/lib/data";
 import { ago, md, todayYmd, ymd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, STATUS_LABEL, type Status } from "@/lib/design";
+import { herePath } from "@/lib/nav";
 import { isNetworkError, queueAscent } from "@/lib/offline";
 import { ascentPoints, routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
@@ -248,7 +249,7 @@ function RouteBody({
     }
   };
 
-  const toLogin = () => router.push(`/login?next=${encodeURIComponent(location.pathname)}`);
+  const toLogin = () => router.push(`/login?next=${encodeURIComponent(herePath())}`);
 
   // 自己的留言排第一，其他依讚數、新到舊；每人每條路線只能一則
   const uid = session?.user.id;

@@ -21,7 +21,7 @@ import {
 } from "@/lib/data";
 import { ago, daysUntil, isNew } from "@/lib/date";
 import { gradeLabel, type HoldColor, STYLE_TAGS } from "@/lib/design";
-import { backOr } from "@/lib/nav";
+import { backOr, upTo } from "@/lib/nav";
 import { overlayPending, withCache } from "@/lib/offline";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
@@ -99,7 +99,8 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
 
   return (
     <>
-      <BackLink onClick={() => backOr(router, `/gym/${zone.gym_id}`)}>{gym.name}</BackLink>
+      {/* 一定回這間館的首頁（登入回來時上一頁是同一區） */}
+      <BackLink onClick={() => upTo(router, `/gym/${zone.gym_id}`)}>{gym.name}</BackLink>
       <h1 className="mt-1 mb-1.5 text-title font-black">{zone.name}</h1>
       <p className="mt-0 mb-[18px] text-sub text-muted">
         {routes.length} 條路線{session ? `，完成 ${done} 條` : ""}

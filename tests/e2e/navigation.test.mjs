@@ -1,4 +1,4 @@
-// 入口頁 → 選擇攀岩館 → 館 → 區域，返回與上一頁
+// 入口頁 → 選擇攀岩館 → 館 → 區域，返回與上一頁；「‹ 選擇攀岩館」「‹ 館名」一定到那一頁；登入後回到原本的區域
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { after, before, test } from "node:test";
@@ -68,4 +68,80 @@ test("入口頁、選館、返回都照順序", async () => {
   assert.ok((await page.textContent("main")).includes("中和館"), "我的紀錄頁首顯示上次選的館");
   assert.deepEqual(await page.locator("nav a").allTextContents(), ["館內路線", "人物卡", "我的紀錄"], "一般人看不到管理後台分頁");
   assert.deepEqual(errors, []);
+});
+
+const TITLE_UP = "「‹ 選擇攀岩館」「‹ 館名」一定到那一頁（從我的紀錄、換館、登入回來都對）；上一頁剛好是那頁才退回";
+test(TITLE_UP, async () => {
+  const mock = createMock();
+  mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zA = mock.db.zones.find((z) => z.gym_id === "mingde" && z.code === "A1");
+  mock.addRoute(zA, 4, "藍", [], 50, 50);
+  const { page, errors } = await phone(browser, mock);
+  const up = 'main button:has-text("選擇攀岩館")';
+  const histLen = () => page.evaluate(() => history.length);
+
+  // 選館頁 → 館 → 選擇攀岩館：上一頁就是選館頁，退回去（不多疊一頁）
+  await page.goto(BASE + "/gyms", { waitUntil: "networkidle" });
+  await page.click('main button:has-text("明德館")');
+  await page.waitForURL("**/gym/mingde");
+  await page.waitForTimeout(400);
+  const n = await histLen();
+  await page.click(up);
+  await page.waitForURL("**/gyms");
+  assert.equal(await histLen(), n, "退回選館頁，不多一頁");
+
+  // 我的紀錄 → 底部「館內路線」→ 選擇攀岩館：到選館頁（以前會退回我的紀錄）
+  await page.goto(BASE + "/me", { waitUntil: "networkidle" });
+  await page.click('nav a:has-text("館內路線")');
+  await page.waitForURL("**/gym/mingde");
+  await page.waitForTimeout(400);
+  await page.click(up);
+  await page.waitForURL("**/gyms");
+  assert.equal(new URL(page.url()).pathname, "/gyms", "從我的紀錄進館，選擇攀岩館要到選館頁");
+
+  // 右上角換到中和館 → 選擇攀岩館：到選館頁（以前會退回明德館）
+  await page.click('main button:has-text("明德館")');
+  await page.waitForURL("**/gym/mingde");
+  await page.waitForTimeout(400);
+  await page.click('main button:has-text("明德館"):has(img)');
+  await page.click('[role=dialog] button:has-text("中和館")');
+  await page.waitForURL("**/gym/g3");
+  await page.waitForTimeout(400);
+  await page.click(up);
+  await page.waitForURL("**/gyms");
+  assert.equal(new URL(page.url()).pathname, "/gyms", "換館後，選擇攀岩館要到選館頁");
+
+  // 訪客在區域頁按 Flash → 登入 → 回到同一區；「‹ 明德館」回館首頁（以前會退回同一區）
+  await page.goto(BASE + "/gym/mingde", { waitUntil: "networkidle" });
+  await page.locator("main button", { hasText: "A1 區" }).first().click();
+  await page.waitForURL("**/zone?id=**");
+  await page.waitForTimeout(500);
+  await page.click('main ul li button:has-text("藍色")');
+  await page.click('[role=dialog] button:has-text("Flash")');
+  await page.waitForURL("**/login?**");
+  assert.equal(new URL(page.url()).searchParams.get("next"), "/zone?id=" + zA.id, "登入後要回到這一區（帶區域編號）");
+  await page.fill("#username", "climber88");
+  await page.fill("#password", "password1");
+  await page.click("button[type=submit]");
+  await page.waitForURL((u) => u.pathname === "/zone");
+  await page.waitForTimeout(800);
+  assert.equal(new URL(page.url()).searchParams.get("id"), zA.id);
+  assert.equal(await page.textContent("main h1"), "A1 區", "登入後回到同一區");
+  await page.click('main button:has-text("明德館")');
+  await page.waitForURL("**/gym/mingde");
+  assert.equal(await page.textContent("main h1"), "今天爬哪一區？", "‹ 明德館 回到館首頁");
+  assert.deepEqual(errors, []);
+
+  // 舊手機（沒有 Navigation API）：一樣到選館頁
+  const O = await phone(browser, mock);
+  await O.ctx.addInitScript(() => Object.defineProperty(window, "navigation", { value: undefined, configurable: true }));
+  await O.page.goto(BASE + "/gyms", { waitUntil: "networkidle" });
+  await O.page.click('main button:has-text("明德館")');
+  await O.page.waitForURL("**/gym/mingde");
+  await O.page.waitForTimeout(400);
+  assert.equal(await O.page.evaluate(() => window.navigation), undefined);
+  await O.page.click(up);
+  await O.page.waitForURL("**/gyms");
+  assert.deepEqual(O.errors, []);
+  await O.ctx.close();
 });

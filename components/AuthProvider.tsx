@@ -4,6 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { authErrorMessage, usernameToEmail, type Access } from "@/lib/auth";
+import { herePath } from "@/lib/nav";
 import { clearCache } from "@/lib/offline";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { markOpen } from "@/lib/usage";
@@ -89,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 第一次登入還沒填暱稱 → 先去填
   useEffect(() => {
     if (session && access && !access.nickname && pathname !== "/welcome" && pathname !== "/login") {
-      router.replace(`/welcome?next=${encodeURIComponent(pathname)}`);
+      router.replace(`/welcome?next=${encodeURIComponent(herePath())}`);
     }
   }, [session, access, pathname, router]);
 
