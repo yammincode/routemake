@@ -244,7 +244,7 @@ export default function DesignShowcase() {
 
       <Block title="區域頁：照片、標記、篩選">
         <Toggle checked={setter} onChange={setSetter} label="管理模式（點照片新增）" />
-        <WallPhoto src={wall.uri} alt="A 區照片" setter={setter} onPick={(x, y) => setTemp({ x, y })}>
+        <WallPhoto src={wall.uri} alt="A 區照片" setter={setter} hideable={!setter} onPick={(x, y) => setTemp({ x, y })}>
           {routes.map((r) => (
             <Pin
               key={r.code}

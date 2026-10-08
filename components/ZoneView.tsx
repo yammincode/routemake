@@ -26,7 +26,7 @@ import { overlayPending, withCache } from "@/lib/offline";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
-// 區域頁：照片＋起步點標記、難度／顏色／風格篩選、路線列表
+// 區域頁：照片＋起步點標記（可隱藏，只看岩牆）、難度／顏色／風格篩選、路線列表
 export default function ZoneView({ zoneId }: { zoneId: string }) {
   const { session, ready } = useAuth();
   const router = useRouter();
@@ -111,7 +111,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
       </p>
 
       {src ? (
-        <WallPhoto src={src} alt={`${zone.name}照片`}>
+        <WallPhoto src={src} alt={`${zone.name}照片`} hideable={routes.length > 0}>
           {routes.map((r) => {
             const s = status(r);
             return (

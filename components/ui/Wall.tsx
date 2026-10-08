@@ -57,22 +57,26 @@ export function TempPin({ x, y }: { x: number; y: number }) {
 
 // 區域照片＋標記：可雙指放大（1–4 倍）、放大後單指拖曳、點兩下還原；標記大小不跟著放大
 // setter=true 時顯示虛線框，點空白處回傳百分比座標（放大時一樣準）
+// hideable=true 時右下角有「隱藏路線」按鈕，按了標記淡出、點不到，只看岩牆（不記住，重新進來會顯示）
 export function WallPhoto({
   src,
   alt,
   setter = false,
+  hideable = false,
   onPick,
   children,
 }: {
   src: string;
   alt: string;
   setter?: boolean;
+  hideable?: boolean;
   onPick?: (x: number, y: number) => void;
   children?: ReactNode;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
   const [view, setView] = useState({ s: 1, x: 0, y: 0 });
+  const [hidden, setHidden] = useState(false);
   const pts = useRef(new Map<number, { x: number; y: number }>());
   const start = useRef<{ s: number; x: number; y: number; d: number; cx: number; cy: number } | null>(null);
   const moved = useRef(false);
@@ -164,7 +168,7 @@ export function WallPhoto({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={src} alt={alt} draggable={false} className="block h-auto w-full select-none" />
-        {children}
+        <div className={`absolute inset-0 transition-[opacity,visibility] duration-150 ${hideable && hidden ? "invisible opacity-0" : ""}`}>{children}</div>
       </div>
       {zoomed && (
         <button
@@ -175,6 +179,18 @@ export function WallPhoto({
           className="absolute top-2 right-2 rounded-full bg-ink/80 px-3 py-1 text-meta font-bold text-surface"
         >
           還原
+        </button>
+      )}
+      {hideable && (
+        <button
+          aria-pressed={hidden}
+          onClick={(e) => {
+            e.stopPropagation();
+            setHidden((h) => !h);
+          }}
+          className="absolute right-2 bottom-2 rounded-full bg-ink/80 px-3 py-1 text-meta font-bold text-surface"
+        >
+          {hidden ? "顯示路線" : "隱藏路線"}
         </button>
       )}
     </div>

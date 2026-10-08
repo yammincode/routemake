@@ -95,7 +95,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Sheet.tsx` | `Sheet`、`SheetTitle`、`SheetSub`、`SheetSection` |
 | `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`、`Segmented`（small：一排小膠囊）、`Rating`（1–5 分）、`ColorPicker`、`GradePicker`、`TagPicker`、`Check` |
 | `Route.tsx` | `Points`、`Grade`、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`（compact：路線卡片一排小按鈕）、`RouteRow`、`RouteList`、`CommentCount`、`SetterNote` |
-| `Wall.tsx` | `WallPhoto`、`Pin`、`TempPin` |
+| `Wall.tsx` | `WallPhoto`（`hideable`：右下角「隱藏路線／顯示路線」按鈕，只用在顧客區域頁）、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`、`ZoneList`、`ProgressBar`、`ResetList`、`NewRouteRow`、`NewRouteCard`、`GymRow`、`SoonBox`、`dueText` |
 | `FloorPlan.tsx` | `FloorPlan` |
 | `Comments.tsx` | `CommentItem`（含 👍 按讚）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
