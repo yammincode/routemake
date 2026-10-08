@@ -256,7 +256,13 @@ export async function createRoute(zoneId: string, input: RouteInput, x: number, 
       .single();
     if (r.error?.code === "23505") {
       const got = await supabase().from("routes").select(ROUTE_COLS).eq("id", id).maybeSingle();
-      if (got.data) return got.data as Route;
+      if (got.data) {
+        const old = got.data as Route;
+        // 重按前改過顏色、難度等：照這次填的更新
+        const changed = (Object.keys(input) as (keyof RouteInput)[]).some((k) => JSON.stringify(old[k]) !== JSON.stringify(input[k]));
+        if (changed) await updateRoute(id, input);
+        return { ...old, ...input };
+      }
     }
     if (ctl.signal.aborted) throw new Error("網路太慢，請確認網路後再按一次（不會多一條）");
     return must(r) as Route;

@@ -2,7 +2,23 @@ import Link from "next/link";
 import { DocSection } from "@/components/ui/Doc";
 
 // 隱私權政策、留言與影片規範的內文：/privacy、/rules 頁面和註冊頁的彈出面板共用
-export function PrivacyContent() {
+// onOpenDoc：在彈出面板裡時，兩份文件互相的連結改成切換面板內容（不離開註冊頁，打好的帳號密碼才不會不見）
+type Doc = "privacy" | "rules";
+function DocLink({ to, onOpenDoc, children }: { to: Doc; onOpenDoc?: (d: Doc) => void; children: string }) {
+  if (onOpenDoc)
+    return (
+      <button type="button" onClick={() => onOpenDoc(to)} className="text-accent underline">
+        {children}
+      </button>
+    );
+  return (
+    <Link href={`/${to}`} className="text-accent underline">
+      {children}
+    </Link>
+  );
+}
+
+export function PrivacyContent({ onOpenDoc }: { onOpenDoc?: (d: Doc) => void }) {
   return (
     <>
       <p className="m-0 text-sub leading-relaxed">
@@ -53,7 +69,7 @@ export function PrivacyContent() {
       </DocSection>
 
       <DocSection title="政策修改">
-        <p className="m-0">本政策修改時會在此頁公告。相關規則請見<Link href="/rules" className="text-accent underline">留言與影片規範</Link>。</p>
+        <p className="m-0">本政策修改時會在此頁公告。相關規則請見<DocLink to="rules" onOpenDoc={onOpenDoc}>留言與影片規範</DocLink>。</p>
       </DocSection>
 
       <DocSection title="聯絡我們">
@@ -63,7 +79,7 @@ export function PrivacyContent() {
   );
 }
 
-export function RulesContent() {
+export function RulesContent({ onOpenDoc }: { onOpenDoc?: (d: Doc) => void }) {
   return (
     <>
       <DocSection title="歡迎這樣留言">
@@ -112,7 +128,7 @@ export function RulesContent() {
 
       <DocSection title="其他">
         <p className="m-0">
-          留言和影片是公開的，所有人都看得到你的暱稱、留言和影片內容。個人資料的處理方式請見<Link href="/privacy" className="text-accent underline">隱私權政策</Link>。
+          留言和影片是公開的，所有人都看得到你的暱稱、留言和影片內容。個人資料的處理方式請見<DocLink to="privacy" onOpenDoc={onOpenDoc}>隱私權政策</DocLink>。
         </p>
       </DocSection>
     </>

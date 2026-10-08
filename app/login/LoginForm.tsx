@@ -51,6 +51,11 @@ export default function LoginForm() {
   // 隱私權政策、規範用彈出面板看，不離開這頁（離開再回來，打好的帳號密碼會不見）
   const [doc, setDoc] = useState<"privacy" | "rules" | null>(null);
 
+  // 面板裡從一份文件點到另一份：捲回最上面
+  useEffect(() => {
+    if (doc) document.querySelector("[role=dialog]")?.scrollTo?.(0, 0);
+  }, [doc]);
+
   // 已經登入就直接回去
   useEffect(() => {
     if (ready && session) router.replace(next);
@@ -178,7 +183,7 @@ export default function LoginForm() {
       )}
       <Sheet open={doc != null} onClose={() => setDoc(null)}>
         <SheetTitle>{doc === "rules" ? "留言與影片規範" : "隱私權政策"}</SheetTitle>
-        {doc === "rules" ? <RulesContent /> : <PrivacyContent />}
+        {doc === "rules" ? <RulesContent onOpenDoc={setDoc} /> : <PrivacyContent onOpenDoc={setDoc} />}
         <Button className="mt-6" onClick={() => setDoc(null)}>
           看完了，回到註冊
         </Button>

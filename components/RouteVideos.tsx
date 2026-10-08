@@ -43,6 +43,7 @@ export default function RouteVideos({
   const [busy, setBusy] = useState(false);
   const [squeeze, setSqueeze] = useState<number | null>(null); // 壓縮進度 0–1
   const [playing, setPlaying] = useState<number | null>(null);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null); // 刪除要按兩次（刪了不能復原）；換到別支影片就重來
 
   useEffect(() => {
     getVideos(r.id)
@@ -101,6 +102,7 @@ export default function RouteVideos({
   };
 
   const remove = async (id: string) => {
+    if (confirmDel !== id) return setConfirmDel(id);
     try {
       await deleteVideo(id);
       setPlaying(null);
@@ -115,16 +117,16 @@ export default function RouteVideos({
     <>
       {videos && videos.length > 0 ? (
         <>
-          <VideoStrip items={cards} onOpen={setPlaying} />
+          <VideoStrip items={cards} onOpen={(i) => (setConfirmDel(null), setPlaying(i))} />
           <VideoViewer
             items={cards}
             index={playing}
-            onIndex={setPlaying}
+            onIndex={(i) => (setConfirmDel(null), setPlaying(i))}
             actions={(i) => {
               const v = videos[i];
               return session && (v.user_id === session.user.id || staff) ? (
-                <button onClick={() => void remove(v.id)} className="text-meta text-warn">
-                  刪除這支影片
+                <button onClick={() => void remove(v.id)} className={`text-meta text-warn ${confirmDel === v.id ? "font-bold" : ""}`}>
+                  {confirmDel === v.id ? "確定刪除？再按一次" : "刪除這支影片"}
                 </button>
               ) : null;
             }}

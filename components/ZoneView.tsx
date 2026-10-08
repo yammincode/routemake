@@ -21,7 +21,7 @@ import {
   type ZoneData,
 } from "@/lib/data";
 import { ago, daysUntil, isNew } from "@/lib/date";
-import { gradeLabel, type HoldColor, STYLE_TAGS } from "@/lib/design";
+import { gradeColor, gradeLabel, type HoldColor, STYLE_TAGS } from "@/lib/design";
 import { backOr, upTo } from "@/lib/nav";
 import { overlayPending, withCache } from "@/lib/offline";
 import { routePoints } from "@/lib/scoring";
@@ -92,6 +92,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
   const match = (r: Route) =>
     (grade == null || r.grade === grade) && (color == null || r.hold_color === color) && (tag == null || r.style_tags.includes(tag));
   const grades = [...new Set(routes.map((r) => r.grade))].sort((a, b) => a - b);
+  const tapeExample = grades.find((g) => gradeColor(g)) ?? null;
   const colors = [...new Set(routes.map((r) => r.hold_color))];
   const tags = STYLE_TAGS.filter((t) => routes.some((r) => r.style_tags.includes(t)));
   const days = daysUntil(zone.next_reset_on);
@@ -143,9 +144,10 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
             title="顏色和分數怎麼看"
             lines={[
               `照片上的圓點：顏色是岩點的顏色（下面的顏色篩選也是），數字是難度${zone.grade_system === "yds" ? "（10a 就是 5.10a）" : ""}`,
-              `難度標籤（例如 ${gradeLabel(grades[0])}）的顏色是牆上膠帶的顏色`,
+              // 有膠帶顏色的難度才說（YDS、V9／V10 還沒有顏色）
+              ...(tapeExample != null ? [`難度標籤（例如 ${gradeLabel(tapeExample)}）的顏色是牆上膠帶的顏色`] : []),
               `Flash：第一次嘗試就完攀${rules ? `，分數 ×${rules.flash_multiplier}` : ""}；試過幾次才爬完記「完攀」`,
-              "難度越高、風格標籤越多，分數越高",
+              `難度越高分數越高；有風格標籤的再加分${rules ? `（每種加的不一樣，最多 +${rules.max_style_bonus}%）` : ""}`,
             ]}
           />
           <ChipRow>

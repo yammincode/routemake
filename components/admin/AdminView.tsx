@@ -421,7 +421,16 @@ export default function AdminView() {
             整區換線（下架全部 {routes.length} 條）
           </Button>
 
-          <RouteEditor zone={zone} target={target} onClose={() => setTarget(null)} onChanged={loadRoutes} />
+          {/* 關掉時也重新讀路線：訊號差時「新增」其實可能已經存進去，要讓那個點出現，才不會在同一個位置再標一次 */}
+          <RouteEditor
+            zone={zone}
+            target={target}
+            onClose={() => {
+              setTarget(null);
+              void loadRoutes();
+            }}
+            onChanged={loadRoutes}
+          />
         </>
       )}
 

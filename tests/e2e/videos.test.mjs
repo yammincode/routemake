@@ -73,6 +73,9 @@ test("顧客分享影片、刪除自己的；員工刪影片並記錄；下架�
   await viewer.locator('button[aria-label="上一支"]').click();
   assert.ok((await viewer.textContent()).includes("1 / 2"), "按 ‹ 回上一支");
   await viewer.locator('button:text-is("刪除這支影片")').click();
+  await c.waitForTimeout(300);
+  assert.equal(mock.db.videos.length, 2, "刪除要按兩次：按一次還在");
+  await viewer.locator('button:text-is("確定刪除？再按一次")').click();
   await c.waitForTimeout(600);
   assert.equal(mock.db.videos.length, 1, "刪除自己的影片");
   assert.ok(!mock.db.vfiles[mine.path], "檔案也刪掉");

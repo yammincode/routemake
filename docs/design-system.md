@@ -112,4 +112,4 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 
 頁面層級：`components/Header.tsx`（Logo＋場館切換；管理後台不給館，只有 Logo）、`components/TabBar.tsx`（底部三個分頁）、`components/ErrorScreen.tsx`（出錯、找不到頁面的中文畫面）。
 
-刪除、清除、移除這類不能復原的操作一律按兩次：第一次按鈕文字變成「確定○○？再按一次」。
+刪除、清除、移除、下架這類不能復原的操作一律按兩次：第一次按鈕文字變成「確定○○？再按一次」（列表裡空間小的只寫「確定下架？」；Spray Wall 岩友路線是跳提示「再按一次確認」）。

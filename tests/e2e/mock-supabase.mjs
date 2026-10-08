@@ -530,6 +530,15 @@ export function createMock() {
       }
       if (m === "POST") {
         if (!uid) return J(route, 403, { code: "42501", message: "沒有權限" });
+        // 跟資料庫的 ascents_before_write 一樣檢查日期（upsert 會先跑 INSERT 的檢查）
+        const rt = db.routes.find((y) => y.id === body.route_id);
+        const tpe = (iso) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date(iso));
+        const bad = (message) => J(route, 400, { code: "22008", message });
+        if (rt && body.climbed_on) {
+          if (body.climbed_on < tpe(rt.created_at)) return bad("日期不能早於路線設定日");
+          if (body.climbed_on > taipeiDay(0)) return bad("日期不能晚於今天");
+          if (rt.archived_at && body.climbed_on > tpe(rt.archived_at)) return bad("日期不能晚於路線下架日");
+        }
         const ex = mine.find((a) => a.route_id === body.route_id);
         if (ex) Object.assign(ex, body, { updated_at: now() });
         else db.ascents.push({ id: uuid(), updated_at: now(), ...body, user_id: uid });

@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { lastGymPath } from "@/lib/gyms";
 import { safeInternalPath } from "@/lib/nav";
 import { useEffect, useState, type FormEvent } from "react";
-import { useAuth } from "@/components/AuthProvider";
+import { nicknameIsUsername, useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { PageTitle, Tip } from "@/components/ui/Card";
 import { Label, TextField } from "@/components/ui/Form";
@@ -31,7 +31,9 @@ export default function NicknameForm() {
     if (ready && !session) router.replace(`/login?next=${encodeURIComponent(next)}`);
   }, [ready, session, next, router]);
 
-  const shown = value ?? access?.nickname ?? "";
+  // 暱稱跟登入帳號一樣（舊版預設帶入）：欄位清空，請他換一個
+  const sameAsUser = !!access && nicknameIsUsername(access);
+  const shown = value ?? (sameAsUser ? "" : (access?.nickname ?? ""));
   const first = !access?.nickname;
 
   const submit = async (e: FormEvent) => {
@@ -50,8 +52,16 @@ export default function NicknameForm() {
 
   return (
     <>
-      <PageTitle sub={first ? "留言時會顯示這個名字，之後可以在「我的紀錄」修改" : "留言時會顯示這個名字"}>
-        {first ? "取個暱稱" : "修改暱稱"}
+      <PageTitle
+        sub={
+          first
+            ? "留言時會顯示這個名字，之後可以在「我的紀錄」修改"
+            : sameAsUser
+              ? "你的暱稱跟登入帳號一樣，別人會看到你的帳號。暱稱會公開顯示，請換一個"
+              : "留言時會顯示這個名字"
+        }
+      >
+        {first ? "取個暱稱" : sameAsUser ? "換一個暱稱" : "修改暱稱"}
       </PageTitle>
       <form onSubmit={submit} noValidate>
         <SetBox>

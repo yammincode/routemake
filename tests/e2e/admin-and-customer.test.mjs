@@ -199,12 +199,42 @@ test("訊號差：新增路線沒收到回覆，再按一次不會多一條；�
   await a.waitForTimeout(1500);
   assert.equal(mock.db.routes.length, 1, "其實已經存進去");
   assert.ok(await a.isVisible('[role=dialog] button:text-is("新增路線")'), "手機以為失敗：面板還開著，可以再按");
+  const firstGrade = mock.db.routes[0].grade;
 
+  // 重按前改了難度：照這次選的存
+  await a.click('[role=dialog] button:text-is("V5")');
   await a.click('[role=dialog] button:text-is("新增路線")');
   await a.waitForTimeout(1800);
   assert.equal(mock.db.routes.length, 1, "再按一次不會多一條");
-  assert.match(await a.locator("[role=status]").last().textContent(), /已新增 A1-01/);
+  assert.notEqual(firstGrade, 5);
+  assert.equal(mock.db.routes[0].grade, 5, "重按前改的難度有存進去");
+  assert.match(await a.locator("[role=status]").last().textContent(), /已新增 A1-01（V5/);
   assert.equal(await a.locator("[role=dialog]").count(), 0, "新增完成，面板關閉");
   assert.equal(await a.locator("main ul li").count(), 1, "列表只有一條");
+  assert.deepEqual(errors, []);
+});
+
+test("訊號差：新增失敗後直接關掉面板，列表會重新讀，存進去的那條會出現", async () => {
+  const mock = createMock();
+  mock.addUser("boss", "password1", { nickname: "老闆", is_owner: true });
+  const zA = mock.db.zones[0];
+  mock.db.files["mingde/zones/A-1.jpg"] = fs.readFileSync(WALL);
+  zA.photo_path = "mingde/zones/A-1.jpg";
+  const { page: a, errors } = await phone(browser, mock);
+  await login(a, "boss", "password1", "/admin");
+  await a.waitForTimeout(800);
+  const wall = a.locator("main div.cursor-crosshair");
+  await wall.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  const bb = await wall.boundingBox();
+  await a.mouse.click(bb.x + bb.width * 0.5, bb.y + bb.height * 0.5);
+  await a.waitForTimeout(300);
+  mock.state.dropRouteReply = true;
+  await a.click('[role=dialog] button:text-is("新增路線")');
+  await a.waitForTimeout(800);
+  assert.equal(mock.db.routes.length, 1, "其實已經存進去");
+  await a.click('[role=dialog] button:text-is("取消")');
+  await a.waitForTimeout(800);
+  assert.equal(await a.locator("main ul li").count(), 1, "關掉後列表出現那一條，就不會在同一個位置再標一次");
+  assert.equal(await a.locator('main button[aria-label="編輯 A1-01"]').count(), 1, "照片上也有那個點");
   assert.deepEqual(errors, []);
 });

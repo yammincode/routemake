@@ -37,7 +37,7 @@ export default function StaffGate({ children }: { children: ReactNode }) {
   if (!isStaffOf(access))
     return (
       <Empty>
-        管理後台是給原岩員工用的。如果你是新來的定線長或店長，請店長在管理後台「員工」輸入你的帳號（<b className="text-ink">{access?.username}</b>），指派完成後重新整理這頁。
+        管理後台是給原岩員工用的。如果你是新來的定線長或店長，請店長或老闆在管理後台「員工」輸入你的帳號（<b className="text-ink">{access?.username}</b>），指派完成後重新整理這頁。
       </Empty>
     );
   return <>{children}</>;

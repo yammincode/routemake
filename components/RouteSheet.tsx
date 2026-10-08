@@ -105,6 +105,8 @@ function RouteBody({
   const [note, setNote] = useState(ascent?.private_note ?? "");
   const [busy, setBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  // 打開卡片時的紀錄：判斷「上次嘗試中、這次爬完」用（這次打開後按錯又改回來不算）
+  const [opened] = useState(() => ({ status: ascent?.status ?? null, date: ascent?.climbed_on ?? null }));
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [draft, setDraft] = useState("");
   const [tab, setTab] = useState<"log" | "video" | "comment" | null>(null);
@@ -158,9 +160,10 @@ function RouteBody({
       setDetails(true);
       return;
     }
-    // 從「嘗試中」改成完攀／Flash：日期改成今天（不然分數會記到第一次嘗試那天）
-    const wasProject = status === "project" && s !== "project";
-    const day = wasProject ? todayYmd() : date;
+    // 上次記「嘗試中」、這次爬完：日期改成今天（不然分數會記到第一次嘗試那天）
+    // 自己改過日期就照改的；已下架的路線不超過下架那天（資料庫會擋）
+    const wasProject = opened.status === "project" && s !== "project";
+    const day = wasProject && date === opened.date ? (todayYmd() > maxDate ? maxDate : todayYmd()) : date;
     setStatus(s);
     setDate(day);
     const pts = rules ? ascentPoints(r.grade, r.style_tags, s, rules) : 0;
@@ -170,7 +173,7 @@ function RouteBody({
         ? `已記錄：${STATUS_LABEL[s]}（岩友路線不算積分）`
         : s === "flash"
           ? wasProject
-            ? `Flash +${pts} 分（試過幾次才爬完，一般記「完攀」）`
+            ? `Flash +${pts} 分（試過幾次的一般記完攀）`
             : `Flash！漂亮 +${pts} 分`
           : s === "send"
             ? `完攀 +${pts} 分`

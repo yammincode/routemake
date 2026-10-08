@@ -167,10 +167,17 @@ test("登入頁：說明是路線專用帳號、明顯的註冊按鈕；看隱�
   await page.click('[role=dialog] button:text-is("看完了，回到註冊")');
   assert.equal(await page.inputValue("#username"), "newbie01", "帳號還在");
   assert.equal(await page.inputValue("#password"), "password1", "密碼還在");
-  await page.click('main button:text-is("留言與影片規範")');
-  assert.ok((await page.textContent("[role=dialog]")).includes("歡迎這樣留言"));
+  // 面板裡從隱私權政策點到規範：在面板裡切換，不離開註冊頁
+  await page.click('main button:text-is("隱私權政策")');
+  await page.click('[role=dialog] button:text-is("留言與影片規範")');
+  assert.ok((await page.textContent("[role=dialog]")).includes("歡迎這樣留言"), "面板換成規範");
+  await page.click('[role=dialog] button:text-is("隱私權政策")');
+  assert.ok((await page.textContent("[role=dialog]")).includes("我們蒐集哪些資料"), "再切回隱私權政策");
+  assert.equal(await page.locator("[role=dialog] a").count(), 0, "面板裡沒有會離開這頁的連結");
   await page.keyboard.press("Escape");
-  assert.ok(page.url().includes("/login"), "一直停在註冊頁");
+  assert.equal(new URL(page.url()).pathname, "/login", "一直停在註冊頁");
+  assert.equal(await page.inputValue("#username"), "newbie01", "帳號還在");
+  assert.equal(await page.inputValue("#password"), "password1", "密碼還在");
 
   // 直接打開說明頁：有「‹ 返回」（加到主畫面後沒有瀏覽器的上一頁）
   for (const path of ["/privacy", "/rules"]) {
@@ -179,5 +186,26 @@ test("登入頁：說明是路線專用帳號、明顯的註冊按鈕；看隱�
   }
   await page.click('main button:has-text("返回")');
   await page.waitForURL((u) => u.pathname !== "/rules");
+  assert.deepEqual(errors, []);
+});
+
+test("暱稱跟登入帳號一樣的舊帳號：登入後請他換一個", async () => {
+  const mock = createMock();
+  mock.addUser("amy_climb", "password1", { nickname: "amy_climb" });
+  const { page, errors } = await phone(browser, mock);
+  await page.goto(BASE + "/login?next=/me", { waitUntil: "networkidle" });
+  await page.fill("#username", "amy_climb");
+  await page.fill("#password", "password1");
+  await page.click("button[type=submit]");
+  await page.waitForURL("**/welcome**");
+  await page.waitForTimeout(400);
+  assert.equal(await page.textContent("main h1"), "換一個暱稱");
+  assert.ok((await page.textContent("main")).includes("別人會看到你的帳號"));
+  assert.equal(await page.inputValue("#nickname"), "", "欄位清空");
+  await page.fill("#nickname", "艾咪");
+  await page.click("button[type=submit]");
+  await page.waitForURL("**/me");
+  await page.waitForTimeout(500);
+  assert.equal(mock.db.profiles.find((p) => p.username === "amy_climb").nickname, "艾咪");
   assert.deepEqual(errors, []);
 });

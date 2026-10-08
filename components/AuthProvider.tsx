@@ -9,6 +9,10 @@ import { clearCache } from "@/lib/offline";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { markOpen } from "@/lib/usage";
 
+// 要先去取暱稱：還沒填，或暱稱跟登入帳號一樣（暱稱會公開，帳號不該公開）
+export const nicknameIsUsername = (a: Access) => !!a.nickname && !!a.username && a.nickname.trim().toLowerCase() === a.username.toLowerCase();
+const needsNickname = (a: Access) => !a.nickname || nicknameIsUsername(a);
+
 type AuthState = {
   ready: boolean; // 已經讀完手機裡的登入狀態
   session: Session | null;
@@ -87,9 +91,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [loadAccess]);
 
-  // 第一次登入還沒填暱稱 → 先去填
+  // 第一次登入還沒填暱稱 → 先去填；暱稱跟登入帳號一樣（舊版預設帶入帳號）也請他換一個，帳號不該公開
   useEffect(() => {
-    if (session && access && !access.nickname && pathname !== "/welcome" && pathname !== "/login") {
+    if (session && access && needsNickname(access) && pathname !== "/welcome" && pathname !== "/login") {
       router.replace(`/welcome?next=${encodeURIComponent(herePath())}`);
     }
   }, [session, access, pathname, router]);
