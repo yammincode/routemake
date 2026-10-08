@@ -1,4 +1,4 @@
-// 店長拖曳整理區域順序；定線長看不到；日期框不會蓋到上傳照片按鈕
+// 平面圖點區域；南港 B2／C1 範圍；店長拖曳整理區域順序；定線長看不到；日期框不會蓋到上傳照片按鈕
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { after, before, test } from "node:test";
@@ -31,6 +31,33 @@ test("後台點平面圖切換區域；圖上沒有的區域用按鈕", async ()
   await b.waitForTimeout(400);
   assert.equal(await b.inputValue("#zname"), "臨時牆", "圖上沒有的區域用按鈕選");
   assert.deepEqual(B.errors, []);
+});
+
+test("南港平面圖：左下角整塊斜牆是 B2，C1 是最下面的短牆", async () => {
+  const mock = createMock();
+  const { page, errors } = await phone(browser, mock);
+  await page.goto(BASE + "/gym/g4", { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  // 用平面圖座標找畫面上那一點是哪一區
+  const zoneAt = (x, y) =>
+    page.evaluate(([x, y]) => {
+      const svg = document.querySelector('svg[role=img][aria-label="南港館平面圖"]');
+      svg.scrollIntoView({ block: "center" });
+      const pt = new DOMPoint(x, y).matrixTransform(svg.getScreenCTM());
+      return document.elementFromPoint(pt.x, pt.y)?.closest("g[role=button]")?.getAttribute("aria-label")?.split("，")[0] ?? null;
+    }, [x, y]);
+  assert.equal(await zoneAt(150, 850), "B2 區", "斜線上方是 B2");
+  assert.equal(await zoneAt(230, 1010), "B2 區", "斜線下方的三角形也是 B2");
+  assert.equal(await zoneAt(340, 1040), "B2 區", "左下角是 B2");
+  assert.equal(await zoneAt(450, 1040), "C1 區", "最下面的短牆是 C1");
+  assert.equal(await zoneAt(450, 900), null, "短牆上方是走道，不屬於任何區");
+
+  // 點 C1 的字樣可以進 C1 區
+  await page.locator('svg[role=img] g[aria-label^="C1 區"] text').first().click();
+  await page.waitForURL(/\/zone\?id=/);
+  await page.waitForTimeout(600);
+  assert.equal(await page.textContent("h1"), "C1 區");
+  assert.deepEqual(errors, []);
 });
 
 test("店長拖曳和按鈕調整區域順序，顧客首頁跟著變", async () => {
