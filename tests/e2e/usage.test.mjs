@@ -95,3 +95,24 @@ test("使用狀況：授權兩間館的人只看得到那兩間（可以切換�
   assert.ok((await page.textContent("main")).includes("活躍人數"), "切到中和館也看得到");
   assert.deepEqual(errors, []);
 });
+
+test("使用狀況：先打開時還沒授權，老闆授權後重新整理就看得到（不會卡在手機裡舊的權限）", async () => {
+  const mock = createMock();
+  const v = mock.addUser("viewer1", "password1", { nickname: "小美" });
+  const { page, errors } = await phone(browser, mock);
+  await login(page, "viewer1", "password1", "/ops/usage");
+  await page.waitForTimeout(1000);
+  assert.ok((await page.textContent("main")).includes("使用狀況要老闆授權才看得到"), "還沒授權");
+  // 老闆授權萬華：重新整理時先用手機裡上次的權限（還沒授權），新的權限讀回來後要改看萬華
+  mock.db.usageViewers.push({ user_id: v, gym_id: "g2" });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(1500);
+  const text = await page.textContent("main");
+  assert.ok(text.includes("活躍人數") && !text.includes("授權才看得到"), `授權後看得到萬華的數字（實際：${text.slice(0, 120)}）`);
+  // 老闆把萬華改成中和：再重新整理，改看中和
+  mock.db.usageViewers = [{ user_id: v, gym_id: "g3" }];
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(1500);
+  assert.ok((await page.textContent("main")).includes("活躍人數"), "授權換館後看得到新的館");
+  assert.deepEqual(errors.filter((e) => !/403/.test(e)), []);
+});

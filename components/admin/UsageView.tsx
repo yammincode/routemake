@@ -22,7 +22,10 @@ export default function UsageView() {
   const toast = useToast();
   const owner = !!access?.is_owner;
   const myGyms = owner ? GYMS.filter((g) => g.live) : GYMS.filter((g) => g.live && access?.usage_gyms?.includes(g.id));
-  const [scope, setScope] = useState<string | null>(owner ? null : (myGyms[0]?.id ?? null)); // null＝全部館
+  // 點選的館（老闆：null＝全部館）；非老闆每次都對照目前的權限：
+  // 剛打開時用的是手機裡上次的權限，新的權限讀回來、或老闆改了授權，就改看還能看的第一間
+  const [picked, setPicked] = useState<string | null>(null);
+  const scope = owner ? picked : picked && myGyms.some((g) => g.id === picked) ? picked : (myGyms[0]?.id ?? null);
   const [data, setData] = useState<UsageStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pick, setPick] = useState<number | null>(null);
@@ -73,12 +76,12 @@ export default function UsageView() {
       {(owner || myGyms.length > 1) && (
         <ChipRow>
           {owner && (
-            <Chip pressed={all} onClick={() => setScope(null)}>
+            <Chip pressed={all} onClick={() => setPicked(null)}>
               全部館
             </Chip>
           )}
           {myGyms.map((g) => (
-            <Chip key={g.id} pressed={scope === g.id} onClick={() => setScope(g.id)}>
+            <Chip key={g.id} pressed={scope === g.id} onClick={() => setPicked(g.id)}>
               {g.name}
             </Chip>
           ))}

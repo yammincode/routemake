@@ -50,7 +50,8 @@ begin
   if not exists (select 1 from public.profiles where id = p_user) then
     raise exception '找不到這個帳號' using errcode = 'P0002';
   end if;
-  if not exists (select 1 from public.gyms where id = p_gym and is_live) then
+  -- 授權只能給已開放的館；取消不管館有沒有開放都可以（館之後關掉，舊的授權也取消得掉）
+  if not exists (select 1 from public.gyms where id = p_gym and (is_live or not p_on)) then
     raise exception '找不到這間館' using errcode = 'P0002';
   end if;
   if p_on then

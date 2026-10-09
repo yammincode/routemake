@@ -127,6 +127,14 @@ function OpsGrants() {
         await setUsageViewer(p.id, what, on);
         toast(on ? `已授權 ${name} 看${gymName(what)}使用狀況` : `已取消 ${name} 看${gymName(what)}使用狀況`);
       }
+      // 畫面馬上改成新的狀態（訊號差時名單還沒重新讀回來，馬上再點一次才會是「取消」而不是又授權一次）；之後再以資料庫為準
+      setPeople((ps) => {
+        const list = ps ?? [];
+        const cur = list.find((x) => x.id === p.id) ?? { ...p, resets: false, gyms: [] };
+        const gyms = cur.gyms.filter((g) => g !== what);
+        const next = what === "resets" ? { ...cur, resets: on } : { ...cur, gyms: on ? [...gyms, what] : gyms };
+        return list.some((x) => x.id === p.id) ? list.map((x) => (x.id === p.id ? next : x)) : [...list, next];
+      });
       setReload((n) => n + 1);
     } catch (e) {
       toast((e as Error).message);

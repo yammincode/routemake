@@ -89,6 +89,32 @@ test("營運：老闆授權看萬華使用狀況、輸入換線日 → 對方多
   assert.deepEqual([...O.errors, ...C.errors], []);
 });
 
+test("營運：訊號差時點了館名馬上再點一次，是取消（不會又授權一次）", async () => {
+  const mock = createMock();
+  mock.addUser("owner1", "password1", { nickname: "老闆", is_owner: true });
+  const me = mock.addUser("climber88", "password1", { nickname: "小安" });
+  mock.db.usageViewers.push({ user_id: me, gym_id: "g3" });
+  const { page, ctx, errors } = await phone(browser, mock);
+  await login(page, "owner1", "password1", "/ops");
+  const row = page.locator('main [role=group][aria-label="小安"]');
+  await row.waitFor();
+  // 之後重新讀名單都很慢（掛在 context 上：App 的請求可能經過 service worker）
+  await ctx.route("**/rest/v1/rpc/usage_viewer_list", async (route) => {
+    await new Promise((r) => setTimeout(r, 3000));
+    await route.fallback();
+  });
+  await row.locator('button:text-is("萬華館")').click();
+  await page.waitForTimeout(800);
+  assert.equal(await row.locator('button:text-is("萬華館")').getAttribute("aria-pressed"), "true", "名單還沒讀回來，膠囊就先變成已授權");
+  await row.locator('button:text-is("萬華館")').click();
+  await page.waitForTimeout(800);
+  assert.deepEqual(mock.db.usageViewers, [{ user_id: me, gym_id: "g3" }], "第二下是取消萬華（中和不受影響）");
+  assert.equal(mock.db.audit.filter((x) => x.action === "usage_viewer.grant").length, 1, "只授權一次");
+  await page.waitForTimeout(3500);
+  assert.equal(await row.locator('button:text-is("萬華館")').getAttribute("aria-pressed"), "false", "讀回來後跟資料庫一樣");
+  assert.deepEqual(errors, []);
+});
+
 test("營運：360 寬的小手機，老闆的五個分頁排得下、字不換行", async () => {
   const mock = createMock();
   mock.addUser("owner1", "password1", { nickname: "老闆", is_owner: true });

@@ -1115,6 +1115,17 @@ select tests.ok('營運：取消寫操作紀錄', exists (select 1 from public.a
 select tests.lives('營運：老闆取消店長的明德館', format($q$select public.set_usage_viewer(%L, 'mingde', false)$q$, :MG));
 select tests.ok('營運：取消後授權名單只剩顧客乙的中和', (select count(*) = 1 and bool_and(gym_ids = array['g3']) from public.usage_viewer_list()));
 reset role;
+-- 館之後關掉（不開放）：舊的授權還是取消得掉
+update public.gyms set is_live = false where id = 'g5';
+set role authenticated; select tests.login(:OW);
+select tests.throws('營運：關掉的館不能授權', format($q$select public.set_usage_viewer(%L, 'g5', true)$q$, :B));
+reset role;
+insert into public.usage_viewers (user_id, gym_id) values (:B, 'g5');
+set role authenticated; select tests.login(:OW);
+select tests.lives('營運：館關掉後，老闆還是取消得掉那一館的授權', format($q$select public.set_usage_viewer(%L, 'g5', false)$q$, :B));
+reset role;
+select tests.ok('營運：取消後授權真的刪掉了', not exists (select 1 from public.usage_viewers where user_id = :B and gym_id = 'g5'));
+update public.gyms set is_live = true where id = 'g5';
 set role authenticated; select tests.login(:B);
 select tests.throws('營運：取消後看不到萬華', $q$select public.usage_stats('g2')$q$);
 select tests.lives('營運：取消萬華後中和還看得到', $q$select public.usage_stats('g3')$q$);
