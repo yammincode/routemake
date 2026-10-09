@@ -114,7 +114,14 @@ export function BandPicker({ value, onChange }: { value: BandId | null; onChange
               <span className="flex gap-[2px]">
                 {o.swatch.map((g) => {
                   const t = tapeLook(g);
-                  return <span key={g} style={t.style} className={`h-3.5 w-[5px] rounded-tape ${t.cls}`} />;
+                  // 選中時底色是 ink，黑色、螢光黃膠帶要換成淺色細框才看得到
+                  return (
+                    <span
+                      key={g}
+                      style={t.style}
+                      className={`h-3.5 w-[5px] rounded-tape ${t.cls} group-aria-pressed:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--bg)_70%,transparent)]`}
+                    />
+                  );
                 })}
               </span>
             )}
@@ -128,6 +135,7 @@ export function BandPicker({ value, onChange }: { value: BandId | null; onChange
 }
 
 // 區域卡片（難度色帶）：小縮圖｜區名（3 天內有新路線加 NEW）、完成數｜難度色帶｜難度範圍或篩選結果、換線倒數
+// total 是牆上條數（跟平面圖同一個來源）；grades 只用來畫色帶和難度範圍，還沒拿到（舊版存在手機的資料）就先不畫，不會寫成「還沒有路線」
 // guest：沒登入只寫條數；band：選了難度時，這區沒有那個難度就變淡
 // 縮圖載入失敗（舊照片還沒有縮圖）就改用原圖
 // 照片載入失敗：縮圖還沒產生就改用原圖；最後再不用 crossOrigin 重抓一次（照樣看得到，只是不會存進離線快取）
@@ -145,6 +153,7 @@ export function ZoneCard({
   fallback,
   name,
   done,
+  total,
   grades,
   scale,
   band = null,
@@ -157,6 +166,7 @@ export function ZoneCard({
   fallback?: string;
   name: string;
   done: number;
+  total: number;
   grades: number[];
   scale: number;
   band?: GradeBand | null;
@@ -164,16 +174,18 @@ export function ZoneCard({
   fresh?: boolean;
   resetDays: number | null;
 }) {
-  const total = grades.length;
-  const hit = band ? grades.filter((g) => inBand(g, band)).length : total;
-  const dim = band != null && hit === 0;
+  const known = grades.length > 0;
+  const hit = band ? grades.filter((g) => inBand(g, band)).length : grades.length;
+  const dim = band != null && known && hit === 0;
   const soon = resetDays != null && resetDays >= 0 && resetDays <= 7;
   const clear = !guest && total > 0 && done >= total;
-  const lo = total ? gradeLabel(Math.min(...grades)) : "";
-  const hi = total ? gradeLabel(Math.max(...grades)) : "";
+  const lo = known ? gradeLabel(Math.min(...grades)) : "";
+  const hi = known ? gradeLabel(Math.max(...grades)) : "";
+  const range = lo === hi ? lo : `${lo}–${hi}`;
+  const detail = !known ? "" : band ? (hit ? `${band.range} 有 ${hit} 條` : `沒有 ${band.range}`) : `難度 ${range}`;
   return (
     <button
-      aria-label={`${name}，${guest ? `牆上 ${total} 條` : `完成 ${done} / ${total}`}${band ? `，${band.range} 有 ${hit} 條` : ""}${resetDays != null ? "，" + dueText(resetDays) : ""}`}
+      aria-label={[name, fresh && "有新路線", guest ? `牆上 ${total} 條` : `完成 ${done} / ${total}`, detail, resetDays != null && dueText(resetDays)].filter(Boolean).join("，")}
       className="flex w-full items-center gap-3 rounded-card bg-surface p-2.5 text-left shadow-card"
       {...rest}
     >
@@ -198,12 +210,16 @@ export function ZoneCard({
             {guest ? `${total} 條` : `${done} / ${total}`}
           </span>
         </span>
-        {total > 0 ? <GradeStrip grades={grades} band={band} scale={scale} /> : <span className="text-meta leading-[18px] text-muted">還沒有路線</span>}
+        {known ? (
+          <GradeStrip grades={grades} band={band} scale={scale} />
+        ) : (
+          <span className="text-meta leading-[18px] text-muted">{total ? "" : "還沒有路線"}</span>
+        )}
         <span className="flex items-center justify-between gap-2 text-meta leading-none">
-          {!total ? (
+          {!known ? (
             <span />
           ) : band == null ? (
-            <span className="font-num text-sub leading-none font-semibold text-muted">{lo === hi ? lo : `${lo}–${hi}`}</span>
+            <span className="font-num text-sub leading-none font-semibold text-muted">{range}</span>
           ) : dim ? (
             <span className="text-muted">沒有 {band.range}</span>
           ) : (

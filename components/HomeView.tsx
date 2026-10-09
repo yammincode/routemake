@@ -191,7 +191,13 @@ export default function HomeView({ gymId }: { gymId: string }) {
           <div className="mt-3 mb-2">
             <BandPicker value={band?.id ?? null} onChange={pickBand} />
           </div>
-          <Tip>{band ? `${hitZones} 區有 ${band.range} 的路線，沒有的區域變淡。` : "色帶是牆上的膠帶顏色，數字是這個難度有幾條。"}</Tip>
+          <Tip>
+            {!band
+              ? "色帶是牆上的膠帶顏色，數字是這個難度有幾條。"
+              : hitZones
+                ? `有 ${hitZones} 個區域有 ${band.range} 的路線，其他區域變淡。`
+                : `目前沒有 ${band.range} 的路線。`}
+          </Tip>
         </>
       )}
       <ZoneList>
@@ -204,6 +210,7 @@ export default function HomeView({ gymId }: { gymId: string }) {
               fallback={photoUrl(z.photo_path) ?? undefined}
               name={z.name}
               done={z.done_count}
+              total={z.route_count}
               grades={info?.grades ?? []}
               scale={scale}
               band={band}

@@ -245,6 +245,7 @@ export default function DesignShowcase() {
               photo={fakeWall(z.seed).uri}
               name={z.name}
               done={z.done}
+              total={ZONE_GRADES[z.code].length}
               grades={ZONE_GRADES[z.code]}
               scale={20}
               band={band}
@@ -252,7 +253,7 @@ export default function DesignShowcase() {
               resetDays={z.resetDays}
             />
           ))}
-          <ZoneCard photo={fakeWall(104).uri} name="D 區（沒登入）" done={0} grades={[0, 1, 2, 3, 4]} scale={20} band={band} guest resetDays={48} />
+          <ZoneCard photo={fakeWall(104).uri} name="D 區（沒登入）" done={0} total={5} grades={[0, 1, 2, 3, 4]} scale={20} band={band} guest resetDays={48} />
         </ZoneList>
         <p className="mt-2 mb-0 text-meta text-muted">選了難度：範圍內的色段保持粗、寫條數，其他縮成細線；整區沒有這個難度就變淡。NEW＝3 天內有新路線</p>
       </Block>
