@@ -71,6 +71,38 @@ export function Segmented<T extends number | string>({
   );
 }
 
+// 單選方塊（選填）：再按一次已選的就取消；cols 2 或 4 格一排，hint 是名稱下面的小字（例如影片的身高、動作）
+export function OptionGrid<T extends string>({
+  options,
+  value,
+  onChange,
+  cols,
+}: {
+  options: readonly { v: T; label: string; hint?: string }[];
+  value: T | null;
+  onChange: (v: T | null) => void;
+  cols: 2 | 4;
+}) {
+  return (
+    <div className={`grid gap-1.5 ${cols === 4 ? "grid-cols-4" : "grid-cols-2"}`}>
+      {options.map((o) => (
+        <button
+          key={o.v}
+          type="button"
+          aria-pressed={value === o.v}
+          onClick={() => onChange(value === o.v ? null : o.v)}
+          className={`grid justify-items-center rounded-field border border-line px-0.5 aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-surface ${
+            o.hint ? "py-2" : "py-2.5 text-note whitespace-nowrap"
+          }`}
+        >
+          {o.hint ? <b className="text-sub">{o.label}</b> : o.label}
+          {o.hint && <span className="text-tiny opacity-70">{o.hint}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // 岩點顏色選擇（原型 .swatches）
 export function ColorPicker({ value, onChange }: { value: HoldColor; onChange: (c: HoldColor) => void }) {
   return (

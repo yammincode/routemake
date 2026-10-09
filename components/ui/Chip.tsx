@@ -2,7 +2,9 @@ import type { ComponentProps, ReactNode } from "react";
 import { gradeColor, gradeLabel } from "@/lib/design";
 
 // 可左右滑動的一排篩選（原型 .chips）
-export function ChipRow({ children }: { children: ReactNode }) {
+// wrap：排不下就換行（面板裡選項不多的篩選用，例如影片的身高、動作；左右滑在窄手機上會把後面的選項整顆藏起來）
+export function ChipRow({ children, wrap = false }: { children: ReactNode; wrap?: boolean }) {
+  if (wrap) return <div className="flex flex-wrap gap-2 pt-0.5 pb-2.5">{children}</div>;
   return <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pt-0.5 pb-2.5">{children}</div>;
 }
 

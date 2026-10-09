@@ -1,5 +1,5 @@
 // 讀寫 Supabase 的資料函式；權限一律由資料庫 RLS 擋，這裡只負責呼叫
-import type { GradeSystem, HoldColor, Status } from "@/lib/design";
+import type { ClimbMove, GradeSystem, HeightBand, HoldColor, Status } from "@/lib/design";
 import type { ScoringRules } from "@/lib/scoring";
 import { supabase } from "@/lib/supabase";
 
@@ -473,20 +473,29 @@ export type Video = {
   caption: string | null;
   status: Status | null;
   duration_s: number | null;
+  height_band?: HeightBand | null; // 資料庫還沒套用 step25 時沒有這兩個欄位
+  move?: ClimbMove | null;
   created_at: string;
   nickname: string;
 };
 export type GymVideo = Video & { route_code: string; zone_name: string };
-const VIDEO_COLS = "id,route_id,user_id,path,caption,status,duration_s,created_at,profiles!route_videos_user_id_fkey(nickname)";
+const VIDEO_BASE = "id,route_id,user_id,path,caption,status,duration_s,created_at,profiles!route_videos_user_id_fkey(nickname)";
+const VIDEO_COLS = `${VIDEO_BASE},height_band,move`;
 type VideoRow = Omit<Video, "nickname"> & { profiles: { nickname: string | null } | null };
 const toVideo = ({ profiles, ...v }: VideoRow): Video => ({ ...v, nickname: profiles?.nickname ?? "攀岩者" });
+// 資料庫還沒套用 step25（沒有身高、動作欄位）：讀的時候 42703、寫的時候 PGRST204，改用原本的欄位
+const noTagCols = (e: { code?: string } | null) => e?.code === "42703" || e?.code === "PGRST204";
+async function selectVideos<T>(q: (cols: string) => PromiseLike<{ data: T | null; error: { message?: string; code?: string } | null }>): Promise<T> {
+  const r = await q(VIDEO_COLS);
+  return noTagCols(r.error) ? must(await q(VIDEO_BASE)) : must(r);
+}
 
 export const videoUrl = (path: string) => supabase().storage.from("route-videos").getPublicUrl(path).data.publicUrl;
 
 export async function getVideos(routeId: string): Promise<Video[]> {
-  const rows = must(
-    await supabase().from("route_videos").select(VIDEO_COLS).eq("route_id", routeId).order("created_at", { ascending: false })
-  ) as unknown as VideoRow[];
+  const rows = (await selectVideos((cols) =>
+    supabase().from("route_videos").select(cols).eq("route_id", routeId).order("created_at", { ascending: false })
+  )) as unknown as VideoRow[];
   return rows.map(toVideo);
 }
 
@@ -528,7 +537,7 @@ export async function uploadVideo(
   gymId: string,
   routeId: string,
   file: File,
-  info: { caption: string | null; status: Status | null },
+  info: { caption: string | null; status: Status | null; height_band?: HeightBand | null; move?: ClimbMove | null },
   source?: File // 壓縮前的原檔：長度從原檔讀（壓縮後的檔有時讀不到長度）
 ) {
   const { duration } = await checkVideo(source ?? file);
@@ -546,14 +555,18 @@ export async function uploadVideo(
     if (m.toLowerCase().includes("mime")) throw new Error("只能分享 MP4、MOV 或 WebM 影片");
     throw new Error("影片上傳失敗，請確認網路後再試");
   }
-  const ins = await supabase().from("route_videos").insert({
+  const row = {
     route_id: routeId,
     path,
     caption: info.caption,
     status: info.status,
     duration_s: duration == null ? null : Math.min(VIDEO_MAX_SECONDS, Math.round(duration * 10) / 10),
     size_bytes: file.size,
-  });
+  };
+  // 身高、動作有選才送；資料庫還沒套用 step25 時去掉標籤再存一次（影片照樣分享出去）
+  const tags = { ...(info.height_band ? { height_band: info.height_band } : {}), ...(info.move ? { move: info.move } : {}) };
+  let ins = await supabase().from("route_videos").insert({ ...row, ...tags });
+  if (noTagCols(ins.error)) ins = await supabase().from("route_videos").insert(row);
   if (ins.error) {
     await supabase().storage.from("route-videos").remove([path]);
     throw new Error(dbError(ins.error));
@@ -582,14 +595,14 @@ export async function getVideoUsage(gym: string): Promise<{ count: number; bytes
   return must(await supabase().rpc("video_usage", { p_gym: gym }));
 }
 export async function getGymVideos(gym: string, limit = 20): Promise<GymVideo[]> {
-  const rows = must(
-    await supabase()
+  const rows = (await selectVideos((cols) =>
+    supabase()
       .from("route_videos")
-      .select(`${VIDEO_COLS},routes!inner(code,zones!inner(gym_id,name))`)
+      .select(`${cols},routes!inner(code,zones!inner(gym_id,name))`)
       .eq("routes.zones.gym_id", gym)
       .order("created_at", { ascending: false })
       .limit(limit)
-  ) as unknown as (VideoRow & { routes: { code: string; zones: { name: string } } })[];
+  )) as unknown as (VideoRow & { routes: { code: string; zones: { name: string } } })[];
   return rows.map(({ routes, ...v }) => ({ ...toVideo(v), route_code: routes.code, zone_name: routes.zones.name }));
 }
 // 清理漏刪的影片檔，回傳刪了幾個

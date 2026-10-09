@@ -17,16 +17,29 @@ import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
-import { Check, ColorPicker, GradePicker, Label, Rating, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
+import { Check, ColorPicker, GradePicker, Label, OptionGrid, Rating, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
 import { BandPicker, GoalLine, GradeChart, NewRouteCard, NewRouteRow, ResetList, SoonBox, ZoneCard, ZoneList } from "@/components/ui/Gym";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { CalendarHeat, DailyBars, Delta, GradeBars, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
-import { PickedFile, VideoPickButton, VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
+import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
 import { fakeWall } from "@/lib/demo";
-import { FEEL, GRADE_BANDS, GRADE_FEEL, GRADES, HOLD_COLOR_NAMES, type BandId, type HoldColor, type Status } from "@/lib/design";
+import {
+  CLIMB_MOVES,
+  FEEL,
+  GRADE_BANDS,
+  GRADE_FEEL,
+  GRADES,
+  HEIGHT_BANDS,
+  HOLD_COLOR_NAMES,
+  type BandId,
+  type ClimbMove,
+  type HeightBand,
+  type HoldColor,
+  type Status,
+} from "@/lib/design";
 import { MINGDE_PLAN } from "@/lib/floorplan";
 import { LIVE_GYM } from "@/lib/gyms";
 
@@ -50,9 +63,9 @@ const STATUSES: (Status | null)[] = ["flash", "send", null, "send", "project", n
 const TAGS = [["力量"], ["技巧", "平衡"], ["腳法"], ["動態"], ["指力"], [], ["協調", "柔軟"], ["耐力"], ["平衡"], ["技巧"]];
 
 const DEMO_VIDEOS: VideoCard[] = [
-  { key: "1", name: "小安", ago: "2 天前", status: "flash", caption: "第三手用左腳勾" },
-  { key: "2", name: "阿明", ago: "昨天", status: "send", caption: "最後一手要果斷" },
-  { key: "3", name: "我", ago: "今天", status: "project", meta: "B 區 B-03" },
+  { key: "1", name: "小安", ago: "2 天前", status: "flash", caption: "第三手用左腳勾", duration: 42, tags: "身高 160–169cm・靜態" },
+  { key: "2", name: "阿明", ago: "昨天", status: "send", caption: "最後一手要果斷", duration: 28, tags: "身高 170–179cm・動態" },
+  { key: "3", name: "我", ago: "今天", status: "project", duration: 19, meta: "B 區 B-03" },
 ];
 
 function Swatch({ name, varName }: { name: string; varName: string }) {
@@ -129,6 +142,9 @@ export default function DesignShowcase() {
   const [month, setMonth] = useState(9);
   const [pickDay, setPickDay] = useState<number | null>(23);
   const [bandId, setBandId] = useState<BandId | null>("mid");
+  const [videoTag, setVideoTag] = useState<string | null>(null);
+  const [pickHeight, setPickHeight] = useState<HeightBand | null>("170s");
+  const [pickMove, setPickMove] = useState<ClimbMove | null>("dynamic");
   const band = GRADE_BANDS.find((b) => b.id === bandId) ?? null;
 
   const match = (r: DemoRoute) => (grade == null || r.grade === grade) && (color == null || r.color === color);
@@ -507,6 +523,23 @@ export default function DesignShowcase() {
       </Block>
 
       <Block title="顧客影片">
+        <p className="mt-0 mb-1.5 text-meta text-muted">路線卡片「影片」分頁：篩選鈕排不下就換行（ChipRow wrap），一支一列（VideoRow）；沒寫說明的標題是「某某的攀爬」</p>
+        <ChipRow wrap>
+          <Chip pressed={videoTag == null} onClick={() => setVideoTag(null)}>
+            全部<span className="ml-1 font-num opacity-60">3</span>
+          </Chip>
+          {["160–169cm", "170–179cm", "動態", "靜態"].map((t) => (
+            <Chip key={t} pressed={videoTag === t} onClick={() => setVideoTag(videoTag === t ? null : t)}>
+              {t}
+            </Chip>
+          ))}
+        </ChipRow>
+        <VideoList>
+          {DEMO_VIDEOS.map((v, i) => (
+            <VideoRow key={v.key} v={v} onClick={() => setPlaying(i)} />
+          ))}
+        </VideoList>
+        <p className="mt-3 mb-1.5 text-meta text-muted">後台：橫向縮圖（VideoStrip）</p>
         <VideoStrip items={DEMO_VIDEOS} onOpen={setPlaying} />
         <VideoViewer
           items={DEMO_VIDEOS}
@@ -522,6 +555,16 @@ export default function DesignShowcase() {
         <div className="mt-3">
           <PickedFile name="IMG_2031.MOV" size={23500000} onClear={() => toast("換一支")} />
         </div>
+        <Label>你的身高（公分，選填）— OptionGrid cols 4，再按一次取消</Label>
+        <OptionGrid cols={4} options={HEIGHT_BANDS} value={pickHeight} onChange={setPickHeight} />
+        <Label>動作（選填）— OptionGrid cols 2，有小字說明</Label>
+        <OptionGrid cols={2} options={CLIMB_MOVES} value={pickMove} onChange={setPickMove} />
+        <p className="mt-3 mb-0 flex flex-wrap items-center gap-x-1 text-note text-muted">
+          你在這條的紀錄會一起顯示：
+          <VideoResult status="send" />
+          <VideoResult status="flash" />
+          <VideoResult status="project" />
+        </p>
         <Check checked={consent} onChange={setConsent}>
           影片裡的其他人都同意入鏡，內容符合分享規範
         </Check>

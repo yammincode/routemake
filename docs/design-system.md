@@ -93,9 +93,9 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 |---|---|
 | `Card.tsx` | `Card`、`PageTitle`、`SectionTitle`、`Empty`、`Tip`、`BackLink` |
 | `Button.tsx` | `Button`（default／primary／danger）、`LinkButton` |
-| `Chip.tsx` | `ChipRow`、`Chip` |
+| `Chip.tsx` | `ChipRow`（wrap：排不下就換行）、`Chip` |
 | `Sheet.tsx` | `Sheet`、`SheetTitle`、`SheetSub`、`SheetSection` |
-| `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`、`Segmented`（small：一排小膠囊）、`Rating`（1–5 分）、`ColorPicker`、`GradePicker`、`TagPicker`、`Check` |
+| `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`、`Segmented`（small：一排小膠囊）、`OptionGrid`（單選方塊、選填，再按一次取消；2 或 4 格一排，可加小字說明）、`Rating`（1–5 分）、`ColorPicker`、`GradePicker`、`TagPicker`、`Check` |
 | `Route.tsx` | `Points`、`Grade`、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`（compact：路線卡片一排小按鈕）、`RouteRow`、`RouteList`、`CommentCount`、`SetterNote` |
 | `Wall.tsx` | `WallPhoto`（`hideable`：左上角「隱藏路線／顯示路線」按鈕，只用在顧客區域頁）、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`（難度色帶版：小縮圖、完成數、`GradeStrip`、難度範圍或篩選結果、換線倒數；guest 只寫條數）、`ZoneList`、`GradeStrip`（區域難度色帶）、`GradeChart`（全館難度分布）、`BandPicker`（全部／入門 VB–V2／進階 V3–V5／挑戰 V6+）、`GoalLine`（快換線提醒）、`ResetList`（沒登入寫「共 ○ 條路線」）、`NewRouteRow`、`NewRouteCard`、`GymRow`、`SoonBox`、`dueText` |
@@ -105,7 +105,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Profile.tsx` | `Avatar`（暱稱第一個字）、`HexChart`（六角形能力表）、`ProfileCardView`（人物卡） |
 | `Tabs.tsx` | `Tabs`（路線卡片的紀錄／影片／留言分頁） |
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |
-| `Video.tsx` | `VideoStrip`（橫向滑動縮圖）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`（顧客分享影片） |
+| `Video.tsx` | `VideoRow`、`VideoList`（路線卡片影片分頁：一支一列，方形縮圖＋片長、說明、誰・多久前、`VideoResult` 分享者紀錄、身高・動作）、`VideoStrip`（橫向滑動縮圖，後台用）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`（顧客分享影片） |
 | `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
 | `HowTo.tsx` | `HowTo`（「怎麼看」說明：第一次展開，按「知道了」收成一行，記在這支手機） |
@@ -113,5 +113,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Icon.tsx` | `Icon`（flash、send、project、chat、lock、down、video、play） |
 
 頁面層級：`components/Header.tsx`（Logo＋場館切換；管理後台不給館，只有 Logo）、`components/TabBar.tsx`（底部三個分頁）、`components/ErrorScreen.tsx`（出錯、找不到頁面的中文畫面）。
+
+篩選鈕：頁面上的長篩選（難度、顏色）用 `ChipRow` 左右滑；面板裡選項不多（7 顆以內，例如影片的身高、動作）用 `ChipRow wrap` 換行排，不要左右滑（窄手機會把後面的選項整顆藏起來，看不出還有）。
 
 刪除、清除、移除、下架這類不能復原的操作一律按兩次：第一次按鈕文字變成「確定○○？再按一次」（列表裡空間小的只寫「確定下架？」；Spray Wall 岩友路線是跳提示「再按一次確認」）。

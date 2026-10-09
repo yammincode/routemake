@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { Status } from "@/lib/design";
+import { STATUS_LABEL, type Status } from "@/lib/design";
 import Icon from "./Icon";
 import { StatusBadge } from "./Route";
 
@@ -13,9 +13,81 @@ export type VideoCard = {
   ago: string;
   caption?: string | null;
   status?: Status | null;
+  duration?: number | null; // 秒
+  tags?: string; // 「身高 170–179cm・動態」（videoTagText）
   meta?: ReactNode; // 例如後台的「B 區 B-03」
   onName?: () => void; // 點名字看人物卡
 };
+
+// 片長 0:42
+const clock = (s: number) => {
+  const t = Math.round(s);
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+};
+
+// 分享者在這條的紀錄：小圓圖示＋小字，比標題安靜
+const RESULT_DOT: Record<Status, string> = {
+  flash: "bg-flash text-flash-ink",
+  send: "bg-accent-soft text-accent",
+  project: "border border-dashed border-muted text-muted",
+};
+export function VideoResult({ status }: { status: Status }) {
+  return (
+    <span className="inline-flex flex-none items-center gap-1 text-meta text-muted">
+      <span className={`grid size-[18px] place-items-center rounded-full ${RESULT_DOT[status]}`}>
+        <Icon name={status} className="size-3" />
+      </span>
+      {status === "flash" ? <span className="font-num text-[15px] leading-none font-semibold tracking-[0.04em] italic">Flash</span> : STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+// 影片一列（像 Spray Wall 路線列）：方形縮圖（第一格畫面、▶、片長）｜標題（說明，沒寫就是「某某的攀爬」）、誰・多久前＋紀錄、身高・動作
+// 整列點了就播放
+export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) {
+  const [bad, setBad] = useState(false);
+  const title = v.caption || `${v.name}的攀爬`;
+  return (
+    <li>
+      <button aria-label={`播放 ${v.name} 的影片：${title}`} onClick={onClick} className="flex w-full items-start gap-3 rounded-tile bg-sunk p-2.5 text-left">
+        <span className="relative block size-[72px] flex-none overflow-hidden rounded-field bg-black">
+          {v.src && !bad && (
+            <video
+              muted
+              playsInline
+              preload="metadata"
+              src={`${v.src}#t=0.1`}
+              onError={() => setBad(true)}
+              className="pointer-events-none absolute inset-0 size-full object-cover"
+            />
+          )}
+          <span className="absolute inset-0 grid place-items-center">
+            <span className="grid size-[26px] place-items-center rounded-full bg-black/45 text-white">
+              <Icon name="play" className="size-3.5" />
+            </span>
+          </span>
+          {v.duration != null && (
+            <span className="absolute right-1 bottom-1 rounded-tape bg-black/60 px-1 font-num text-tiny leading-[1.35] font-semibold text-white">{clock(v.duration)}</span>
+          )}
+        </span>
+        <span className="min-w-0 flex-1 pt-px">
+          <b className="line-clamp-2 text-sub leading-snug font-bold break-words">{title}</b>
+          <span className="mt-1 flex items-center justify-between gap-2 text-meta text-muted">
+            {/* 沒寫說明時標題已經有名字，這行只寫時間 */}
+            <span className="min-w-0 truncate">{v.caption ? `${v.name}・${v.ago}` : v.ago}</span>
+            {v.status && <VideoResult status={v.status} />}
+          </span>
+          {v.meta && <span className="mt-0.5 block truncate text-tiny text-muted">{v.meta}</span>}
+          {v.tags && <span className="mt-0.5 block truncate text-tiny text-muted">{v.tags}</span>}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+export function VideoList({ children }: { children: ReactNode }) {
+  return <ul className="m-0 grid list-none gap-2 p-0">{children}</ul>;
+}
 
 // 影片縮圖：直式，顯示第一格畫面（網址加 #t=0.1 讓手機載入第一格）、上傳者、完成狀態
 export function VideoThumb({ v, onClick }: { v: VideoCard; onClick: () => void }) {
@@ -170,6 +242,7 @@ export function VideoViewer({
           {v.status && <StatusBadge status={v.status} />}
         </div>
         {v.meta && <div className="mt-0.5 text-meta text-white/75">{v.meta}</div>}
+        {v.tags && <div className="mt-0.5 text-meta text-white/75">{v.tags}</div>}
         {v.caption && <p className="mt-1 mb-0 text-sub leading-normal break-words">{v.caption}</p>}
         {actions && <div className="mt-2">{actions(index)}</div>}
       </div>

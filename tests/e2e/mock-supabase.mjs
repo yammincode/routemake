@@ -62,7 +62,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false };
+  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -84,7 +84,7 @@ export function createMock() {
     const z = db.zones.find((x) => x.id === route.zone_id);
     const path = `${z.gym_id}/${route.id}/${userId}/${uuid()}.mp4`;
     db.vfiles[path] = { buf: Buffer.from("fake"), owner: userId, created_at: now() };
-    const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, created_at: now(), ...extra };
+    const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, height_band: null, move: null, created_at: now(), ...extra };
     db.videos.push(v);
     return v;
   };
@@ -579,6 +579,11 @@ export function createMock() {
       }
     }
     if (t === "route_videos") {
+      // state.noVideoTags：模擬資料庫還沒套用 step25（沒有身高、動作欄位），跟 PostgREST 一樣回錯誤碼
+      if (state.noVideoTags && (m === "GET" || m === "HEAD") && /height_band|move/.test(sel))
+        return J(route, 400, { code: "42703", message: "column route_videos.height_band does not exist" });
+      if (state.noVideoTags && m === "POST" && ("height_band" in body || "move" in body))
+        return J(route, 400, { code: "PGRST204", message: "Could not find the 'height_band' column of 'route_videos' in the schema cache" });
       if (m === "GET" || m === "HEAD") {
         const q = new URLSearchParams(sp);
         const gym = (q.get("routes.zones.gym_id") || "").replace(/^eq\./, "");
@@ -589,6 +594,7 @@ export function createMock() {
           return { ...v, profiles: { nickname: prof(v.user_id)?.nickname }, routes: { code: r.code, zones: { gym_id: z.gym_id, name: z.name } } };
         });
         if (gym) rows = rows.filter((v) => v.routes.zones.gym_id === gym);
+        if (state.noVideoTags) rows = rows.map(({ height_band, move, ...v }) => v); // 舊資料庫沒有這兩欄
         rows.sort((x, y) => y.created_at.localeCompare(x.created_at));
         rows = filt(rows, q);
         if (m === "HEAD") return route.fulfill({ status: 200, headers: { ...cors, "content-range": `*/${rows.length}` } });
@@ -597,7 +603,9 @@ export function createMock() {
       if (m === "POST") {
         if (!canShare(uid, body.route_id) || !videoPathOk(uid, body.route_id, body.path))
           return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "route_videos"' });
-        db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, ...body, user_id: uid, created_at: now() });
+        if ((body.height_band != null && !["lt160", "160s", "170s", "ge180"].includes(body.height_band)) || (body.move != null && !["dynamic", "static"].includes(body.move)))
+          return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_height_band_check"' });
+        db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, height_band: null, move: null, ...body, user_id: uid, created_at: now() });
         return empty(route, 201);
       }
     }

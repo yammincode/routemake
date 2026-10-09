@@ -51,6 +51,23 @@ export const STYLE_TAGS = ["力量", "指力", "技巧", "平衡", "腳法", "�
 
 export const STATUS_LABEL: Record<Status, string> = { flash: "Flash", send: "完攀", project: "嘗試中" };
 
+// 影片標籤（分享時選填，固定選項才能篩選）：身高 4 段、動作 2 種；會公開顯示在影片上
+export type HeightBand = "lt160" | "160s" | "170s" | "ge180";
+export const HEIGHT_BANDS: readonly { v: HeightBand; label: string; cm: string }[] = [
+  { v: "lt160", label: "160 以下", cm: "160cm 以下" },
+  { v: "160s", label: "160–169", cm: "160–169cm" },
+  { v: "170s", label: "170–179", cm: "170–179cm" },
+  { v: "ge180", label: "180 以上", cm: "180cm 以上" },
+];
+export type ClimbMove = "dynamic" | "static";
+export const CLIMB_MOVES: readonly { v: ClimbMove; label: string; hint: string }[] = [
+  { v: "dynamic", label: "動態", hint: "有跳、甩的動作" },
+  { v: "static", label: "靜態", hint: "一手一手慢慢移動" },
+];
+// 影片列、播放畫面上的灰字，例如「身高 170–179cm・動態」；都沒選回傳空字串
+export const videoTagText = (h: HeightBand | null | undefined, m: ClimbMove | null | undefined) =>
+  [h && `身高 ${HEIGHT_BANDS.find((x) => x.v === h)?.cm}`, m && CLIMB_MOVES.find((x) => x.v === m)?.label].filter(Boolean).join("・");
+
 export const FEEL = [
   { v: 1, e: "😌", t: "輕鬆" },
   { v: 2, e: "🙂", t: "剛好" },
