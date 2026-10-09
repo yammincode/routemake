@@ -168,8 +168,9 @@ export function WallPhoto({
         className="origin-top-left"
         style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, ["--inv" as string]: 1 / view.s }}
       >
+        {/* key={src}：換照片時換一個新的元素（退回一般方式顯示過的元素不會再帶 crossOrigin） */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt={alt} crossOrigin="anonymous" draggable={false} onError={(e) => imgFallback(e.currentTarget)} className="block h-auto w-full select-none" />
+        <img key={src} src={src} alt={alt} crossOrigin="anonymous" draggable={false} onError={(e) => imgFallback(e.currentTarget)} className="block h-auto w-full select-none" />
         <div className={`absolute inset-0 transition-[opacity,visibility] duration-150 ${hideable && hidden ? "invisible opacity-0" : ""}`}>{children}</div>
       </div>
       {zoomed && (

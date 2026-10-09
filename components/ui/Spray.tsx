@@ -137,7 +137,7 @@ export function RouteThumb({ src, fallback, holds, ratio = 0.75, size = 56 }: { 
     <span aria-hidden className="relative block flex-none overflow-hidden rounded-cell bg-line" style={{ width: size, height: size }}>
       <span className="absolute" style={{ width: w, height: h, left, top }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt="" loading="lazy" crossOrigin="anonymous" draggable={false} onError={(e) => imgFallback(e.currentTarget, fallback)} className="block size-full select-none" />
+        <img key={src} src={src} alt="" loading="lazy" crossOrigin="anonymous" draggable={false} onError={(e) => imgFallback(e.currentTarget, fallback)} className="block size-full select-none" />
         <HoldMarks holds={holds} mini />
       </span>
     </span>

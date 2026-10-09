@@ -46,6 +46,7 @@ export function ZoneCard({
     <button className="flex w-full items-center gap-3.5 rounded-card bg-surface p-2.5 text-left shadow-card" {...rest}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
+        key={photo}
         src={photo}
         alt=""
         loading="lazy"

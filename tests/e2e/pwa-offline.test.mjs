@@ -82,6 +82,12 @@ test("岩牆照片存進手機：第二次不用重抓、離線也看得到；Su
   assert.ok((await img.evaluate((el) => el.naturalWidth)) > 0, "照片顯示");
   const cached = await page.evaluate(async () => ((await caches.has("zone-photos")) ? (await (await caches.open("zone-photos")).keys()).length : 0));
   assert.ok(cached >= 1, `照片存進手機的快取（${cached} 張）`);
+  // 第一次打開時下載的中文字型片段，Service Worker 接手後也會補存（離線時字型才不會跑掉）
+  const fontCount = await page.evaluate(async () => ((await caches.has("fonts")) ? (await (await caches.open("fonts")).keys()).length : 0));
+  assert.ok(fontCount >= 1, `字型存進手機的快取（${fontCount} 片）`);
+  // 區域頁只存一份（鍵固定是 /zone）
+  const zoneKeys = await page.evaluate(async () => (await (await caches.open("zone-shell")).keys()).map((r) => new URL(r.url).pathname + new URL(r.url).search));
+  assert.deepEqual(zoneKeys, ["/zone"], `區域頁快取只有一份（實際：${zoneKeys.join(", ")}）`);
 
   // 離線：照片照樣看得到
   mock.state.offline = true;

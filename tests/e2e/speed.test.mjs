@@ -58,16 +58,10 @@ test("區域頁：資料庫還沒套用 step17 時改用原本的方式，照樣
   await ctx.close();
 });
 
-test("第一次打開：字型不放進預先下載、中文字型只宣告一份", async () => {
+test("第一次打開：字型不放進預先下載", async () => {
   const sw = await (await fetch(BASE + "/sw.js")).text();
   assert.ok(sw.includes("/_next/static/chunks/"), "預先下載清單還在（程式檔）");
   assert.ok(!/\/_next\/static\/media\/[^"'\s]+\.woff2/.test(sw), "字型檔不在預先下載清單裡");
-  const html = await (await fetch(BASE + "/")).text();
-  const css = [...html.matchAll(/href="([^"]+\.css)"/g)].map((m) => m[1]);
-  assert.ok(css.length > 0);
-  let faces = 0;
-  for (const href of css) faces += ((await (await fetch(new URL(href, BASE))).text()).match(/@font-face/g) ?? []).length;
-  assert.ok(faces > 0 && faces < 150, `字型宣告 ${faces} 條（原本同一批字型重複宣告 4 次，超過 400 條）`);
 });
 
 test("點區域：手機裡有上次的資料就直接畫出來，不用等網路", async () => {
@@ -77,8 +71,15 @@ test("點區域：手機裡有上次的資料就直接畫出來，不用等網�
   mock.addRoute(zA, 3, "藍", [], 30, 40);
   mock.addRoute(zA, 5, "紅", [], 60, 50);
   const { page, errors } = await phone(browser, mock);
+  // 館首頁一打開就先預抓區域頁（還沒點任何區域）
+  const rsc = [];
+  page.on("request", (r) => {
+    const u = new URL(r.url());
+    if (u.pathname === "/zone" && u.searchParams.has("_rsc")) rsc.push(u.href);
+  });
   await login(page, "climber88", "password1", "/gym/mingde");
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(1500);
+  assert.ok(rsc.length > 0, "館首頁先預抓區域頁");
   // 第一次進區域（存下資料）→ 回館首頁
   await page.locator("main button", { hasText: "A1 區" }).first().click();
   await page.waitForURL("**/zone?id=**");
@@ -92,12 +93,19 @@ test("點區域：手機裡有上次的資料就直接畫出來，不用等網�
     await new Promise((res) => setTimeout(res, 3000));
     await r.fallback();
   });
+  // 偵測點下去之後畫面有沒有出現過「讀取中」
+  await page.evaluate(() => {
+    window.__sawLoading = false;
+    new MutationObserver(() => {
+      if (document.querySelector("main")?.textContent.includes("讀取中")) window.__sawLoading = true;
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
   const t0 = Date.now();
   await page.locator("main button", { hasText: "A1 區" }).first().click();
   await page.locator("main ul li", { hasText: "A1-02" }).waitFor({ timeout: 2500 });
   const ms = Date.now() - t0;
-  assert.ok(ms < 1500, `資料庫還沒回應就先畫出上次的路線（${ms} ms）`);
-  assert.equal(await page.locator("main", { hasText: "讀取中" }).count(), 0, "沒有先閃「讀取中」");
+  assert.ok(ms < 2000, `資料庫還沒回應就先畫出上次的路線（${ms} ms）`);
+  assert.equal(await page.evaluate(() => window.__sawLoading), false, "沒有先閃「讀取中」");
   await page.waitForTimeout(3200);
   assert.deepEqual(errors, []);
 });

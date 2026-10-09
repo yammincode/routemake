@@ -42,10 +42,26 @@ self.addEventListener("fetch", (event) => {
   if (event.request.url.includes("/storage/v1/object/public/route-videos/")) event.stopImmediatePropagation();
 });
 
+// 區域頁只存一份：不管 ?id= 是哪一區，快取的鍵都固定是 /zone，每次成功載入和每次新版安裝都覆蓋同一份
+// （原本每一區各存一份、找的時候拿最舊的那份，網路慢時可能拿到好幾版前的頁面，新版換不上去）
+// 只處理整頁載入；換頁時的 RSC 請求交給下面一般頁面的規則
+const zoneKey = { cacheKeyWillBeUsed: async () => new URL("/zone", self.location.origin).href };
 const zoneShell = {
-  matcher: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) => sameOrigin && url.pathname === "/zone",
-  handler: new NetworkFirst({ cacheName: ZONE_CACHE, matchOptions: { ignoreSearch: true }, networkTimeoutSeconds: PAGE_TIMEOUT }),
+  matcher: ({ url, sameOrigin, request }: { url: URL; sameOrigin: boolean; request: Request }) =>
+    sameOrigin && url.pathname === "/zone" && request.mode === "navigate",
+  handler: new NetworkFirst({ cacheName: ZONE_CACHE, plugins: [zoneKey], networkTimeoutSeconds: PAGE_TIMEOUT }),
 };
+// 清掉舊版留下的「每一區各一份」
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches
+      .open(ZONE_CACHE)
+      .then(async (cache) => {
+        for (const req of await cache.keys()) if (new URL(req.url).search) await cache.delete(req);
+      })
+      .catch(() => undefined)
+  );
+});
 
 // 岩牆照片：每次上傳都是新檔名（含時間），舊網址的內容不會變，存過就直接用手機裡的，不再重新下載
 const wallPhotos = {

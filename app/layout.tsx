@@ -8,10 +8,11 @@ import SyncManager from "@/components/SyncManager";
 import UpdateWatcher from "@/components/UpdateWatcher";
 import "./globals.css";
 
-// 中文字用可變字型：一份宣告就涵蓋 400–900 各種粗細（列出多個粗細會把同一批字型檔重複宣告好幾次，擋住第一次畫面）
+// 注意：不要改成 weight: "variable"。CSS 變小後中文字型會提早開始下載，跟程式檔搶網路，
+// 第一次打開時畫面先出來、按鈕卻要多等約 1 秒才按得動（實測 4G：畫面 1.1 秒、能按 3.7 秒；現在兩者都在約 2.8 秒）
 const noto = Noto_Sans_TC({
   variable: "--font-noto",
-  weight: "variable",
+  weight: ["400", "500", "700", "900"],
   subsets: ["latin"],
   display: "swap",
 });

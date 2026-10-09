@@ -21,6 +21,16 @@ export default function UpdateWatcher() {
         navigator.serviceWorker.getRegistration().then((r) => r?.update()).catch(() => undefined);
       }
     };
+    // 第一次打開時，Service Worker 還沒接手前下載的中文字型片段沒存進字型快取：接手後補存（離線時字才不會變成手機內建字體）
+    navigator.serviceWorker.ready
+      .then((reg) => {
+        const fonts = performance
+          .getEntriesByType("resource")
+          .map((e) => e.name)
+          .filter((u) => u.startsWith(location.origin + "/_next/static/media/") && u.endsWith(".woff2"));
+        if (fonts.length) reg.active?.postMessage({ type: "CACHE_URLS", payload: { urlsToCache: fonts } });
+      })
+      .catch(() => undefined);
     navigator.serviceWorker.addEventListener("controllerchange", onChange);
     document.addEventListener("visibilitychange", check);
     check();
