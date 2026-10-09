@@ -11,14 +11,15 @@ import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { compressMinBytes, compressType, compressVideo } from "@/lib/video";
 import { checkVideo, deleteVideo, getVideos, uploadVideo, videoUrl, type Route, type Video } from "@/lib/data";
+import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { ago } from "@/lib/date";
 import { CLIMB_MOVES, HEIGHT_BANDS, videoTagText, type ClimbMove, type HeightBand, type Status } from "@/lib/design";
 
-// 身高記在這支手機，下次分享不用再選（隱私模式等讀寫失敗就當沒記）
-const HEIGHT_KEY = "routemake:video-height";
-function savedHeight(): HeightBand | null {
+// 身高記在這支手機、分帳號記，下次分享不用再選；登出時清掉（lib/offline clearCache）；隱私模式等讀寫失敗就當沒記
+const heightKey = (uid: string) => `${HEIGHT_KEY_PREFIX}${uid}`;
+function savedHeight(uid: string): HeightBand | null {
   try {
-    const v = localStorage.getItem(HEIGHT_KEY);
+    const v = localStorage.getItem(heightKey(uid));
     return HEIGHT_BANDS.some((h) => h.v === v) ? (v as HeightBand) : null;
   } catch {
     return null;
@@ -58,7 +59,7 @@ export default function RouteVideos({
   const [videos, setVideos] = useState<Video[] | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
-  const [height, setHeight] = useState<HeightBand | null>(savedHeight);
+  const [height, setHeight] = useState<HeightBand | null>(null);
   const [move, setMove] = useState<ClimbMove | null>(null);
   const [filter, setFilter] = useState<TagFilter | null>(null);
   const [consent, setConsent] = useState(false);
@@ -101,6 +102,7 @@ export default function RouteVideos({
     try {
       await checkVideo(f);
       setFile(f);
+      if (session) setHeight(savedHeight(session.user.id)); // 帶入這個帳號上次選的身高
     } catch (e) {
       toast((e as Error).message);
     }
@@ -136,10 +138,11 @@ export default function RouteVideos({
         small ? file : undefined,
       );
       try {
-        if (height) localStorage.setItem(HEIGHT_KEY, height);
-        else localStorage.removeItem(HEIGHT_KEY);
+        if (height) localStorage.setItem(heightKey(session.user.id), height);
+        else localStorage.removeItem(heightKey(session.user.id));
       } catch {}
       reset();
+      setFilter(null); // 回到全部，剛分享的才看得到
       setVideos(await getVideos(r.id));
       toast("已分享影片");
     } catch (e) {
@@ -154,6 +157,7 @@ export default function RouteVideos({
     try {
       await deleteVideo(id);
       setPlaying(null);
+      setFilter(null);
       setVideos((vs) => vs?.filter((v) => v.id !== id) ?? null);
       toast("已刪除影片");
     } catch (e) {
@@ -186,7 +190,7 @@ export default function RouteVideos({
             </VideoList>
             {tag && (
               <p className="mt-2.5 mb-0 text-center text-meta text-muted">
-                <span className="font-num text-[15px] font-semibold">
+                <span className="font-num text-sub font-semibold">
                   {shown.length} / {videos.length}
                 </span>{" "}
                 支
@@ -230,7 +234,7 @@ export default function RouteVideos({
               <Label>你的身高（公分，選填）</Label>
               <OptionGrid cols={4} options={HEIGHT_BANDS} value={height} onChange={setHeight} />
               <p className="mt-1.5 mb-0 text-tiny text-muted">
-                會顯示在影片上，方便身高相近的人參考；
+                會顯示在影片上，方便身高相近的人參考（分享後不能改）；
                 <span className="whitespace-nowrap">下次不用再選</span>
               </p>
               <Label>動作（選填）</Label>

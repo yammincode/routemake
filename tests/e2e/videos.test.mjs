@@ -269,7 +269,9 @@ test("影片標籤：一支一列、用身高或動作篩選；分享時選身�
   await c.waitForTimeout(200);
   assert.equal(await rows.count(), 3, "再按一次回到全部");
 
-  // 分享：選身高、動作，不寫說明、還沒記錄這條
+  // 分享：選身高、動作，不寫說明、還沒記錄這條；篩選停在別的身高時，分享完回到全部（剛分享的才看得到）
+  await chip("170–179cm").click();
+  await c.waitForTimeout(200);
   await dialog.locator("input[type=file]").setInputFiles(clip());
   await c.waitForTimeout(600);
   const form = await dialog.textContent();
@@ -288,6 +290,9 @@ test("影片標籤：一支一列、用身高或動作篩選；分享時選身�
   assert.equal(mine.height_band, "160s");
   assert.equal(mine.move, "dynamic");
   assert.equal(mine.caption, null);
+  const pressed = await dialog.locator('button[aria-pressed="true"].rounded-full').allTextContents();
+  assert.deepEqual(pressed.map((t) => t.replace(/\s+/g, "")), ["全部4"], "分享完篩選回到全部");
+  assert.equal(await rows.count(), 4);
   assert.ok((await rows.first().textContent()).includes("小安的攀爬"), "新的在最上面");
 
   // 下次分享：身高自動帶入，動作不帶
@@ -308,11 +313,30 @@ test("影片標籤：一支一列、用身高或動作篩選；分享時選身�
   assert.equal(await dialog.locator("button[aria-pressed].rounded-full").count(), 0, "沒有標籤就不出現篩選");
   await dialog.locator("input[type=file]").setInputFiles(clip("c.mp4"));
   await c.waitForTimeout(600);
+  assert.equal(await opt("160–169").getAttribute("aria-pressed"), "true", "重新整理後身高還記得（存在手機）");
+  await opt("有跳、甩的動作").click();
   await dialog.locator("input[type=checkbox]").check();
   await dialog.locator('button:text-is("分享影片")').click();
   await c.waitForTimeout(1000);
   assert.equal(mock.db.videos.length, 5, "去掉標籤照樣分享");
   assert.equal(mock.db.videos.at(-1).height_band ?? null, null);
+  assert.ok(mock.state.tagFallbacks >= 2, "讀和寫都走了舊資料庫的備用方式");
   assert.ok((await c.locator("[role=status]").last().textContent()).includes("已分享影片"));
+  mock.state.noVideoTags = false;
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(300);
+
+  // 登出換別人登入：不會帶入上一個人的身高（身高分帳號記，登出時清掉）
+  await c.goto(BASE + "/me", { waitUntil: "networkidle" });
+  await c.waitForTimeout(500);
+  await c.click("text=登出");
+  await c.waitForTimeout(400);
+  assert.ok(!(await c.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith("routemake:video-height")))), "登出時清掉記住的身高");
+  await login(c, "other22", "password1", `/zone?id=${zone.id}`);
+  await c.waitForTimeout(600);
+  await open();
+  await dialog.locator("input[type=file]").setInputFiles(clip("d.mp4"));
+  await c.waitForTimeout(600);
+  assert.equal(await dialog.locator('button[aria-pressed="true"].rounded-field').count(), 0, "別人登入時沒有預先選好的身高");
   assert.deepEqual(errors, []);
 });

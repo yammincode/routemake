@@ -8,6 +8,8 @@ import { useSyncExternalStore } from "react";
 
 const PREFIX = "routemake-cache:";
 const QUEUE_KEY = "routemake-pending";
+// 分享影片時記住的身高（每個帳號一個），登出時一起清掉
+export const HEIGHT_KEY_PREFIX = "routemake:video-height:";
 
 function read<T>(key: string): T | null {
   try {
@@ -51,11 +53,11 @@ export function peekCache<T>(key: string): T | null {
   return read<T>(PREFIX + key);
 }
 
-// 登出時清掉個人資料快取
+// 登出時清掉個人資料快取（含記住的身高）
 export function clearCache() {
   try {
     Object.keys(localStorage)
-      .filter((k) => k.startsWith(PREFIX) || k === QUEUE_KEY)
+      .filter((k) => k.startsWith(PREFIX) || k === QUEUE_KEY || k.startsWith(HEIGHT_KEY_PREFIX))
       .forEach((k) => localStorage.removeItem(k));
   } catch {}
 }

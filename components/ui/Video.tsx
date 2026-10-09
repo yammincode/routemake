@@ -49,7 +49,11 @@ export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) 
   const title = v.caption || `${v.name}的攀爬`;
   return (
     <li>
-      <button aria-label={`播放 ${v.name} 的影片：${title}`} onClick={onClick} className="flex w-full items-start gap-3 rounded-tile bg-sunk p-2.5 text-left">
+      <button
+        aria-label={[`播放 ${v.name} 的影片：${title}`, v.duration != null && clock(v.duration), v.status && STATUS_LABEL[v.status], v.tags].filter(Boolean).join("，")}
+        onClick={onClick}
+        className="flex w-full items-start gap-3 rounded-tile bg-sunk p-2.5 text-left"
+      >
         <span className="relative block size-[72px] flex-none overflow-hidden rounded-field bg-black">
           {v.src && !bad && (
             <video

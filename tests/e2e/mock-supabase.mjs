@@ -62,7 +62,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false };
+  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0 };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -580,10 +580,14 @@ export function createMock() {
     }
     if (t === "route_videos") {
       // state.noVideoTags：模擬資料庫還沒套用 step25（沒有身高、動作欄位），跟 PostgREST 一樣回錯誤碼
-      if (state.noVideoTags && (m === "GET" || m === "HEAD") && /height_band|move/.test(sel))
+      if (state.noVideoTags && (m === "GET" || m === "HEAD") && /height_band|move/.test(sel)) {
+        state.tagFallbacks++;
         return J(route, 400, { code: "42703", message: "column route_videos.height_band does not exist" });
-      if (state.noVideoTags && m === "POST" && ("height_band" in body || "move" in body))
+      }
+      if (state.noVideoTags && m === "POST" && ("height_band" in body || "move" in body)) {
+        state.tagFallbacks++;
         return J(route, 400, { code: "PGRST204", message: "Could not find the 'height_band' column of 'route_videos' in the schema cache" });
+      }
       if (m === "GET" || m === "HEAD") {
         const q = new URLSearchParams(sp);
         const gym = (q.get("routes.zones.gym_id") || "").replace(/^eq\./, "");
