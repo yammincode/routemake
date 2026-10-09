@@ -5,14 +5,16 @@ import { pressKeys } from "./Gym";
 
 export type PlanZone = { code: string; name: string; done: number; total: number; resetDays: number | null };
 
-// 館內平面圖（原型 planSVG）：依完成度上色，7 天內換線用紅色虛線框
+// 館內平面圖（原型 planSVG）：依完成度上色，7 天內換線用紅色虛線框（幾天後換線寫在區域卡片和「即將換線」，圖上不寫，免得壓到旁邊的區名）
 // admin：管理後台用，顯示每區路線數，selected 的區域加粗框（目前編輯中）
+// guest：沒登入，每區寫路線數、統一底色（沒有完成度）
 export default function FloorPlan({
   shape,
   gymName,
   zones,
   onSelect,
   admin = false,
+  guest = false,
   selected,
 }: {
   shape: FloorPlanShape;
@@ -20,6 +22,7 @@ export default function FloorPlan({
   zones: PlanZone[];
   onSelect: (code: string) => void;
   admin?: boolean;
+  guest?: boolean;
   selected?: string;
 }) {
   return (
@@ -48,18 +51,19 @@ export default function FloorPlan({
           const on = selected === z.code;
           const fill = admin
             ? `color-mix(in srgb,var(--accent) ${on ? 55 : 14}%,var(--blush))`
-            : `color-mix(in srgb,var(--accent) ${Math.round(18 + p * 72)}%,var(--blush))`;
+            : guest
+              ? "color-mix(in srgb,var(--accent) 30%,var(--blush))"
+              : `color-mix(in srgb,var(--accent) ${Math.round(18 + p * 72)}%,var(--blush))`;
+          const count = admin || guest;
           const go = () => onSelect(z.code);
           return (
             <g
               key={z.code}
               tabIndex={0}
               role="button"
-              aria-label={
-                admin
-                  ? `${z.name}，牆上 ${z.total} 條`
-                  : `${z.name}，完成 ${z.done} / ${z.total}${soon ? "，" + (z.resetDays === 0 ? "今天換線" : `${z.resetDays} 天後換線`) : ""}`
-              }
+              aria-label={`${z.name}，${count ? `牆上 ${z.total} 條` : `完成 ${z.done} / ${z.total}`}${
+                !admin && soon ? "，" + (z.resetDays === 0 ? "今天換線" : `${z.resetDays} 天後換線`) : ""
+              }`}
               aria-pressed={admin ? on : undefined}
               onClick={go}
               onKeyDown={pressKeys(go)}
@@ -80,13 +84,8 @@ export default function FloorPlan({
                 {P.t ?? z.name.replace(" 區", "")}
               </text>
               <text x={P.lx} y={P.ly + 36} fontSize={32} textAnchor="middle" className="fill-ink font-num font-bold">
-                {admin ? `${z.total} 條` : `${z.done}/${z.total}`}
+                {count ? `${z.total} 條` : `${z.done}/${z.total}`}
               </text>
-              {soon && (
-                <text x={P.lx} y={P.ly + 68} fontSize={24} textAnchor="middle" className="fill-warn font-bold">
-                  {z.resetDays === 0 ? "今天換線" : `${z.resetDays} 天後換線`}
-                </text>
-              )}
             </g>
           );
         })}
@@ -96,6 +95,8 @@ export default function FloorPlan({
           <span className="inline-flex items-center gap-[5px]">
             <i className="inline-block h-2.5 w-3.5 rounded-sm border-2 border-ink bg-blush" />點區域切換，粗框是目前區域
           </span>
+        ) : guest ? (
+          <span>點區域看路線</span>
         ) : (
           <span className="inline-flex items-center gap-[5px]">
             完成度 少<i className="inline-block h-2 w-[22px] rounded bg-linear-to-r from-blush to-accent" />多

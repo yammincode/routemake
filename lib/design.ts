@@ -82,6 +82,17 @@ export const YDS_GRADES = [
   "5.13a", "5.13b", "5.13c", "5.13d",
 ] as const;
 export const isYds = (g: number) => g >= 100;
+
+// 首頁難度篩選的三段（入門含 VB）；只算抱石 V 級，上攀 YDS 不在任何一段
+export type BandId = "easy" | "mid" | "hard";
+export type GradeBand = { id: BandId; name: string; range: string; min: number; max: number; swatch: number[] };
+export const GRADE_BANDS: readonly GradeBand[] = [
+  { id: "easy", name: "入門", range: "VB–V2", min: -1, max: 2, swatch: [0, 1, 2] },
+  { id: "mid", name: "進階", range: "V3–V5", min: 3, max: 5, swatch: [3, 4, 5] },
+  { id: "hard", name: "挑戰", range: "V6+", min: 6, max: 10, swatch: [6, 7, 8] },
+];
+// band 是 null（全部）時每個難度都算
+export const inBand = (g: number, band: GradeBand | null) => !band || (!isYds(g) && g >= band.min && g <= band.max);
 export const gradeLabel = (g: number) => (isYds(g) ? (YDS_GRADES[g - 100] ?? "?") : g < 0 ? "VB" : `V${g}`);
 // 起步點圓圈裡放的短標籤：V 級只寫數字，YDS 去掉「5.」
 export const gradeShort = (g: number) => (isYds(g) ? (YDS_GRADES[g - 100] ?? "?").slice(2) : g < 0 ? "B" : String(g));

@@ -19,8 +19,8 @@ export const ago = (ts: string) => {
   return d <= 0 ? "今天" : `${d} 天前`;
 };
 
-// 7 天內設定的算新路線
-export const isNew = (ts: string) => Date.now() - new Date(ts).getTime() < 7 * DAY;
+// 7 天內設定的算新路線（館首頁的區域 NEW 用 3 天）
+export const isNew = (ts: string, days = 7) => Date.now() - new Date(ts).getTime() < days * DAY;
 
 // 10/05 格式
 export const md = (date: string) => `${date.slice(5, 7)}/${date.slice(8, 10)}`;

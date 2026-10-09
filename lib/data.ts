@@ -153,6 +153,19 @@ export async function getNewRoutes(gym: string): Promise<(Route & { zone_name: s
   ) as unknown as (Route & { zones: { name: string } })[];
   return rows.map((r) => ({ ...r, zone_name: r.zones.name }));
 }
+// 場館牆上每條路線的難度和設定時間（首頁的難度色帶、全館難度分布、NEW）；只抓這幾個欄位，幾 KB 而已
+export type GradeRow = { zone_id: string; grade: number; created_at: string };
+export async function getGymGrades(gym: string): Promise<GradeRow[]> {
+  const rows = must(
+    await supabase()
+      .from("routes")
+      .select("zone_id,grade,created_at,zones!inner(gym_id,kind)")
+      .eq("zones.gym_id", gym)
+      .eq("zones.kind", "wall")
+      .is("archived_at", null)
+  ) as unknown as (GradeRow & { zones: unknown })[];
+  return rows.map(({ zone_id, grade, created_at }) => ({ zone_id, grade, created_at }));
+}
 // 自己在這些路線上的紀錄（RLS 只回傳自己的）
 export async function getMyAscents(routeIds: string[]): Promise<Record<string, Ascent>> {
   if (!routeIds.length) return {};

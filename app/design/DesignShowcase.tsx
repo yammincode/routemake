@@ -18,7 +18,7 @@ import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
 import { Check, ColorPicker, GradePicker, Label, Rating, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
-import { NewRouteCard, NewRouteRow, ResetList, SoonBox, ZoneCard, ZoneList } from "@/components/ui/Gym";
+import { BandPicker, GoalLine, GradeChart, NewRouteCard, NewRouteRow, ResetList, SoonBox, ZoneCard, ZoneList } from "@/components/ui/Gym";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { CalendarHeat, DailyBars, Delta, GradeBars, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
@@ -26,7 +26,7 @@ import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoPickButton, VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
 import { fakeWall } from "@/lib/demo";
-import { FEEL, GRADE_FEEL, GRADES, HOLD_COLOR_NAMES, type HoldColor, type Status } from "@/lib/design";
+import { FEEL, GRADE_BANDS, GRADE_FEEL, GRADES, HOLD_COLOR_NAMES, type BandId, type HoldColor, type Status } from "@/lib/design";
 import { MINGDE_PLAN } from "@/lib/floorplan";
 import { LIVE_GYM } from "@/lib/gyms";
 
@@ -39,6 +39,12 @@ const ZONES = [
   { code: "C", name: "C 區", done: 13, total: 14, resetDays: 33, seed: 103 },
   { code: "D", name: "D 區", done: 0, total: 10, resetDays: 48, seed: 104 },
 ];
+// 區域卡片的難度色帶示範（每條路線的難度，由易到難；10 = V10 還沒定膠帶顏色）
+const ZONE_GRADES: Record<string, number[]> = {
+  A: [-1, 0, 1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 5, 5, 6, 6, 7, 8, 9, 10],
+  W: [6, 6, 7, 7, 8, 8, 9, 9, 10, 10],
+  B: [0, 1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 7, 8],
+};
 
 const STATUSES: (Status | null)[] = ["flash", "send", null, "send", "project", null, "send", null, null, "flash"];
 const TAGS = [["力量"], ["技巧", "平衡"], ["腳法"], ["動態"], ["指力"], [], ["協調", "柔軟"], ["耐力"], ["平衡"], ["技巧"]];
@@ -122,6 +128,8 @@ export default function DesignShowcase() {
   const [draft, setDraft] = useState("");
   const [month, setMonth] = useState(9);
   const [pickDay, setPickDay] = useState<number | null>(23);
+  const [bandId, setBandId] = useState<BandId | null>("mid");
+  const band = GRADE_BANDS.find((b) => b.id === bandId) ?? null;
 
   const match = (r: DemoRoute) => (grade == null || r.grade === grade) && (color == null || r.color === color);
   const grades = [...new Set(routes.map((r) => r.grade))].sort((a, b) => a - b);
@@ -218,19 +226,43 @@ export default function DesignShowcase() {
         <FloorPlan shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={ZONES} onSelect={(c) => toast(`點了 ${c} 區`)} />
         <p className="mt-3 mb-1.5 text-meta text-muted">管理後台（admin）：顯示路線數，粗框是目前編輯的區域</p>
         <FloorPlan admin selected="B" shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={ZONES} onSelect={(c) => toast(`切換到 ${c} 區`)} />
+        <p className="mt-3 mb-1.5 text-meta text-muted">沒登入（guest）：每區寫路線數、統一底色</p>
+        <FloorPlan guest shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={ZONES} onSelect={(c) => toast(`點了 ${c} 區`)} />
+        <GoalLine label="下一個目標" onClick={() => toast("進 A 區")}>
+          A 區 5 天後換線，還有 11 條沒完攀
+        </GoalLine>
+      </Block>
+
+      <Block title="難度色帶（館首頁的所有區域）">
+        <GradeChart grades={Object.values(ZONE_GRADES).flat()} band={band} onBand={setBandId} />
+        <div className="mt-3 mb-2">
+          <BandPicker value={bandId} onChange={setBandId} />
+        </div>
         <ZoneList>
-          {ZONES.slice(0, 3).map((z) => (
-            <ZoneCard key={z.code} photo={fakeWall(z.seed).uri} name={z.name} done={z.done} total={z.total} resetDays={z.resetDays} />
+          {ZONES.slice(0, 3).map((z, i) => (
+            <ZoneCard
+              key={z.code}
+              photo={fakeWall(z.seed).uri}
+              name={z.name}
+              done={z.done}
+              grades={ZONE_GRADES[z.code]}
+              scale={20}
+              band={band}
+              fresh={i === 2}
+              resetDays={z.resetDays}
+            />
           ))}
+          <ZoneCard photo={fakeWall(104).uri} name="D 區（沒登入）" done={0} grades={[0, 1, 2, 3, 4]} scale={20} band={band} guest resetDays={48} />
         </ZoneList>
+        <p className="mt-2 mb-0 text-meta text-muted">選了難度：範圍內的色段保持粗、寫條數，其他縮成細線；整區沒有這個難度就變淡。NEW＝3 天內有新路線</p>
       </Block>
 
       <Block title="即將換線">
         <ResetList
           items={[
-            { key: "A", name: "A 區", date: "10/05", left: 11, days: 5 },
-            { key: "B", name: "B 區", date: "10/12", left: 5, days: 12 },
-            { key: "W", name: "比賽牆", date: "10/24", left: 8, days: 24 },
+            { key: "A", name: "A 區", date: "10/05", left: 11, total: 20, days: 5 },
+            { key: "B", name: "B 區", date: "10/12", left: 5, total: 16, days: 12 },
+            { key: "W", name: "比賽牆（沒登入）", date: "10/24", left: null, total: 10, days: 24 },
           ]}
         />
       </Block>
