@@ -33,7 +33,7 @@ test("後台點平面圖切換區域；圖上沒有的區域用按鈕", async ()
   assert.deepEqual(B.errors, []);
 });
 
-test("南港平面圖：左下角整塊斜牆是 B2，C1 是最下面的短牆", async () => {
+test("南港平面圖：左下角整塊斜牆是 B2，C1 是最下面的短牆，中間長牆左半 C2、右半 C3；C 區畫厚一點好點", async () => {
   const mock = createMock();
   const { page, errors } = await phone(browser, mock);
   await page.goto(BASE + "/gym/g4", { waitUntil: "networkidle" });
@@ -50,6 +50,11 @@ test("南港平面圖：左下角整塊斜牆是 B2，C1 是最下面的短牆",
   assert.equal(await zoneAt(230, 1010), "B2 區", "斜線下方的三角形也是 B2");
   assert.equal(await zoneAt(340, 1040), "B2 區", "左下角是 B2");
   assert.equal(await zoneAt(450, 1040), "C1 區", "最下面的短牆是 C1");
+  assert.equal(await zoneAt(450, 1010), "C1 區", "C1 加厚：上緣也點得到");
+  assert.equal(await zoneAt(720, 935), "C2 區", "中間長牆左半是 C2");
+  assert.equal(await zoneAt(1070, 935), "C3 區", "中間長牆右半是 C3");
+  assert.equal(await zoneAt(794, 955), "C2 區", "C2 加厚：下緣也點得到");
+  assert.equal(await zoneAt(998, 915), "C3 區", "C3 加厚：上緣也點得到");
   assert.equal(await zoneAt(450, 900), null, "短牆上方是走道，不屬於任何區");
 
   // 點 C1 的字樣可以進 C1 區
@@ -57,6 +62,15 @@ test("南港平面圖：左下角整塊斜牆是 B2，C1 是最下面的短牆",
   await page.waitForURL(/\/zone\?id=/);
   await page.waitForTimeout(600);
   assert.equal(await page.textContent("h1"), "C1 區");
+
+  // 點 C3 的字樣可以進 C3 區
+  await page.goBack();
+  await page.waitForURL("**/gym/g4");
+  await page.waitForTimeout(600);
+  await page.locator('svg[role=img] g[aria-label^="C3 區"] text').first().click();
+  await page.waitForURL(/\/zone\?id=/);
+  await page.waitForTimeout(600);
+  assert.equal(await page.textContent("h1"), "C3 區");
   assert.deepEqual(errors, []);
 });
 

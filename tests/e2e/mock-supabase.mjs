@@ -38,7 +38,7 @@ export function createMock() {
         Object.entries({
           g2: [["A", "A 區"], ["B1", "B1 區"], ["B2", "B2 區"], ["C1", "C1 區"], ["C2", "C2 區"], ["D1", "D1 區"], ["D2", "D2 區"], ["SL", "教學區 Slab"], ["TR", "訓練區"]],
           g3: [["A1", "A1 區"], ["A2", "A2 區"], ["AB1", "Auto-Belay 1"], ["AB2", "Auto-Belay 2"], ["B", "B 區"], ["C", "C 區"], ["D", "D 區"], ["SP", "速度牆"], ["BO", "抱石區"]],
-          g4: [["A1", "A1 區"], ["A2", "A2 區"], ["A3", "A3 區"], ["B1", "B1 區"], ["B2", "B2 區"], ["C1", "C1 區"], ["C2", "C2 區"]],
+          g4: [["A1", "A1 區"], ["A2", "A2 區"], ["A3", "A3 區"], ["B1", "B1 區"], ["B2", "B2 區"], ["C1", "C1 區"], ["C2", "C2 區"], ["C3", "C3 區"]],
           g5: [["A1", "抱石 A1 區"], ["A2", "抱石 A2 區"], ["B1", "抱石 B1 區"], ["B2", "抱石 B2 區"], ["C1", "C1 區"], ["C2", "C2 區"], ["D", "D 區"], ["E", "上攀 E 區"]],
         }).flatMap(([gym_id, zs]) => zs.map(([code, name], i) => ({ id: uuid(), gym_id, code, name, sort: i + 1, photo_path: null, photo_width: null, photo_height: null, next_reset_on: null, route_seq: 0, grade_system: gym_id === "g3" && code !== "BO" ? "yds" : "v" })))
       ),

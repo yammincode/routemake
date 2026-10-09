@@ -30,6 +30,7 @@
 | `setup/step21-zones-split.sql` | migration 0025：明德、新店、中和、萬華細分區域（萬華 D 右段＝教學區 Slab）；執行前要先把要切的區域整區換線 | 已套用 |
 | `setup/step22-grade-vb.sql` | migration 0026：新增 VB 難度（grade = -1）、VB 分數（預設 5 分） | 已套用 |
 | `setup/step23-usage-since.sql` | migration 0027：使用狀況「統計起始日」（usage_settings、set_usage_since()，usage_stats() 照起始日計算） | 已套用 |
+| `setup/step24-nangang-c3.sql` | migration 0028：南港中間長牆切成 C2（左半）／C3（右半），新增 C3 區 | 待套用 |
 
 ## 規則摘要
 

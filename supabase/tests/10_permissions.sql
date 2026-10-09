@@ -83,8 +83,8 @@ select tests.ok('初始資料：六間店、明德館 17 區（細分＋Spray Wa
   and (select count(*) from public.zones where gym_id = 'mingde' and plan_shape is not null) = 5);
 select tests.ok('開放館：明德、萬華、中和、南港、新店（中壢還沒）',
   (select array_agg(id order by id) from public.gyms where is_live) = '{g2,g3,g4,g5,mingde}');
-select tests.ok('各館區域數：萬華 9、中和 9、南港 7（＋Spray Wall）、新店 8',
-  (select array_agg(n order by gym_id) from (select gym_id, count(*) n from public.zones where gym_id <> 'mingde' group by gym_id) x) = '{9,9,8,8}');
+select tests.ok('各館區域數：萬華 9、中和 9、南港 8（＋Spray Wall）、新店 8',
+  (select array_agg(n order by gym_id) from (select gym_id, count(*) n from public.zones where gym_id <> 'mingde' group by gym_id) x) = '{9,9,9,8}');
 select tests.ok('明德館區域順序：A1–A4、比賽牆 1–4、B1–B3、C1–C3、D1–D2、Spray Wall',
   (select string_agg(name, '、' order by sort) from public.zones where gym_id = 'mingde') = 'A1 區、A2 區、A3 區、A4 區、比賽牆 1、比賽牆 2、比賽牆 3、比賽牆 4、B1 區、B2 區、B3 區、C1 區、C2 區、C3 區、D1 區、D2 區、Spray Wall');
 select tests.ok('換線日：比賽牆四段都是 10/6、新店上攀 E 區 10/18',
@@ -98,7 +98,7 @@ select tests.ok('新使用者自動建立 profiles 並存帳號名稱（轉小�
 -- 未登入的人
 -- ---------------------------------------------------------------------
 set role anon; select tests.login(null);
-select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 51);
+select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 52);
 select tests.ok('未登入：可以看暱稱', (select nickname from public.profiles where id = :A) = '甲');
 select tests.throws('未登入：讀不到手機號碼', 'select phone from public.profiles');
 select tests.throws('未登入：讀不到帳號名稱', 'select username from public.profiles');
@@ -373,8 +373,8 @@ select tests.ok('萬華細分：B1、B2、C1、C2、D1、D2，D 右段是教學�
 select tests.ok('新分段沿用原本的換線日（明德 A2 是 9/30、比賽牆 4 是 10/6）',
   (select next_reset_on from public.zones where gym_id = 'mingde' and code = 'A2') = '2026-09-30'
   and (select next_reset_on from public.zones where gym_id = 'mingde' and code = 'W4') = '2026-10-06');
-select tests.ok('南港館細分成 7 區（A1–C2），沒有舊的 A／B／C',
-  (select array_agg(code order by sort) from public.zones where gym_id = 'g4' and kind = 'wall') = array['A1','A2','A3','B1','B2','C1','C2']);
+select tests.ok('南港館細分成 8 區（A1–C3，中間長牆左半 C2、右半 C3），沒有舊的 A／B／C',
+  (select array_agg(code order by sort) from public.zones where gym_id = 'g4' and kind = 'wall') = array['A1','A2','A3','B1','B2','C1','C2','C3']);
 
 -- ---------------------------------------------------------------------
 -- 員工指派
