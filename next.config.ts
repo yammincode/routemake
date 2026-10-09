@@ -44,9 +44,13 @@ const nextConfig: NextConfig = {
     const headers = process.env.NODE_ENV === "production" ? [...base, { key: "Content-Security-Policy", value: csp }] : base;
     return [{ source: "/:path*", headers }];
   },
-  // 舊的區域網址 /zone/{id} 轉到 /zone?id={id}
+  // 舊的區域網址 /zone/{id} 轉到 /zone?id={id}；使用狀況、換線日從管理後台搬到「營運」分頁，舊網址轉過去
   async redirects() {
-    return [{ source: "/zone/:id", destination: "/zone?id=:id", permanent: true }];
+    return [
+      { source: "/zone/:id", destination: "/zone?id=:id", permanent: true },
+      { source: "/admin/usage", destination: "/ops/usage", permanent: false },
+      { source: "/admin/resets", destination: "/ops/resets", permanent: false },
+    ];
   },
 };
 

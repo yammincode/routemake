@@ -1,7 +1,6 @@
 "use client";
 
 import FeedbackPanel from "@/components/admin/FeedbackPanel";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteEditor, { type EditTarget } from "@/components/admin/RouteEditor";
@@ -22,7 +21,7 @@ import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { NoPhoto, Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
-import { canEditResets, isManagerOf, roleLabel } from "@/lib/auth";
+import { isManagerOf, roleLabel } from "@/lib/auth";
 import {
   archiveZone,
   createZone,
@@ -51,7 +50,6 @@ type Confirm = { kind: "photo"; file: File } | { kind: "reset" } | { kind: "zone
 
 // 管理後台：選場館、全館留言開關、區域設定與照片、在照片上標路線、整區換線、員工
 export default function AdminView() {
-  const router = useRouter();
   const { access } = useAuth();
   const toast = useToast();
   const rules = useScoring();
@@ -338,7 +336,7 @@ export default function AdminView() {
                   defaultValue={zone.next_reset_on ?? ""}
                   onChange={(e) => void saveZone({ next_reset_on: e.target.value || null }, e.target.value ? "已更新換線日" : "已清除換線日")}
                 />
-                {access.can_edit_resets !== undefined && <small className="mt-1 block text-tiny text-muted">有換線公告時以公告為準（老闆在「📅 換線日」輸入）</small>}
+                {access.can_edit_resets !== undefined && <small className="mt-1 block text-tiny text-muted">有換線公告時以公告為準（在「營運 → 📅 換線日」輸入）</small>}
               </div>
               <div>
                 <Label>區域照片</Label>
@@ -452,18 +450,6 @@ export default function AdminView() {
         </SetBox>
       )}
       {gym && <VideoPanel gymId={gymId} gymName={gym.name} />}
-      {/* 使用狀況：只有老闆和這一館的店長看得到（資料庫也只給這兩種人看） */}
-      {manager && gym && (
-        <Button className="mt-6" onClick={() => router.push("/admin/usage")}>
-          📊 使用狀況
-        </Button>
-      )}
-      {/* 換線日：老闆和老闆授權的人（各館一起輸入）；資料庫還沒套用 step27 時（帳號資料沒有 can_edit_resets）先不顯示 */}
-      {access.can_edit_resets !== undefined && canEditResets(access) && (
-        <Button className="mt-2" onClick={() => router.push("/admin/resets")}>
-          📅 換線日
-        </Button>
-      )}
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <AuditPanel gymId={gymId} gymName={gym.name} />}
       {access.is_owner && <ScoringPanel />}

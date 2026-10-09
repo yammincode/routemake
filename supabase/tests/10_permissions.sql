@@ -894,10 +894,7 @@ set role authenticated; select tests.login(:ST);
 select tests.throws('使用狀況：定線員不能看', $q$select public.usage_stats('mingde')$q$);
 reset role;
 set role authenticated; select tests.login(:MG);
-select tests.ok('使用狀況：店長看得到自己的館',
-  (select (u ->> 'month')::int >= 1 and jsonb_array_length(u -> 'daily') = 30 and u -> 'gyms' = 'null'::jsonb from public.usage_stats('mingde') u),
-  public.usage_stats('mingde')::text);
-select tests.throws('使用狀況：店長不能看別館', $q$select public.usage_stats('g2')$q$);
+select tests.throws('使用狀況：店長沒有老闆授權也不能看（自己的館也不行）', $q$select public.usage_stats('mingde')$q$);
 select tests.throws('使用狀況：店長不能看全部館', $q$select public.usage_stats(null)$q$);
 reset role;
 set role authenticated; select tests.login(:OW);
@@ -1063,6 +1060,68 @@ values ('g2', '臨時 T', array[(select id from public.zones where gym_id = 'g2'
 select tests.lives('換線日：同一筆公告的兩區一次刪掉（重新分區）也刪得掉', $q$delete from public.zones where gym_id = 'g2' and code in ('T1', 'T2')$q$);
 select tests.ok('換線日：一次刪掉的兩區都從公告拿掉',
   (select zone_ids from public.reset_events where label = '臨時 T') = array[(select v from rz where k = 'd1')]);
+
+-- ---------------------------------------------------------------------
+-- 營運：使用狀況要老闆授權，只看老闆指定的館
+-- ---------------------------------------------------------------------
+set role authenticated; select tests.login(:MG);
+select tests.ok('營運：店長 my_access 沒有可以看使用狀況的館', (public.my_access() -> 'usage_gyms') = '[]'::jsonb);
+select tests.throws('營運：店長不能授權自己看使用狀況', format($q$select public.set_usage_viewer(%L, 'mingde', true)$q$, :MG));
+select tests.ok('營運：店長看不到使用狀況授權名單', (select count(*) from public.usage_viewer_list()) = 0);
+select tests.throws('營運：不能直接寫授權名單', format($q$insert into public.usage_viewers (user_id, gym_id) values (%L, 'mingde')$q$, :MG));
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.lives('營運：老闆授權店長看明德館', format($q$select public.set_usage_viewer(%L, 'mingde', true)$q$, :MG));
+select tests.lives('營運：老闆授權顧客乙看中和', format($q$select public.set_usage_viewer(%L, 'g3', true)$q$, :B));
+select tests.lives('營運：老闆授權顧客乙看萬華', format($q$select public.set_usage_viewer(%L, 'g2', true)$q$, :B));
+select tests.lives('營運：同一館再授權一次不會出錯', format($q$select public.set_usage_viewer(%L, 'g2', true)$q$, :B));
+select tests.throws('營運：還沒開放的館不能授權', format($q$select public.set_usage_viewer(%L, 'g6', true)$q$, :B));
+select tests.throws('營運：沒有這間館不能授權', format($q$select public.set_usage_viewer(%L, 'nope', true)$q$, :B));
+select tests.throws('營運：沒有這個帳號不能授權', $q$select public.set_usage_viewer('00000000-0000-0000-0000-000000000999', 'g2', true)$q$);
+select tests.ok('營運：老闆看得到授權名單（每人一列、館照順序）',
+  (select gym_ids = array['g2', 'g3'] and username is not null from public.usage_viewer_list() where id = :B),
+  (select string_agg(format('%s %s', username, gym_ids), '; ') from public.usage_viewer_list()));
+select tests.ok('營運：授權寫在那一館的操作紀錄', exists (select 1 from public.audit_log where action = 'usage_viewer.grant' and gym_id = 'g2' and target_id = :B));
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.ok('營運：被授權後店長看得到明德館',
+  (select jsonb_array_length(u -> 'daily') = 30 and u -> 'gyms' = 'null'::jsonb from public.usage_stats('mingde') u));
+select tests.ok('營運：店長 my_access 有明德館', (public.my_access() -> 'usage_gyms') = '["mingde"]'::jsonb);
+select tests.throws('營運：店長還是不能看別館', $q$select public.usage_stats('g2')$q$);
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.ok('營運：顧客乙看得到萬華', (select jsonb_array_length(u -> 'daily') = 30 from public.usage_stats('g2') u));
+select tests.lives('營運：顧客乙看得到中和', $q$select public.usage_stats('g3')$q$);
+select tests.throws('營運：沒指定的館看不到（明德）', $q$select public.usage_stats('mingde')$q$);
+select tests.throws('營運：被授權的人不能看全部館', $q$select public.usage_stats(null)$q$);
+select tests.throws('營運：被授權的人不能重新開始統計', $q$select public.set_usage_since(null)$q$);
+select tests.throws('營運：被授權的人不能授權別人', format($q$select public.set_usage_viewer(%L, 'g2', true)$q$, :A));
+select tests.ok('營運：被授權的人看不到授權名單', (select count(*) from public.usage_viewer_list()) = 0);
+select tests.ok('營運：被授權的人只看得到自己的授權', (select count(*) = 2 and bool_and(user_id = :B) from public.usage_viewers));
+select tests.throws('營運：被授權的人不能自己刪授權', format($q$delete from public.usage_viewers where user_id = %L$q$, :B));
+select tests.ok('營運：my_access 照館的順序列出可以看的館', (public.my_access() -> 'usage_gyms') = '["g2", "g3"]'::jsonb);
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.ok('營運：沒被授權的顧客 my_access 沒有館', (public.my_access() -> 'usage_gyms') = '[]'::jsonb);
+select tests.throws('營運：沒被授權的顧客看不到', $q$select public.usage_stats('g2')$q$);
+reset role;
+set role anon; select tests.login(null);
+select tests.ok('營運：沒登入看不到授權名單', (select count(*) from public.usage_viewers) = 0);
+select tests.throws('營運：沒登入不能看使用狀況', $q$select public.usage_stats('g2')$q$);
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.lives('營運：老闆取消顧客乙的萬華', format($q$select public.set_usage_viewer(%L, 'g2', false)$q$, :B));
+select tests.ok('營運：取消寫操作紀錄', exists (select 1 from public.audit_log where action = 'usage_viewer.revoke' and gym_id = 'g2' and target_id = :B));
+select tests.lives('營運：老闆取消店長的明德館', format($q$select public.set_usage_viewer(%L, 'mingde', false)$q$, :MG));
+select tests.ok('營運：取消後授權名單只剩顧客乙的中和', (select count(*) = 1 and bool_and(gym_ids = array['g3']) from public.usage_viewer_list()));
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.throws('營運：取消後看不到萬華', $q$select public.usage_stats('g2')$q$);
+select tests.lives('營運：取消萬華後中和還看得到', $q$select public.usage_stats('g3')$q$);
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.throws('營運：取消後店長又看不到', $q$select public.usage_stats('mingde')$q$);
+reset role;
 
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));

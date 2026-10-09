@@ -16,10 +16,17 @@ export type Access = {
   avatar_url: string | null;
   is_owner: boolean;
   can_edit_resets?: boolean; // 可以輸入換線日（老闆或老闆授權的人；資料庫還沒套用 step27 時沒有這個欄位）
+  usage_gyms?: string[]; // 老闆授權看使用狀況的館（資料庫還沒套用 step28 時沒有這個欄位）
   roles: { gym_id: string; role: Role }[];
 };
 // 可以輸入換線日
 export const canEditResets = (a: Access | null) => !!a && (a.is_owner || !!a.can_edit_resets);
+// 可以看使用狀況：老闆看全部館；其他人要老闆授權，只看老闆指定的館
+export const canViewUsage = (a: Access | null) => !!a && (a.is_owner || (a.usage_gyms?.length ?? 0) > 0);
+// 「營運」分頁（使用狀況、換線日）：有其中一個權限才看得到
+export const canOps = (a: Access | null) => canViewUsage(a) || canEditResets(a);
+// 管理後台（路線、員工）：老闆和各館員工
+export const isStaff = (a: Access | null) => !!a && (a.is_owner || a.roles.length > 0);
 
 export const isStaffOf = (a: Access | null, gym?: string) =>
   !!a && (a.is_owner || a.roles.some((r) => !gym || r.gym_id === gym));

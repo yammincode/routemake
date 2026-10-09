@@ -14,14 +14,14 @@ import { GYMS } from "@/lib/gyms";
 
 const md = (d: string) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
 
-// 使用狀況頁（獨立頁面）：店長看自己的館；老闆可以看全部館、各館比較，並設定「統計起始日」
+// 使用狀況頁（營運分頁）：老闆授權的人只看老闆指定的館；老闆可以看全部館、各館比較，並設定「統計起始日」
 // 「有使用」＝當天有打開 App，或有記錄攀爬、留言、分享影片（只算登入的人）
 export default function UsageView() {
   const { access } = useAuth();
   const router = useRouter();
   const toast = useToast();
   const owner = !!access?.is_owner;
-  const myGyms = owner ? GYMS.filter((g) => g.live) : GYMS.filter((g) => access?.roles.some((r) => r.gym_id === g.id && r.role === "manager"));
+  const myGyms = owner ? GYMS.filter((g) => g.live) : GYMS.filter((g) => g.live && access?.usage_gyms?.includes(g.id));
   const [scope, setScope] = useState<string | null>(owner ? null : (myGyms[0]?.id ?? null)); // null＝全部館
   const [data, setData] = useState<UsageStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +29,9 @@ export default function UsageView() {
   const [confirm, setConfirm] = useState(false);
   const [reload, setReload] = useState(0);
 
+  const allowed = owner || myGyms.length > 0;
   useEffect(() => {
+    if (!allowed) return; // 沒授權：不用問資料庫（資料庫也會擋）
     let alive = true;
     void Promise.resolve().then(() => {
       setData(null);
@@ -41,9 +43,14 @@ export default function UsageView() {
     return () => {
       alive = false;
     };
-  }, [scope, reload]);
+  }, [allowed, scope, reload]);
 
-  if (!owner && myGyms.length === 0) return <Empty>使用狀況只有店長和老闆看得到。</Empty>;
+  if (!allowed)
+    return (
+      <Empty>
+        使用狀況要老闆授權才看得到。需要的話請找老闆在「營運」授權給你的帳號（<b className="text-ink">{access?.username}</b>）。
+      </Empty>
+    );
 
   const all = scope == null;
   const rate = data && data.registered ? Math.round((data.month / data.registered) * 1000) / 10 : 0;
@@ -62,7 +69,7 @@ export default function UsageView() {
 
   return (
     <>
-      <BackLink onClick={() => router.push("/admin")}>管理後台</BackLink>
+      <BackLink onClick={() => router.push("/ops")}>營運</BackLink>
       {(owner || myGyms.length > 1) && (
         <ChipRow>
           {owner && (

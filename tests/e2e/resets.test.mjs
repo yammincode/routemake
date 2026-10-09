@@ -15,10 +15,11 @@ test("換線日：老闆輸入 → 選館頁、行事曆、館首頁卡片都更
 
   const O = await phone(browser, mock);
   const o = O.page;
-  await login(o, "owner1", "password1", "/admin");
-  await o.waitForTimeout(800);
+  await login(o, "owner1", "password1", "/gyms");
+  await o.click('nav a:text-is("營運")');
+  await o.waitForURL("**/ops");
   await o.click('main button:text-is("📅 換線日")');
-  await o.waitForURL("**/admin/resets");
+  await o.waitForURL("**/ops/resets");
   await o.waitForTimeout(600);
   await o.click('main button[aria-pressed]:text-is("萬華館")');
   await o.waitForTimeout(300);
@@ -93,38 +94,45 @@ test("換線日：老闆輸入 → 選館頁、行事曆、館首頁卡片都更
   assert.deepEqual([...O.errors, ...G.errors], []);
 });
 
-test("換線日權限：顧客不能輸入；老闆授權後可以，取消後不行", async () => {
+test("換線日權限：顧客不能輸入；老闆在營運授權後可以，取消後不行", async () => {
   const mock = createMock();
   mock.addUser("owner1", "password1", { nickname: "老闆", is_owner: true });
   const me = mock.addUser("climber88", "password1", { nickname: "小安" });
 
   const C = await phone(browser, mock);
   const c = C.page;
-  await login(c, "climber88", "password1", "/admin/resets");
+  await login(c, "climber88", "password1", "/ops/resets");
   await c.waitForTimeout(800);
   assert.ok((await c.textContent("main")).includes("換線日由老闆統一輸入"), "顧客看到說明");
   assert.equal(await c.locator('main button:has-text("新增")').count(), 0);
   assert.equal(await c.locator('nav a:has-text("管理後台")').count(), 0, "顧客沒有管理後台分頁");
+  assert.equal(await c.locator('nav a:has-text("營運")').count(), 0, "顧客沒有營運分頁");
 
   const O = await phone(browser, mock);
   const o = O.page;
-  await login(o, "owner1", "password1", "/admin/resets");
+  await login(o, "owner1", "password1", "/ops");
   await o.waitForTimeout(800);
-  await o.fill("#rsearch", "climber");
+  await o.fill("#osearch", "climber");
   await o.waitForTimeout(800);
   await o.click('main button:has-text("小安")');
+  const row = o.locator('main [role=group][aria-label="小安"]');
+  await row.waitFor();
+  assert.ok((await row.textContent()).includes("帳號 climber88"), "選到的人出現在授權名單");
+  await row.locator('button:text-is("可以輸入")').click();
   await o.waitForTimeout(600);
   assert.deepEqual(mock.db.resetEditors, [me], "老闆授權小安");
-  assert.ok((await o.textContent("main")).includes("帳號 climber88"), "授權名單出現");
+  assert.equal(await row.locator('button:text-is("可以輸入")').getAttribute("aria-pressed"), "true", "膠囊變成已授權");
 
   await c.reload({ waitUntil: "networkidle" });
   await c.waitForTimeout(800);
-  assert.equal(await c.locator('nav a:has-text("管理後台")').count(), 1, "被授權後有管理後台分頁");
-  await c.click('nav a:has-text("管理後台")');
-  await c.waitForURL("**/admin");
+  assert.equal(await c.locator('nav a:has-text("營運")').count(), 1, "被授權後有營運分頁");
+  assert.equal(await c.locator('nav a:has-text("管理後台")').count(), 0, "不是員工：沒有管理後台分頁");
+  await c.click('nav a:has-text("營運")');
+  await c.waitForURL("**/ops");
   await c.waitForTimeout(600);
+  assert.equal(await c.locator('main button:text-is("📊 使用狀況")').count(), 0, "只授權換線日：看不到使用狀況");
   await c.click('main button:text-is("📅 換線日")');
-  await c.waitForURL("**/admin/resets");
+  await c.waitForURL("**/ops/resets");
   await c.waitForTimeout(600);
   await c.click('main button:has-text("新增")');
   const sheet = c.locator("[role=dialog]");
@@ -136,10 +144,10 @@ test("換線日權限：顧客不能輸入；老闆授權後可以，取消後�
   await c.waitForTimeout(800);
   assert.equal(mock.db.resetEvents.length, 1, "被授權的人可以新增");
 
-  await o.click('main button:text-is("取消權限")');
-  await o.click('main button:text-is("確定取消？再按一次")');
+  await row.locator('button:text-is("可以輸入")').click();
   await o.waitForTimeout(600);
   assert.deepEqual(mock.db.resetEditors, []);
+  assert.equal(await row.locator('button:text-is("可以輸入")').getAttribute("aria-pressed"), "false", "取消後膠囊沒按下（人還留在名單上，點錯可以點回來）");
   await c.reload({ waitUntil: "networkidle" });
   await c.waitForTimeout(800);
   assert.ok((await c.textContent("main")).includes("換線日由老闆統一輸入"), "取消後不能輸入");
@@ -180,7 +188,7 @@ test("選館頁：換線中、剛換好（NEW）、Spray Wall 那一列各自寫
   assert.deepEqual(errors, []);
 });
 
-test("資料庫還沒套用 step27：選館頁、行事曆、館首頁照常（沒有換線資訊），後台不出現換線日按鈕", async () => {
+test("資料庫還沒套用 step27：選館頁、行事曆、館首頁照常（沒有換線資訊），營運不出現換線日按鈕", async () => {
   const mock = createMock();
   mock.state.noResets = true;
   mock.addUser("owner1", "password1", { nickname: "老闆", is_owner: true });
@@ -194,10 +202,12 @@ test("資料庫還沒套用 step27：選館頁、行事曆、館首頁照常（�
   await page.goto(BASE + "/gym/g2", { waitUntil: "networkidle" });
   await page.waitForTimeout(800);
   assert.ok(await page.locator("main button.rounded-card").count(), "館首頁照常");
-  await login(page, "owner1", "password1", "/admin");
+  await login(page, "owner1", "password1", "/ops");
   await page.waitForTimeout(800);
   // 只認「📅 換線日」入口按鈕（操作紀錄的篩選也有「換線日」，那個不算）
   assert.equal(await page.locator('main button:text-is("📅 換線日")').count(), 0, "還沒套用 step27 時不顯示換線日按鈕");
+  assert.equal(await page.locator('main button:text-is("📊 使用狀況")').count(), 1, "老闆照常看得到使用狀況");
+  assert.equal(await page.locator("main #osearch").count(), 0, "還沒套用時不顯示授權");
   assert.deepEqual(errors, []);
 });
 
@@ -213,7 +223,7 @@ test("換線日後台：網路慢時換館，勾的區域是現在這間館的�
       await route.fallback();
     }
   );
-  await login(page, "owner1", "password1", "/admin/resets");
+  await login(page, "owner1", "password1", "/ops/resets");
   await page.click('main button[aria-pressed]:text-is("萬華館")');
   await page.waitForTimeout(3800);
   await page.click('main button:has-text("新增萬華館換線日")');

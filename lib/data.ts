@@ -200,6 +200,20 @@ export async function setResetEditor(userId: string, on: boolean) {
   mustResets(await supabase().rpc("set_reset_editor", { p_user: userId, p_on: on }));
 }
 
+// ---------- 營運權限（老闆授權誰看哪幾館的使用狀況） ----------
+const NO_OPS = "資料庫還沒套用營運權限設定（step28），請先請老闆在 Supabase 執行 step28";
+function mustOps<T>(r: { data: T | null; error: { message?: string; code?: string } | null }): T {
+  if (r.error?.code === "PGRST202" || r.error?.code === "PGRST205" || r.error?.code === "42P01") throw new Error(NO_OPS);
+  return must(r);
+}
+export type UsageViewer = { id: string; username: string | null; nickname: string | null; gym_ids: string[] };
+export async function getUsageViewers(): Promise<UsageViewer[]> {
+  return mustOps(await supabase().rpc("usage_viewer_list")) ?? [];
+}
+export async function setUsageViewer(userId: string, gym: string, on: boolean) {
+  mustOps(await supabase().rpc("set_usage_viewer", { p_user: userId, p_gym: gym, p_on: on }));
+}
+
 // 自己在這些路線上的紀錄（RLS 只回傳自己的）
 export async function getMyAscents(routeIds: string[]): Promise<Record<string, Ascent>> {
   if (!routeIds.length) return {};

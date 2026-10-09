@@ -2,6 +2,7 @@
 import { ROLE_NAME, type Role } from "@/lib/auth";
 import type { AuditEntry } from "@/lib/data";
 import { gradeLabel } from "@/lib/design";
+import { GYMS } from "@/lib/gyms";
 
 export const AUDIT_FILTERS = [
   { key: "all", label: "全部", actions: [] as string[] },
@@ -11,10 +12,12 @@ export const AUDIT_FILTERS = [
   { key: "card", label: "人物卡", actions: ["card.clear"] },
   { key: "staff", label: "員工", actions: ["staff.assign", "staff.remove"] },
   { key: "scoring", label: "計分／統計", actions: ["scoring.update", "usage.reset"] },
-  { key: "reset", label: "換線日", actions: ["reset.add", "reset.update", "reset.delete", "reset_editor.grant", "reset_editor.revoke"] },
+  { key: "reset", label: "換線日", actions: ["reset.add", "reset.update", "reset.delete"] },
+  { key: "ops", label: "營運權限", actions: ["reset_editor.grant", "reset_editor.revoke", "usage_viewer.grant", "usage_viewer.revoke"] },
 ] as const;
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
+const gymName = (id: string | null) => GYMS.find((g) => g.id === id)?.name ?? "";
 
 export function describeAudit(a: AuditEntry): string {
   const d = a.detail ?? {};
@@ -55,6 +58,10 @@ export function describeAudit(a: AuditEntry): string {
       return `授權 ${person} 輸入換線日`;
     case "reset_editor.revoke":
       return `取消 ${person} 的換線日權限`;
+    case "usage_viewer.grant":
+      return `授權 ${person} 看${gymName(a.gym_id)}使用狀況`;
+    case "usage_viewer.revoke":
+      return `取消 ${person} 看${gymName(a.gym_id)}使用狀況`;
     case "usage.reset":
       return `使用狀況重新開始統計（從 ${str(d.since).slice(5).replace("-", "/")} 開始）`;
     default:

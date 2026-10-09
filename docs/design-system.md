@@ -111,11 +111,12 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Video.tsx` | `VideoRow`、`VideoList`（路線卡片影片分頁：一支一列，方形縮圖＋片長、說明、誰・多久前、`VideoResult` 分享者紀錄、身高・動作）、`VideoStrip`（橫向滑動縮圖，後台用）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`（顧客分享影片） |
 | `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
+| `Grant.tsx` | `GrantList`、`GrantRow`（授權名單的一個人：暱稱、帳號）、`GrantGroup`（一組權限：小標＋膠囊，按下去＝有權限，再按一次取消；營運分頁老闆用） |
 | `HowTo.tsx` | `HowTo`（「怎麼看」說明：第一次展開，按「知道了」收成一行，記在這支手機） |
 | `Toast.tsx` | `ToastProvider`、`useToast` |
 | `Icon.tsx` | `Icon`（flash、send、project、chat、lock、down、video、play） |
 
-頁面層級：`components/Header.tsx`（Logo＋場館切換；管理後台不給館，只有 Logo）、`components/TabBar.tsx`（底部三個分頁）、`components/ErrorScreen.tsx`（出錯、找不到頁面的中文畫面）。
+頁面層級：`components/Header.tsx`（Logo＋場館切換；管理後台不給館，只有 Logo）、`components/TabBar.tsx`（底部分頁：館內路線、人物卡、我的紀錄，員工多「管理後台」，老闆和被授權的人多「營運」；五個分頁時間距縮小，360 寬也排得下一行）、`components/LoginGate.tsx`（要先登入的頁面：沒登入顯示說明和登入按鈕）、`components/ErrorScreen.tsx`（出錯、找不到頁面的中文畫面）。
 
 篩選鈕：頁面上的長篩選（難度、顏色）用 `ChipRow` 左右滑；面板裡選項不多（7 顆以內，例如影片的身高、動作）用 `ChipRow wrap` 換行排，不要左右滑（窄手機會把後面的選項整顆藏起來，看不出還有）。
 

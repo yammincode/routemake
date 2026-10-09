@@ -50,6 +50,7 @@ export function createMock() {
     feedback: [],
     resetEvents: [], // 換線公告
     resetEditors: [], // 老闆授權輸入換線日的人（user_id）
+    usageViewers: [], // 老闆授權看使用狀況的人和館（{ user_id, gym_id }）
     likes: [], // comment_likes
     audit: [],
     files: {},
@@ -64,7 +65,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false };
+  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false, noOps: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -119,6 +120,10 @@ export function createMock() {
   const isOwner = (uid) => !!prof(uid)?.is_owner;
   const isStaff = (uid, g) => isOwner(uid) || db.staff_roles.some((s) => s.user_id === uid && s.gym_id === g);
   const canEditResets = (uid) => isOwner(uid) || db.resetEditors.includes(uid);
+  // state.noOps：模擬資料庫還沒套用 step28（沒有營運權限）；step28 要在 step27 之後，所以還沒套用 step27 時也算
+  const noOps = () => state.noOps || state.noResets;
+  const canViewUsage = (uid, g) => isOwner(uid) || db.usageViewers.some((v) => v.user_id === uid && v.gym_id === g);
+  const usageGyms = (uid) => db.gyms.filter((g) => db.usageViewers.some((v) => v.user_id === uid && v.gym_id === g.id)).map((g) => g.id);
   // 同 sync_zone_resets：區域的下次換線日＝今天以後開始的公告裡最早的開始日；沒有公告時，正是舊公告的日期就清空
   const syncZoneResets = (zoneIds, oldStart) => {
     const today = taipeiDay();
@@ -195,7 +200,7 @@ export function createMock() {
   async function rpc(route, fn, a, uid) {
     if (fn === "my_access") {
       const p = prof(uid);
-      return J(route, 200, p ? { id: p.id, username: p.username, nickname: p.nickname, avatar_url: null, is_owner: p.is_owner, ...(state.noResets ? {} : { can_edit_resets: canEditResets(uid) }), roles: db.staff_roles.filter((s) => s.user_id === uid).map((s) => ({ gym_id: s.gym_id, role: s.role })) } : null);
+      return J(route, 200, p ? { id: p.id, username: p.username, nickname: p.nickname, avatar_url: null, is_owner: p.is_owner, ...(state.noResets ? {} : { can_edit_resets: canEditResets(uid) }), ...(noOps() ? {} : { usage_gyms: usageGyms(uid) }), roles: db.staff_roles.filter((s) => s.user_id === uid).map((s) => ({ gym_id: s.gym_id, role: s.role })) } : null);
     }
     // state.noResets：模擬資料庫還沒套用 step27（沒有換線公告的函式），跟 PostgREST 一樣回 PGRST202
     if (state.noResets && ["reset_calendar", "reset_editor_list", "set_reset_editor"].includes(fn))
@@ -210,6 +215,21 @@ export function createMock() {
     if (fn === "reset_editor_list") {
       if (!isOwner(uid)) return J(route, 200, []);
       return J(route, 200, db.resetEditors.map((id) => ({ id, username: prof(id)?.username, nickname: prof(id)?.nickname })));
+    }
+    if (noOps() && ["usage_viewer_list", "set_usage_viewer"].includes(fn))
+      return J(route, 404, { code: "PGRST202", message: `Could not find the function public.${fn}` });
+    if (fn === "usage_viewer_list") {
+      if (!isOwner(uid)) return J(route, 200, []);
+      const ids = [...new Set(db.usageViewers.map((v) => v.user_id))];
+      return J(route, 200, ids.map((id) => ({ id, username: prof(id)?.username, nickname: prof(id)?.nickname, gym_ids: usageGyms(id) })));
+    }
+    if (fn === "set_usage_viewer") {
+      if (!isOwner(uid)) return J(route, 403, { code: "42501", message: "只有老闆可以設定使用狀況權限" });
+      if (!db.gyms.some((g) => g.id === a.p_gym && g.is_live)) return J(route, 404, { code: "P0002", message: "找不到這間館" });
+      db.usageViewers = db.usageViewers.filter((v) => !(v.user_id === a.p_user && v.gym_id === a.p_gym));
+      if (a.p_on) db.usageViewers.push({ user_id: a.p_user, gym_id: a.p_gym });
+      audit(uid, a.p_gym, a.p_on ? "usage_viewer.grant" : "usage_viewer.revoke", a.p_user, { nickname: prof(a.p_user)?.nickname });
+      return empty(route);
     }
     if (fn === "set_reset_editor") {
       if (!isOwner(uid)) return J(route, 403, { code: "42501", message: "只有老闆可以設定換線日權限" });
@@ -375,7 +395,9 @@ export function createMock() {
       return J(route, 200, null);
     }
     if (fn === "usage_stats") {
-      if (a.p_gym == null ? !isOwner(uid) : !isMgr(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有店長可以看使用狀況" });
+      // 同 usage_stats：全部館只有老闆；指定館要老闆授權（還沒套用 step28 的舊資料庫：那一館的店長）
+      const ok = a.p_gym == null ? isOwner(uid) : noOps() ? isMgr(uid, a.p_gym) : canViewUsage(uid, a.p_gym);
+      if (!ok) return J(route, 403, { code: "42501", message: "使用狀況要老闆授權才看得到" });
       const since = state.usageSince; // 統計起始日（null＝全部）
       const opens = db.opens.filter((o) => (a.p_gym == null || o.gym_id === a.p_gym) && (!since || o.day >= since));
       const days = Array.from({ length: 30 }, (_, i) => taipeiDay(i - 29));

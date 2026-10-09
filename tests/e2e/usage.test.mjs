@@ -1,4 +1,4 @@
-// 使用狀況：登入的人看館頁會記「今天有打開」；店長看自己的館，老闆可以看全部館；顧客看不到
+// 使用狀況：登入的人看館頁會記「今天有打開」；在「營運」分頁：老闆看全部館，老闆授權的人只看指定的館；店長沒授權也看不到
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { BASE, createMock, launch, login, phone, taipeiDay } from "./helpers.mjs";
@@ -7,7 +7,7 @@ let browser;
 before(async () => (browser = await launch()));
 after(async () => browser?.close());
 
-test("使用狀況：記錄打開、店長與老闆看統計", async () => {
+test("使用狀況：記錄打開；店長要老闆授權才看得到、只看指定的館；老闆看全部館", async () => {
   const mock = createMock();
   const me = mock.addUser("climber88", "password1", { nickname: "小安" });
   mock.addUser("boss", "password1", { nickname: "老闆", is_owner: true });
@@ -26,28 +26,40 @@ test("使用狀況：記錄打開、店長與老闆看統計", async () => {
   await C.page.waitForTimeout(600);
   assert.equal(mock.db.opens.length, n, "同一天不會重複記");
 
-  // 店長：從管理後台的按鈕進獨立頁面，只看自己的館
+  // 店長沒授權：管理後台沒有使用狀況、沒有營運分頁，直接打網址也看不到
   const M = await phone(browser, mock);
-  await login(M.page, "manager1", "password1", "/admin");
-  await M.page.waitForTimeout(1200);
-  assert.ok(!(await M.page.textContent("main")).includes("每天使用人數"), "管理後台不再塞使用狀況");
-  // 按鈕在下方（平面圖和區域之後，員工管理之前），不再佔最上面
-  const btnY = (await M.page.locator('main button:has-text("使用狀況")').boundingBox()).y;
-  const planY = (await M.page.locator("main svg[role=img]").first().boundingBox()).y;
-  assert.ok(btnY > planY, "使用狀況按鈕在平面圖下面");
-  await M.page.click('main button:has-text("使用狀況")');
-  await M.page.waitForURL("**/admin/usage");
-  await M.page.waitForTimeout(1000);
-  const text = await M.page.textContent("main");
-  assert.ok(text.includes("活躍人數") && text.includes("每天使用人數") && text.includes("註冊") && text.includes("熱門路線"), "店長看得到使用狀況");
-  assert.equal(await M.page.locator('main button:text-is("全部館")').count(), 0, "店長不能看全部館");
-  assert.equal(await M.page.locator('main button:has-text("重新開始統計")').count(), 0, "店長不能重新開始統計");
-  assert.equal(await M.page.locator('main [aria-label="最近 30 天每天使用人數"] button').count(), 30, "30 天趨勢");
+  const m = M.page;
+  await login(m, "manager1", "password1", "/admin");
+  await m.waitForTimeout(1200);
+  assert.equal(await m.locator('main button:has-text("使用狀況")').count(), 0, "管理後台沒有使用狀況按鈕");
+  assert.equal(await m.locator('nav a:text-is("營運")').count(), 0, "沒授權沒有營運分頁");
+  await m.goto(BASE + "/ops/usage", { waitUntil: "networkidle" });
+  await m.waitForTimeout(800);
+  assert.ok((await m.textContent("main")).includes("使用狀況要老闆授權才看得到"), "沒授權看到說明");
+  assert.ok(!(await m.textContent("main")).includes("活躍人數"));
 
-  // 老闆：預設看全部館，可以重新開始統計
+  // 老闆授權看萬華：多一個營運分頁，只看萬華
+  mock.db.usageViewers.push({ user_id: mgr, gym_id: "g2" });
+  await m.goto(BASE + "/admin", { waitUntil: "networkidle" });
+  await m.waitForTimeout(1000);
+  await m.click('nav a:text-is("營運")');
+  await m.waitForURL("**/ops");
+  await m.waitForTimeout(600);
+  assert.ok((await m.textContent("main")).includes("老闆授權你看萬華館的使用狀況"), "寫出可以看哪幾館");
+  await m.click('main button:text-is("📊 使用狀況")');
+  await m.waitForURL("**/ops/usage");
+  await m.waitForTimeout(1000);
+  const text = await m.textContent("main");
+  assert.ok(text.includes("活躍人數") && text.includes("每天使用人數") && text.includes("註冊") && text.includes("熱門路線"), "授權後看得到使用狀況");
+  assert.equal(await m.locator('main button:text-is("全部館")').count(), 0, "不能看全部館");
+  assert.equal(await m.locator('main button:has-text("重新開始統計")').count(), 0, "不能重新開始統計");
+  assert.equal(await m.locator('main [aria-label="最近 30 天每天使用人數"] button').count(), 30, "30 天趨勢");
+
+  // 老闆：預設看全部館，可以重新開始統計（舊網址 /admin/usage 會轉到營運）
   const B = await phone(browser, mock);
   const b = B.page;
   await login(b, "boss", "password1", "/admin/usage");
+  await b.waitForURL("**/ops/usage");
   await b.waitForTimeout(1200);
   const all = await b.textContent("main");
   assert.ok(all.includes("各館比較") && all.includes("使用率") && all.includes("目前算全部資料"), "老闆看得到各館比較與使用率");
@@ -61,33 +73,25 @@ test("使用狀況：記錄打開、店長與老闆看統計", async () => {
   assert.equal(await b.locator("main strong").first().textContent(), "0", "之前的使用不算進來");
   assert.ok(mock.db.audit.some((x) => x.action === "usage.reset"), "寫操作紀錄");
 
-  await C.page.goto(BASE + "/admin/usage", { waitUntil: "networkidle" });
+  await C.page.goto(BASE + "/ops/usage", { waitUntil: "networkidle" });
   await C.page.waitForTimeout(800);
   assert.ok(!(await C.page.textContent("main")).includes("活躍人數"), "顧客看不到");
   assert.deepEqual([...C.errors, ...M.errors, ...B.errors], []);
 });
 
-test("使用狀況按鈕：只有老闆和這一館的店長看得到，定線員看不到", async () => {
+test("使用狀況：授權兩間館的人只看得到那兩間（可以切換），看不到別館和全部館", async () => {
   const mock = createMock();
-  const setter = mock.addUser("setter1", "password1", { nickname: "阿定" });
-  const mix = mock.addUser("mix1", "password1", { nickname: "兼職" });
-  mock.db.staff_roles.push({ user_id: setter, gym_id: "mingde", role: "setter" });
-  // 在萬華當店長、在明德當定線員：看明德時不顯示
-  mock.db.staff_roles.push({ user_id: mix, gym_id: "g2", role: "manager" }, { user_id: mix, gym_id: "mingde", role: "setter" });
-
-  const S = await phone(browser, mock);
-  await login(S.page, "setter1", "password1", "/admin");
-  await S.page.waitForTimeout(1200);
-  assert.equal(await S.page.locator('main button:has-text("使用狀況")').count(), 0, "定線員看不到");
-
-  const X = await phone(browser, mock);
-  await login(X.page, "mix1", "password1", "/admin");
-  await X.page.waitForTimeout(1200);
-  await X.page.click('main button:text-is("明德館")');
-  await X.page.waitForTimeout(800);
-  assert.equal(await X.page.locator('main button:has-text("使用狀況")').count(), 0, "看自己當定線員的館時不顯示");
-  await X.page.click('main button:text-is("萬華館")');
-  await X.page.waitForTimeout(800);
-  assert.equal(await X.page.locator('main button:has-text("使用狀況")').count(), 1, "看自己當店長的館時顯示");
-  assert.deepEqual([...S.errors, ...X.errors], []);
+  const v = mock.addUser("viewer1", "password1", { nickname: "小美" });
+  mock.db.usageViewers.push({ user_id: v, gym_id: "g3" }, { user_id: v, gym_id: "g2" });
+  const { page, errors } = await phone(browser, mock);
+  await login(page, "viewer1", "password1", "/ops/usage");
+  await page.waitForTimeout(1200);
+  const chips = (await page.locator("main button[aria-pressed]").allTextContents()).filter((t) => t.endsWith("館"));
+  assert.deepEqual(chips, ["萬華館", "中和館"], "只有授權的兩館（照館的順序），沒有全部館");
+  assert.equal(await page.locator('main button[aria-pressed="true"]:text-is("萬華館")').count(), 1, "預設第一間");
+  assert.ok((await page.textContent("main")).includes("活躍人數"));
+  await page.click('main button:text-is("中和館")');
+  await page.waitForTimeout(800);
+  assert.ok((await page.textContent("main")).includes("活躍人數"), "切到中和館也看得到");
+  assert.deepEqual(errors, []);
 });

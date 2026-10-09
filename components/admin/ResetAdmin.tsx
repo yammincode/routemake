@@ -4,27 +4,15 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { Button, LinkButton } from "@/components/ui/Button";
-import { Empty, SectionTitle, Tip } from "@/components/ui/Card";
+import { BackLink, Empty, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { Label, TextField } from "@/components/ui/Form";
 import { ResetDateRow } from "@/components/ui/Resets";
-import { PickList } from "@/components/ui/PickList";
 import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
-import { MonthSwitcher, SetBox } from "@/components/ui/Stats";
+import { MonthSwitcher } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { canEditResets } from "@/lib/auth";
-import {
-  deleteResetEvent,
-  getResetCalendar,
-  getResetEditors,
-  getZones,
-  saveResetEvent,
-  searchUsers,
-  setResetEditor,
-  type ResetInput,
-  type UserHit,
-  type Zone,
-} from "@/lib/data";
+import { deleteResetEvent, getResetCalendar, getZones, saveResetEvent, type ResetInput, type Zone } from "@/lib/data";
 import { todayYmd } from "@/lib/date";
 import { GYMS, lastLiveGym } from "@/lib/gyms";
 import { addDays, dayDiff, suggestLabel, type ResetEvent } from "@/lib/resets";
@@ -93,14 +81,14 @@ export default function ResetAdmin() {
       <>
         <Empty>換線日由老闆統一輸入，請先登入。</Empty>
         <div className="mt-3">
-          <Button variant="primary" onClick={() => router.push("/login?next=/admin/resets")}>
+          <Button variant="primary" onClick={() => router.push("/login?next=/ops/resets")}>
             登入
           </Button>
         </div>
       </>
     );
   if (!access) return <Empty>讀取中…</Empty>;
-  if (!allowed) return <Empty>換線日由老闆統一輸入。需要輸入權限，請找老闆在這一頁授權給你的帳號（{access.username}）。</Empty>;
+  if (!allowed) return <Empty>換線日由老闆統一輸入。需要輸入權限，請找老闆在「營運」授權給你的帳號（{access.username}）。</Empty>;
 
   const gymName = GYMS.find((g) => g.id === gymId)?.name ?? "";
   const mine = (events ?? []).filter((e) => e.gym_id === gymId);
@@ -161,6 +149,7 @@ export default function ResetAdmin() {
   const [y, m] = month.split("-").map(Number);
   return (
     <>
+      <BackLink onClick={() => router.push("/ops")}>營運</BackLink>
       <ChipRow>
         {LIVE.map((g) => (
           <Chip key={g.id} pressed={g.id === gymId} onClick={() => (setGymId(g.id), setConfirmDel(null))}>
@@ -205,7 +194,6 @@ export default function ResetAdmin() {
       </Button>
       <Tip>照 LINE 換線公告輸入。存檔後選館頁、換線行事曆、館首頁各區的換線日都會一起更新。</Tip>
 
-      {access.is_owner && <ResetEditors />}
 
       <Sheet open={!!draft} onClose={() => setDraft(null)}>
         {draft && (
@@ -250,121 +238,6 @@ export default function ResetAdmin() {
           </>
         )}
       </Sheet>
-    </>
-  );
-}
-
-// 老闆：授權別人輸入換線日（例如負責發公告的同事）
-function ResetEditors() {
-  const toast = useToast();
-  const [list, setList] = useState<{ id: string; username: string | null; nickname: string | null }[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<UserHit[] | null>(null);
-  const [confirm, setConfirm] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(() => {
-    getResetEditors()
-      .then((l) => (setList(l), setError(null)))
-      .catch((e) => setError((e as Error).message));
-  }, []);
-  useEffect(() => {
-    void Promise.resolve().then(load);
-  }, [load]);
-
-  // 邊打邊搜（停 0.3 秒才查）；英數至少 2 個字、中文 1 個字
-  useEffect(() => {
-    const q = query.trim();
-    if (!q || (q.length < 2 && /^[ -~]*$/.test(q))) {
-      queueMicrotask(() => setHits(null));
-      return;
-    }
-    let alive = true;
-    const t = setTimeout(() => {
-      searchUsers(q, LIVE[0].id)
-        .then((h) => alive && setHits(h))
-        .catch((e) => alive && toast((e as Error).message));
-    }, 300);
-    return () => {
-      alive = false;
-      clearTimeout(t);
-    };
-  }, [query, toast]);
-
-  const set = async (id: string, on: boolean, name: string) => {
-    if (!on && confirm !== id) return setConfirm(id);
-    setBusy(true);
-    try {
-      await setResetEditor(id, on);
-      toast(on ? `已授權 ${name} 輸入換線日` : `已取消 ${name} 的換線日權限`);
-      setConfirm(null);
-      setQuery("");
-      setHits(null);
-      load();
-    } catch (e) {
-      toast((e as Error).message);
-    }
-    setBusy(false);
-  };
-
-  return (
-    <>
-      <SectionTitle>可以輸入換線日的人</SectionTitle>
-      {list == null ? (
-        <Empty>{error ?? "讀取中…"}</Empty>
-      ) : list.length === 0 ? (
-        <Empty>目前只有老闆可以輸入。</Empty>
-      ) : (
-        <div className="grid gap-px overflow-hidden rounded-tile bg-line shadow-card">
-          {list.map((p) => (
-            <div key={p.id} className="flex items-center justify-between gap-2 bg-surface px-4 py-3">
-              <span className="min-w-0">
-                {p.nickname ?? "（未填暱稱）"}
-                <small className="ml-2 text-meta text-muted">帳號 {p.username}</small>
-              </span>
-              <button
-                className={`flex-none text-meta text-warn ${confirm === p.id ? "font-bold" : ""}`}
-                disabled={busy}
-                onClick={() => void set(p.id, false, p.nickname ?? p.username ?? "")}
-              >
-                {confirm === p.id ? "確定取消？再按一次" : "取消權限"}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <SetBox>
-        <Label htmlFor="rsearch">授權：搜尋暱稱或帳號名稱</Label>
-        <TextField
-          id="rsearch"
-          type="search"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="例如 小安 或 climber88"
-        />
-        {hits != null &&
-          (hits.length === 0 ? (
-            <p className="mt-2 mb-0 text-meta text-muted">找不到，請對方先註冊並填好暱稱</p>
-          ) : (
-            <PickList
-              items={hits.map((h) => ({
-                id: h.id,
-                title: h.nickname ?? "（未填暱稱）",
-                sub: `帳號 ${h.username}`,
-                tag: list?.some((p) => p.id === h.id) ? "已授權" : undefined,
-              }))}
-              onPick={(id) => {
-                const h = hits.find((x) => x.id === id);
-                if (h && !list?.some((p) => p.id === id)) void set(id, true, h.nickname ?? h.username ?? "");
-              }}
-            />
-          ))}
-        <Tip>點一下就授權。被授權的人可以輸入所有館的換線日，但不能管理路線和員工。</Tip>
-      </SetBox>
     </>
   );
 }

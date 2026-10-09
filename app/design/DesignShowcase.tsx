@@ -11,6 +11,7 @@ import { ScrollList } from "@/components/ui/ScrollList";
 import { AppVersion } from "@/components/ui/Version";
 import { FeedbackItem, FeedbackList } from "@/components/ui/Feedback";
 import { PickList } from "@/components/ui/PickList";
+import { GrantGroup, GrantList, GrantRow } from "@/components/ui/Grant";
 import { Tabs } from "@/components/ui/Tabs";
 import { HoldLegend, HoldMarks, HoldTools, RouteThumb, SprayRow } from "@/components/ui/Spray";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
@@ -150,6 +151,8 @@ export default function DesignShowcase() {
   const [order, setOrder] = useState(["A 區", "比賽牆", "B 區", "C 區"]);
   const [pickColor, setPickColor] = useState<HoldColor>("紅");
   const [pickPerson, setPickPerson] = useState<string | null>("a");
+  const [grantGyms, setGrantGyms] = useState<string[]>(["g2"]);
+  const [grantResets, setGrantResets] = useState(true);
   const [pickGrade, setPickGrade] = useState(3);
   const [pickTags, setPickTags] = useState<string[]>(["技巧"]);
   const [toggle, setToggle] = useState(true);
@@ -501,7 +504,34 @@ export default function DesignShowcase() {
         <p className="-mt-1.5 mb-0 text-tiny text-muted">共 3 則，左右滑動看更多</p>
       </Block>
 
-      <Block title="使用狀況（後台）">
+      <Block title="營運：授權（老闆）">
+        <GrantList>
+          <GrantRow name="小安" username="climber88">
+            <GrantGroup label="📊 使用狀況（只看點選的館）">
+              {[
+                ["mingde", "明德館"],
+                ["g2", "萬華館"],
+                ["g3", "中和館"],
+              ].map(([id, name]) => (
+                <Chip
+                  key={id}
+                  pressed={grantGyms.includes(id)}
+                  onClick={() => setGrantGyms((g) => (g.includes(id) ? g.filter((x) => x !== id) : [...g, id]))}
+                >
+                  {name}
+                </Chip>
+              ))}
+            </GrantGroup>
+            <GrantGroup label="📅 換線日（所有館）">
+              <Chip pressed={grantResets} onClick={() => setGrantResets((v) => !v)}>
+                可以輸入
+              </Chip>
+            </GrantGroup>
+          </GrantRow>
+        </GrantList>
+      </Block>
+
+      <Block title="使用狀況（營運）">
         <TrendBars
           label="最近 30 天每天使用人數"
           items={Array.from({ length: 30 }, (_, i) => {
