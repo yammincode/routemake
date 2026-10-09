@@ -15,8 +15,11 @@ export type Access = {
   nickname: string | null;
   avatar_url: string | null;
   is_owner: boolean;
+  can_edit_resets?: boolean; // 可以輸入換線日（老闆或老闆授權的人；資料庫還沒套用 step27 時沒有這個欄位）
   roles: { gym_id: string; role: Role }[];
 };
+// 可以輸入換線日
+export const canEditResets = (a: Access | null) => !!a && (a.is_owner || !!a.can_edit_resets);
 
 export const isStaffOf = (a: Access | null, gym?: string) =>
   !!a && (a.is_owner || a.roles.some((r) => !gym || r.gym_id === gym));

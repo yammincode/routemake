@@ -6,6 +6,9 @@ import { Button } from "./Button";
 import Icon from "./Icon";
 import { HoldDot, NewBadge } from "./Route";
 
+// 區域卡片上的換線：days 是離開始還有幾天（換線中是 0）
+export type ZoneReset = { days: number; ongoing: boolean; text: string; warn: boolean };
+
 // 換線倒數文字
 export function dueText(days: number | null) {
   if (days == null) return "";
@@ -159,7 +162,7 @@ export function ZoneCard({
   band = null,
   guest = false,
   fresh = false,
-  resetDays,
+  due,
   ...rest
 }: ComponentProps<"button"> & {
   photo: string;
@@ -172,12 +175,11 @@ export function ZoneCard({
   band?: GradeBand | null;
   guest?: boolean;
   fresh?: boolean;
-  resetDays: number | null;
+  due: ZoneReset | null; // 換線：「10/19–20 換線・10 天後」「換線中・今晚起新路線」（7 天內 warn）
 }) {
   const known = grades.length > 0;
   const hit = band ? grades.filter((g) => inBand(g, band)).length : grades.length;
   const dim = band != null && known && hit === 0;
-  const soon = resetDays != null && resetDays >= 0 && resetDays <= 7;
   const clear = !guest && total > 0 && done >= total;
   const lo = known ? gradeLabel(Math.min(...grades)) : "";
   const hi = known ? gradeLabel(Math.max(...grades)) : "";
@@ -185,7 +187,7 @@ export function ZoneCard({
   const detail = !known ? "" : band ? (hit ? `${band.range} 有 ${hit} 條` : `沒有 ${band.range}`) : `難度 ${range}`;
   return (
     <button
-      aria-label={[name, fresh && "有新路線", guest ? `牆上 ${total} 條` : `完成 ${done} / ${total}`, detail, resetDays != null && dueText(resetDays)].filter(Boolean).join("，")}
+      aria-label={[name, fresh && "有新路線", guest ? `牆上 ${total} 條` : `完成 ${done} / ${total}`, detail, due?.text].filter(Boolean).join("，")}
       className="flex w-full items-center gap-3 rounded-card bg-surface p-2.5 text-left shadow-card"
       {...rest}
     >
@@ -227,7 +229,7 @@ export function ZoneCard({
               {band.range} 有 <span className="font-num text-sub leading-none">{hit}</span> 條
             </span>
           )}
-          <span className={soon ? "font-bold text-warn" : "text-muted"}>{dueText(resetDays)}</span>
+          <span className={`flex-none ${due?.warn ? "font-bold text-warn" : "text-muted"}`}>{due?.text}</span>
         </span>
       </span>
     </button>
@@ -254,29 +256,6 @@ export function GoalLine({ label, children, ...rest }: ComponentProps<"button"> 
   );
 }
 
-// 即將換線列表（原型 .resets）；left 是 null（沒登入）時改寫「共 ○ 條路線」
-export function ResetList({ items }: { items: { key: string; name: string; date: string; left: number | null; total: number; days: number }[] }) {
-  return (
-    <div className="grid gap-px overflow-hidden rounded-tile bg-line shadow-card">
-      {items.map((z) => {
-        const soon = z.days <= 7;
-        return (
-          <div key={z.key} className="flex items-center justify-between bg-surface px-4 py-3">
-            <span>
-              {z.name}
-              <br />
-              <small className="text-meta text-muted">
-                {z.date} 換線，{z.left == null ? `共 ${z.total} 條路線` : `還有 ${z.left} 條沒完攀`}
-              </small>
-            </span>
-            <span className={`font-num text-num-reset font-bold ${soon ? "text-warn" : ""}`}>{z.days === 0 ? "今天" : `${z.days} 天`}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // 最新路線橫向卡片（原型 .newcard）
 export function NewRouteRow({ children }: { children: ReactNode }) {
   return <div className="no-scrollbar -mx-4 flex gap-2.5 overflow-x-auto px-4 pt-0.5 pb-2">{children}</div>;
@@ -298,26 +277,32 @@ export function NewRouteCard({ color, grade, zone, ago, ...rest }: ComponentProp
 
 // 場館選擇列（原型 .gymrow）
 // tag：右邊的小字（預設「已上線／即將上線」）
+// lines：館名下面的小字（選館頁的換線資訊）；tag 給空字串就不顯示右邊的字
 export function GymRow({
   name,
   live,
   selected,
   logo,
   tag,
+  lines,
   ...rest
-}: ComponentProps<"button"> & { name: string; live: boolean; selected: boolean; logo?: string; tag?: string }) {
+}: ComponentProps<"button"> & { name: string; live: boolean; selected: boolean; logo?: string; tag?: string; lines?: ReactNode }) {
+  const right = tag ?? (live ? "已上線" : "即將上線");
   return (
     <button
       aria-pressed={selected}
-      className={`flex w-full items-center justify-between rounded-btn bg-sunk px-4 text-left font-medium aria-pressed:shadow-[inset_0_0_0_2px_var(--ink)] ${logo ? "py-2.5" : "py-3.5"}`}
+      className={`flex w-full items-center justify-between gap-2 rounded-btn bg-sunk px-4 text-left font-medium aria-pressed:shadow-[inset_0_0_0_2px_var(--ink)] ${logo ? "py-2.5" : "py-3.5"}`}
       {...rest}
     >
-      <span className="flex items-center gap-3">
+      <span className="flex min-w-0 items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {logo && <img src={logo} alt="" width={48} height={48} className={`size-12 flex-none ${live ? "" : "opacity-60 grayscale-[40%]"}`} />}
-        {name}
+        <span className="grid min-w-0">
+          {name}
+          {lines}
+        </span>
       </span>
-      <small className={`text-meta ${live ? "font-bold text-accent" : "font-normal text-muted"}`}>{tag ?? (live ? "已上線" : "即將上線")}</small>
+      {right && <small className={`flex-none text-meta ${live ? "font-bold text-accent" : "font-normal text-muted"}`}>{right}</small>}
     </button>
   );
 }

@@ -7,10 +7,11 @@ import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
 import { Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
 import FloorPlan from "@/components/ui/FloorPlan";
-import { BandPicker, dueText, GoalLine, GradeChart, NewRouteCard, NewRouteRow, ResetList, ZoneCard, ZoneList } from "@/components/ui/Gym";
+import { BandPicker, dueText, GoalLine, GradeChart, NewRouteCard, NewRouteRow, ZoneCard, ZoneList, type ZoneReset } from "@/components/ui/Gym";
 import {
   getGym,
   getGymGrades,
+  getResetCalendar,
   getMyAscents,
   getNewRoutes,
   getZoneProgress,
@@ -22,8 +23,9 @@ import {
   type Route,
   type ZoneProgress,
 } from "@/lib/data";
-import { ago, daysUntil, isNew, md } from "@/lib/date";
+import { ago, daysUntil, isNew, todayYmd } from "@/lib/date";
 import { GRADE_BANDS, inBand, isYds, type BandId } from "@/lib/design";
+import { addDays, resetPhase, resetRange, type ResetEvent } from "@/lib/resets";
 import { PLANS } from "@/lib/floorplan";
 import { saveLastGym, SPRAY_WALLS, sprayPath } from "@/lib/gyms";
 import { overlayPending, withCache } from "@/lib/offline";
@@ -42,7 +44,8 @@ function savedBand(): BandId | null {
   }
 }
 
-// 館內路線首頁：平面圖、快換線提醒、全館難度分布與難度篩選、各區難度色帶卡片、即將換線、最新路線
+// 館內路線首頁：平面圖、快換線提醒、全館難度分布與難度篩選、各區難度色帶卡片（含換線日）、最新路線
+// 換線日：有換線公告就照公告（10/19–20 換線、換線中），沒有公告就用員工設的下次換線日
 export default function HomeView({ gymId }: { gymId: string }) {
   const { session, ready } = useAuth();
   const router = useRouter();
@@ -51,6 +54,7 @@ export default function HomeView({ gymId }: { gymId: string }) {
   const [fresh, setFresh] = useState<(Route & { zone_name: string })[]>([]);
   const [ascents, setAscents] = useState<Record<string, Ascent>>({});
   const [grades, setGrades] = useState<GradeRow[]>([]);
+  const [resets, setResets] = useState<ResetEvent[]>([]);
   const [bandId, setBandId] = useState<BandId | null>(savedBand);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<(Route & { zone_name: string }) | null>(null);
@@ -59,20 +63,28 @@ export default function HomeView({ gymId }: { gymId: string }) {
   // 第一次載入時先顯示手機裡上次的資料，抓到最新的再換掉
   const first = useRef(true);
   const load = useCallback(async () => {
-    type Data = { g: Gym; z: ZoneProgress[]; n: (Route & { zone_name: string })[]; a: Record<string, Ascent>; r?: GradeRow[] };
+    type Data = { g: Gym; z: ZoneProgress[]; n: (Route & { zone_name: string })[]; a: Record<string, Ascent>; r?: GradeRow[]; ev?: ResetEvent[] };
     const apply = (data: Data) => {
       setGym(data.g);
       setZones(data.z);
       setFresh(data.n);
       setAscents(overlayPending(data.a, uid));
       setGrades(data.r ?? []); // 舊版存在手機裡的資料沒有 r
+      setResets(data.ev ?? []);
     };
     try {
       const { data } = await withCache<Data>(
         `home:${gymId}:${uid ?? "guest"}`,
         async () => {
-          const [g, z, n, r] = await Promise.all([getGym(gymId), getZoneProgress(gymId), getNewRoutes(gymId), getGymGrades(gymId)]);
-          return { g, z, n, r, a: uid ? await getMyAscents(n.map((x) => x.id)) : {} };
+          const today = todayYmd();
+          const [g, z, n, r, ev] = await Promise.all([
+            getGym(gymId),
+            getZoneProgress(gymId),
+            getNewRoutes(gymId),
+            getGymGrades(gymId),
+            getResetCalendar(today, addDays(today, 60)).catch(() => [] as ResetEvent[]),
+          ]);
+          return { g, z, n, r, ev: ev.filter((e) => e.gym_id === gymId), a: uid ? await getMyAscents(n.map((x) => x.id)) : {} };
         },
         first.current ? apply : undefined
       );
@@ -138,14 +150,29 @@ export default function HomeView({ gymId }: { gymId: string }) {
 
   const total = zones.reduce((s, z) => s + z.route_count, 0);
   const done = zones.reduce((s, z) => s + z.done_count, 0);
-  const scheduled = zones
-    .filter((z) => (daysUntil(z.next_reset_on) ?? -1) >= 0)
-    .sort((a, b) => a.next_reset_on!.localeCompare(b.next_reset_on!));
-  const upcoming = scheduled.slice(0, 3);
+  // 每一區的換線：公告裡還沒結束、最早的那筆；沒有公告就用員工設的下次換線日
+  const today = todayYmd();
+  const resetOf = (z: ZoneProgress): ZoneReset | null => {
+    const e = resets.filter((x) => x.zone_ids.includes(z.zone_id) && x.ends_on >= today).sort((a, b) => a.starts_on.localeCompare(b.starts_on))[0];
+    if (e) {
+      const p = resetPhase(e, today);
+      if (p.phase === "ongoing") return { days: 0, ongoing: true, text: `換線中・${e.ends_on === today ? "今晚" : `${+e.ends_on.slice(5, 7)}/${+e.ends_on.slice(8, 10)} 晚上`}起新路線`, warn: true };
+      return { days: p.days, ongoing: false, text: `${resetRange(e)} 換線・${p.days === 0 ? "今天" : `${p.days} 天後`}`, warn: p.days <= 7 };
+    }
+    const d = daysUntil(z.next_reset_on);
+    return d == null ? null : { days: d, ongoing: false, text: dueText(d), warn: d >= 0 && d <= 7 };
+  };
+  const zoneResets = new Map(zones.map((z) => [z.zone_id, resetOf(z)]));
   const goZone = (id: string) => router.push(`/zone?id=${id}`);
   // 提醒：最快換線（7 天內）、而且還有沒完攀路線的區
   const guest = !session;
-  const goal = scheduled.find((z) => daysUntil(z.next_reset_on)! <= 7 && z.route_count > 0 && (guest || z.done_count < z.route_count));
+  const goal = zones
+    .filter((z) => {
+      const r = zoneResets.get(z.zone_id);
+      return r != null && r.days >= 0 && r.days <= 7 && z.route_count > 0 && (guest || z.done_count < z.route_count);
+    })
+    .sort((a, b) => zoneResets.get(a.zone_id)!.days - zoneResets.get(b.zone_id)!.days)[0];
+  const goalReset = goal ? zoneResets.get(goal.zone_id)! : null;
   const scale = Math.max(1, ...zones.map((z) => byZone.get(z.zone_id)?.grades.length ?? 0));
   const hitZones = band ? zones.filter((z) => byZone.get(z.zone_id)?.grades.some((g) => inBand(g, band))).length : 0;
 
@@ -157,7 +184,7 @@ export default function HomeView({ gymId }: { gymId: string }) {
           shape={PLANS[gymId]}
           gymName={gym?.name ?? ""}
           guest={guest}
-          zones={zones.map((z) => ({ code: z.code, name: z.name, done: z.done_count, total: z.route_count, resetDays: daysUntil(z.next_reset_on) }))}
+          zones={zones.map((z) => ({ code: z.code, name: z.name, done: z.done_count, total: z.route_count, resetDays: zoneResets.get(z.zone_id)?.days ?? null }))}
           onSelect={(code) => {
             const z = zones.find((x) => x.code === code);
             if (z) goZone(z.zone_id);
@@ -178,9 +205,9 @@ export default function HomeView({ gymId }: { gymId: string }) {
         </Button>
       ))}
 
-      {goal && (
+      {goal && goalReset && (
         <GoalLine label={guest ? "快換線" : "下一個目標"} onClick={() => goZone(goal.zone_id)}>
-          {goal.name} {dueText(daysUntil(goal.next_reset_on))}，{guest ? `共 ${goal.route_count} 條路線` : `還有 ${goal.route_count - goal.done_count} 條沒完攀`}
+          {goal.name} {goalReset.ongoing ? "換線中" : dueText(goalReset.days)}，{guest ? `共 ${goal.route_count} 條路線` : `還有 ${goal.route_count - goal.done_count} 條沒完攀`}
         </GoalLine>
       )}
 
@@ -216,28 +243,12 @@ export default function HomeView({ gymId }: { gymId: string }) {
               band={band}
               guest={guest}
               fresh={info?.fresh ?? false}
-              resetDays={daysUntil(z.next_reset_on)}
+              due={zoneResets.get(z.zone_id) ?? null}
               onClick={() => goZone(z.zone_id)}
             />
           );
         })}
       </ZoneList>
-
-      <SectionTitle>即將換線</SectionTitle>
-      {upcoming.length ? (
-        <ResetList
-          items={upcoming.map((z) => ({
-            key: z.zone_id,
-            name: z.name,
-            date: md(z.next_reset_on!),
-            left: guest ? null : z.route_count - z.done_count,
-            total: z.route_count,
-            days: daysUntil(z.next_reset_on)!,
-          }))}
-        />
-      ) : (
-        <Empty>目前沒有排定換線日。</Empty>
-      )}
 
       <SectionTitle>最新路線</SectionTitle>
       {fresh.length ? (

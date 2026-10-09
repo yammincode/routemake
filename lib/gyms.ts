@@ -10,6 +10,18 @@ export const GYMS: Gym[] = [
   { id: "g6", name: "中壢館", live: false, logo: "/logos/zhongli.svg" },
 ];
 
+// 各店標準色（換線行事曆的色塊、色票）：照老闆提供的「各店標準色」圖取色
+export const GYM_COLORS: Record<string, string> = {
+  mingde: "#6D3540",
+  g2: "#6959B2",
+  g3: "#01BCB5",
+  g4: "#066D6A",
+  g5: "#006382",
+  g6: "#304562",
+};
+// 館名去掉「館」，行事曆色塊上用（明德、萬華…）
+export const gymShort = (name: string) => name.replace(/館$/, "");
+
 // 原岩攀岩館主 Logo（含文字）與 T 圓形標誌
 export const BRAND_LOGO = "/logos/tup.svg";
 export const BRAND_MARK = "/logos/tup-mark.svg";

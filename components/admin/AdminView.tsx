@@ -22,7 +22,7 @@ import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { NoPhoto, Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
-import { isManagerOf, roleLabel } from "@/lib/auth";
+import { canEditResets, isManagerOf, roleLabel } from "@/lib/auth";
 import {
   archiveZone,
   createZone,
@@ -455,6 +455,12 @@ export default function AdminView() {
       {manager && gym && (
         <Button className="mt-6" onClick={() => router.push("/admin/usage")}>
           📊 使用狀況
+        </Button>
+      )}
+      {/* 換線日：老闆和老闆授權的人（各館一起輸入） */}
+      {canEditResets(access) && (
+        <Button className="mt-2" onClick={() => router.push("/admin/resets")}>
+          📅 換線日
         </Button>
       )}
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}

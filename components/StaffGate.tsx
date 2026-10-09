@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { Empty } from "@/components/ui/Card";
-import { isStaffOf } from "@/lib/auth";
+import { canEditResets, isStaffOf } from "@/lib/auth";
 
 // 只有員工（定線長、店長、老闆）才顯示內容；真正的權限由資料庫 RLS 擋
 export default function StaffGate({ children }: { children: ReactNode }) {
@@ -34,6 +34,18 @@ export default function StaffGate({ children }: { children: ReactNode }) {
       </>
     );
   }
+  // 不是員工、但老闆授權輸入換線日：直接帶去換線日
+  if (!isStaffOf(access) && canEditResets(access))
+    return (
+      <>
+        <Empty>你可以輸入各館的換線日。</Empty>
+        <div className="mt-3">
+          <Button variant="primary" onClick={() => router.push("/admin/resets")}>
+            📅 換線日
+          </Button>
+        </div>
+      </>
+    );
   if (!isStaffOf(access))
     return (
       <Empty>

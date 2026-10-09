@@ -11,6 +11,7 @@ export const AUDIT_FILTERS = [
   { key: "card", label: "人物卡", actions: ["card.clear"] },
   { key: "staff", label: "員工", actions: ["staff.assign", "staff.remove"] },
   { key: "scoring", label: "計分／統計", actions: ["scoring.update", "usage.reset"] },
+  { key: "reset", label: "換線日", actions: ["reset.add", "reset.update", "reset.delete", "reset_editor.grant", "reset_editor.revoke"] },
 ] as const;
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -43,6 +44,17 @@ export function describeAudit(a: AuditEntry): string {
       return `移除${ROLE_NAME[(str(d.role) || "setter") as Role]} ${person}`;
     case "scoring.update":
       return `修改計分規則（Flash ×${d.flash_multiplier ?? "–"}、風格加成上限 ${d.max_style_bonus ?? "–"}%）`;
+    case "reset.add":
+    case "reset.update":
+    case "reset.delete": {
+      const range = (v: unknown) => str(v).slice(5).replace("-", "/");
+      const when = d.starts_on === d.ends_on ? range(d.starts_on) : `${range(d.starts_on)}–${range(d.ends_on)}`;
+      return `${a.action === "reset.add" ? "新增" : a.action === "reset.update" ? "修改" : "刪除"}換線日：${str(d.label)} ${when}`;
+    }
+    case "reset_editor.grant":
+      return `授權 ${person} 輸入換線日`;
+    case "reset_editor.revoke":
+      return `取消 ${person} 的換線日權限`;
     case "usage.reset":
       return `使用狀況重新開始統計（從 ${str(d.since).slice(5).replace("-", "/")} 開始）`;
     default:

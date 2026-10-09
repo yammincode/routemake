@@ -1,5 +1,6 @@
 // 讀寫 Supabase 的資料函式；權限一律由資料庫 RLS 擋，這裡只負責呼叫
 import type { ClimbMove, GradeSystem, HeightBand, HoldColor, Status } from "@/lib/design";
+import type { ResetEvent } from "@/lib/resets";
 import type { ScoringRules } from "@/lib/scoring";
 import { supabase } from "@/lib/supabase";
 
@@ -166,6 +167,29 @@ export async function getGymGrades(gym: string): Promise<GradeRow[]> {
   ) as unknown as (GradeRow & { zones: unknown })[];
   return rows.map(({ zone_id, grade, created_at }) => ({ zone_id, grade, created_at }));
 }
+// ---------- 換線公告 ----------
+// 一段日期內各館的換線公告（大家都看得到）；資料庫還沒套用 step27 時當作沒有公告
+export async function getResetCalendar(from: string, to: string): Promise<ResetEvent[]> {
+  const r = await supabase().rpc("reset_calendar", { p_from: from, p_to: to });
+  if (r.error?.code === "PGRST202") return [];
+  return must(r) as ResetEvent[];
+}
+export type ResetInput = { gym_id: string; label: string; zone_ids: string[]; starts_on: string; ends_on: string };
+export async function saveResetEvent(input: ResetInput, id?: string) {
+  if (id) must(await supabase().from("reset_events").update(input).eq("id", id).select("id"));
+  else must(await supabase().from("reset_events").insert(input).select("id"));
+}
+export async function deleteResetEvent(id: string) {
+  must(await supabase().from("reset_events").delete().eq("id", id).select("id"));
+}
+// 老闆：可以輸入換線日的人
+export async function getResetEditors(): Promise<{ id: string; username: string | null; nickname: string | null }[]> {
+  return must(await supabase().rpc("reset_editor_list"));
+}
+export async function setResetEditor(userId: string, on: boolean) {
+  must(await supabase().rpc("set_reset_editor", { p_user: userId, p_on: on }));
+}
+
 // 自己在這些路線上的紀錄（RLS 只回傳自己的）
 export async function getMyAscents(routeIds: string[]): Promise<Record<string, Ascent>> {
   if (!routeIds.length) return {};

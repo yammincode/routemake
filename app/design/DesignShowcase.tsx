@@ -18,7 +18,9 @@ import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
 import { Check, ColorPicker, GradePicker, Label, OptionGrid, Rating, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
-import { BandPicker, GoalLine, GradeChart, NewRouteCard, NewRouteRow, ResetList, SoonBox, ZoneCard, ZoneList } from "@/components/ui/Gym";
+import { BandPicker, GoalLine, GradeChart, GymRow, NewRouteCard, NewRouteRow, SoonBox, ZoneCard, ZoneList } from "@/components/ui/Gym";
+import { GymDot, ResetDateRow, ResetLines, ResetMonth } from "@/components/ui/Resets";
+import { newRoutesText, type ResetEvent } from "@/lib/resets";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { CalendarHeat, DailyBars, Delta, GradeBars, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
@@ -41,7 +43,7 @@ import {
   type Status,
 } from "@/lib/design";
 import { MINGDE_PLAN } from "@/lib/floorplan";
-import { LIVE_GYM } from "@/lib/gyms";
+import { GYMS, LIVE_GYM } from "@/lib/gyms";
 
 type DemoRoute = { code: string; grade: number; color: HoldColor; tags: string[]; x: number; y: number; status: Status | null; isNew: boolean; comments: number };
 
@@ -61,6 +63,19 @@ const ZONE_GRADES: Record<string, number[]> = {
 
 const STATUSES: (Status | null)[] = ["flash", "send", null, "send", "project", null, "send", null, null, "flash"];
 const TAGS = [["力量"], ["技巧", "平衡"], ["腳法"], ["動態"], ["指力"], [], ["協調", "柔軟"], ["耐力"], ["平衡"], ["技巧"]];
+
+// 換線日示範（今天當作 2026/10/9）
+const DEMO_TODAY = "2026-10-09";
+const DEMO_RESETS: ResetEvent[] = [
+  { id: "r1", gym_id: "mingde", label: "比賽牆", zone_ids: [], starts_on: "2026-10-07", ends_on: "2026-10-08", spray: false },
+  { id: "r2", gym_id: "mingde", label: "D 區", zone_ids: [], starts_on: "2026-10-12", ends_on: "2026-10-12", spray: false },
+  { id: "r3", gym_id: "g2", label: "C 區", zone_ids: [], starts_on: "2026-10-12", ends_on: "2026-10-13", spray: false },
+  { id: "r4", gym_id: "mingde", label: "B 區", zone_ids: [], starts_on: "2026-10-15", ends_on: "2026-10-16", spray: false },
+  { id: "r5", gym_id: "g3", label: "Auto-Belay", zone_ids: [], starts_on: "2026-10-09", ends_on: "2026-10-10", spray: false },
+  { id: "r6", gym_id: "g2", label: "教學區 Slab 區", zone_ids: [], starts_on: "2026-10-20", ends_on: "2026-10-20", spray: false },
+  { id: "r7", gym_id: "g3", label: "D 區", zone_ids: [], starts_on: "2026-10-28", ends_on: "2026-10-29", spray: false },
+  { id: "r8", gym_id: "g4", label: "C 區", zone_ids: [], starts_on: "2026-10-31", ends_on: "2026-11-01", spray: false },
+];
 
 const DEMO_VIDEOS: VideoCard[] = [
   { key: "1", name: "小安", ago: "2 天前", status: "flash", caption: "第三手用左腳勾", duration: 42, tags: "身高 160–169cm・靜態" },
@@ -142,6 +157,7 @@ export default function DesignShowcase() {
   const [month, setMonth] = useState(9);
   const [pickDay, setPickDay] = useState<number | null>(23);
   const [bandId, setBandId] = useState<BandId | null>("mid");
+  const [resetDay, setResetDay] = useState("2026-10-12");
   const [videoTag, setVideoTag] = useState<string | null>(null);
   const [pickHeight, setPickHeight] = useState<HeightBand | null>("170s");
   const [pickMove, setPickMove] = useState<ClimbMove | null>("dynamic");
@@ -266,22 +282,48 @@ export default function DesignShowcase() {
               scale={20}
               band={band}
               fresh={i === 2}
-              resetDays={z.resetDays}
+              due={{ days: z.resetDays, ongoing: false, text: `${z.resetDays} 天後換線`, warn: z.resetDays <= 7 }}
             />
           ))}
-          <ZoneCard photo={fakeWall(104).uri} name="D 區（沒登入）" done={0} total={5} grades={[0, 1, 2, 3, 4]} scale={20} band={band} guest resetDays={48} />
+          <ZoneCard photo={fakeWall(104).uri} name="D 區（沒登入）" done={0} total={5} grades={[0, 1, 2, 3, 4]} scale={20} band={band} guest due={{ days: 0, ongoing: true, text: "換線中・今晚起新路線", warn: true }} />
         </ZoneList>
         <p className="mt-2 mb-0 text-meta text-muted">選了難度：範圍內的色段保持粗、寫條數，其他縮成細線；整區沒有這個難度就變淡。NEW＝3 天內有新路線</p>
       </Block>
 
-      <Block title="即將換線">
-        <ResetList
-          items={[
-            { key: "A", name: "A 區", date: "10/05", left: 11, total: 20, days: 5 },
-            { key: "B", name: "B 區", date: "10/12", left: 5, total: 16, days: 12 },
-            { key: "W", name: "比賽牆（沒登入）", date: "10/24", left: null, total: 10, days: 24 },
-          ]}
-        />
+      <Block title="換線日（選館頁、換線行事曆）">
+        <p className="mt-0 mb-1.5 text-meta text-muted">選館頁：館名下面寫換線中、剛換好（NEW）、之後的換線（7 天內橘色）</p>
+        <div className="grid gap-2">
+          {GYMS.filter((g) => g.live)
+            .slice(0, 3)
+            .map((g) => (
+              <GymRow
+                key={g.id}
+                name={g.name}
+                logo={g.logo}
+                live
+                tag=""
+                selected={false}
+                lines={<ResetLines events={DEMO_RESETS.filter((e) => e.gym_id === g.id)} today={DEMO_TODAY} />}
+              />
+            ))}
+        </div>
+        <p className="mt-3 mb-1.5 text-meta text-muted">換線行事曆：每間館一個顏色，兩天的畫成跨兩格的長條；點日期看細節（今天＝10/9）</p>
+        <ResetMonth month="2026-10" events={DEMO_RESETS} gymName={(id) => GYMS.find((g) => g.id === id)?.name ?? ""} today={DEMO_TODAY} selected={resetDay} onSelect={setResetDay} />
+        <div className="mt-2 grid gap-px overflow-hidden rounded-tile bg-line shadow-card">
+          {DEMO_RESETS.filter((e) => e.starts_on <= resetDay && e.ends_on >= resetDay).map((e) => (
+            <ResetDateRow
+              key={e.id}
+              e={e}
+              title={
+                <span className="inline-flex items-center gap-1.5">
+                  <GymDot gymId={e.gym_id} />
+                  {GYMS.find((g) => g.id === e.gym_id)?.name} {e.label}
+                </span>
+              }
+              sub={newRoutesText(e)}
+            />
+          ))}
+        </div>
       </Block>
 
       <Block title="最新路線">

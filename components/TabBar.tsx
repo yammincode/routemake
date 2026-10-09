@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { DEFAULT_GYM_PATH, lastGymPath } from "@/lib/gyms";
 
-// 底部分頁（原型 .tabs）：館內路線、人物卡、我的紀錄；管理後台只有員工（定線長、店長、老闆）看得到
+// 底部分頁（原型 .tabs）：館內路線、人物卡、我的紀錄；管理後台只有員工（定線長、店長、老闆）和可以輸入換線日的人看得到
 // （直接打網址進後台一樣由 StaffGate 與資料庫權限把關）
 const TABS = [
   { href: "gym", label: "館內路線", match: (p: string) => p.startsWith("/zone") || p.startsWith("/gym") || p.startsWith("/spray") },
@@ -18,7 +18,8 @@ const TABS = [
 export default function TabBar() {
   const pathname = usePathname();
   const { access } = useAuth();
-  const isStaff = !!access && (access.is_owner || access.roles.length > 0);
+  // 員工，或老闆授權輸入換線日的人
+  const isStaff = !!access && (access.is_owner || access.roles.length > 0 || !!access.can_edit_resets);
   // 館內路線 → 上次選的館
   const [gymHref, setGymHref] = useState(DEFAULT_GYM_PATH);
   useEffect(() => {

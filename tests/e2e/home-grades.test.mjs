@@ -36,10 +36,11 @@ test("館首頁難度色帶：沒登入只寫條數；登入後有完成數、�
   const goalG = g.locator("main button", { hasText: "快換線" });
   assert.match((await goalG.textContent()).replace(/\s+/g, ""), /A2區2天後換線，共2條路線/, "沒登入的快換線提醒");
   assert.ok(!(await g.textContent("main")).includes("沒完攀"), "沒登入不出現「沒完攀」");
-  assert.ok((await g.textContent("main")).includes("共 4 條路線"), "即將換線寫路線數（A1 只在即將換線列表，不是提醒）");
+  assert.ok(!(await g.textContent("main")).includes("即將換線"), "即將換線整段拿掉（換線寫在區域卡片上）");
   const cardG = g.locator("main button.rounded-card", { hasText: "A1 區" });
   assert.ok((await cardG.textContent()).includes("4 條"));
   assert.ok(!(await cardG.textContent()).includes("/"), "沒登入不顯示完成數");
+  assert.ok((await cardG.textContent()).includes("20 天後換線"), "卡片寫換線日（沒有公告時用員工設的下次換線日）");
 
   // ---- 登入 ----
   const C = await phone(browser, mock);

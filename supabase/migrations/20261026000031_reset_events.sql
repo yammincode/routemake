@@ -1,0 +1,220 @@
+-- =====================================================================
+-- 換線公告（各館每月換線日）
+-- - reset_events：哪間館、公告上的名稱（例如「A 區」）、包含哪些區域、開始日（拆線）、結束日（定線，當天晚上起新路線）
+-- - 大家都看得到（沒登入也可以）；只有老闆和老闆授權的人（reset_editors）能新增、修改、刪除，都寫操作紀錄
+-- - 存檔時自動更新那些區域的「下次換線日」（zones.next_reset_on）：那一區還沒結束的公告裡最早的開始日
+--   刪掉或改掉公告時，如果區域的換線日正是舊公告的日期、又沒有別的公告，就清空
+-- - 整區換線後不再一律清空換線日，改接這一區之後的下一筆公告
+-- =====================================================================
+-- 用 execute 建表：Supabase SQL Editor 看到建表指令會跳出「開啟 RLS」提示並改寫整份 SQL，會把後面的函式切壞。下面已經自己開啟 RLS。
+do $do$ begin
+  execute 'create ' || $t$table public.reset_editors (
+  user_id    uuid primary key references public.profiles (id) on delete cascade,
+  created_by uuid,
+  created_at timestamptz not null default now()
+)$t$;
+  execute 'create ' || $t$table public.reset_events (
+  id         uuid primary key default gen_random_uuid(),
+  gym_id     text not null references public.gyms (id),
+  label      text not null check (char_length(label) between 1 and 20),
+  zone_ids   uuid[] not null default '{}',
+  starts_on  date not null,
+  ends_on    date not null,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (ends_on >= starts_on and ends_on - starts_on <= 6)
+)$t$;
+end $do$;
+create index reset_events_month_idx on public.reset_events (starts_on, gym_id);
+
+-- 可以輸入換線日：老闆，或老闆授權的人
+create or replace function public.can_edit_resets() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select public.is_owner() or exists (select 1 from public.reset_editors e where e.user_id = auth.uid())
+$$;
+
+-- 台北今天
+create or replace function public.taipei_today() returns date
+language sql stable set search_path = '' as $$
+  select (now() at time zone 'Asia/Taipei')::date
+$$;
+
+-- 重新算這些區域的下次換線日：還沒結束的公告裡最早的開始日；沒有公告時，換線日正是 p_old（剛刪掉或改掉的公告日期）就清空，其他保留（員工手動設定的）
+create or replace function public.sync_zone_resets(p_zones uuid[], p_old date) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if coalesce(cardinality(p_zones), 0) = 0 then return; end if;
+  perform set_config('app.internal', 'on', true);
+  update public.zones z
+     set next_reset_on = coalesce(
+           (select min(e.starts_on) from public.reset_events e
+             where z.id = any (e.zone_ids) and e.ends_on >= public.taipei_today()),
+           case when z.next_reset_on = p_old then null else z.next_reset_on end)
+   where z.id = any (p_zones);
+  perform set_config('app.internal', 'off', true);
+end $$;
+revoke execute on function public.sync_zone_resets(uuid[], date) from public, anon, authenticated;
+
+-- 存檔前：名稱去頭尾空白、區域不重複而且要是這間館的；建立者、時間由資料庫填
+create or replace function public.reset_events_before() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  new.label := btrim(new.label);
+  new.zone_ids := coalesce((select array_agg(distinct z) from unnest(new.zone_ids) z), '{}');
+  if exists (select 1 from unnest(new.zone_ids) z
+              where not exists (select 1 from public.zones x where x.id = z and x.gym_id = new.gym_id)) then
+    raise exception '換線的區域要是這間館的' using errcode = '22023';
+  end if;
+  if not public.is_db_admin() then
+    if tg_op = 'INSERT' then
+      new.created_by := auth.uid();
+      new.created_at := now();
+    else
+      new.created_by := old.created_by;
+      new.created_at := old.created_at;
+    end if;
+  end if;
+  new.updated_at := now();
+  return new;
+end $$;
+create trigger reset_events_before before insert or update on public.reset_events
+  for each row execute function public.reset_events_before();
+
+-- 存檔後：同步區域的換線日、寫操作紀錄
+create or replace function public.reset_events_after() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  r public.reset_events;
+begin
+  if tg_op = 'DELETE' then
+    r := old;
+    perform public.sync_zone_resets(old.zone_ids, old.starts_on);
+  elsif tg_op = 'UPDATE' then
+    r := new;
+    perform public.sync_zone_resets(old.zone_ids, old.starts_on);
+    perform public.sync_zone_resets(new.zone_ids, null);
+  else
+    r := new;
+    perform public.sync_zone_resets(new.zone_ids, null);
+  end if;
+  perform public.write_audit(r.gym_id,
+    case tg_op when 'INSERT' then 'reset.add' when 'UPDATE' then 'reset.update' else 'reset.delete' end, r.id,
+    jsonb_build_object('label', r.label, 'starts_on', r.starts_on, 'ends_on', r.ends_on));
+  return null;
+end $$;
+create trigger reset_events_after after insert or update or delete on public.reset_events
+  for each row execute function public.reset_events_after();
+
+alter table public.reset_events enable row level security;
+create policy reset_events_read on public.reset_events for select to anon, authenticated using (true);
+create policy reset_events_insert on public.reset_events for insert to authenticated with check (public.can_edit_resets());
+create policy reset_events_update on public.reset_events for update to authenticated
+  using (public.can_edit_resets()) with check (public.can_edit_resets());
+create policy reset_events_delete on public.reset_events for delete to authenticated using (public.can_edit_resets());
+revoke insert, update, delete, truncate on public.reset_events from anon;
+revoke truncate on public.reset_events from authenticated;
+
+-- 授權名單：老闆看得到全部，被授權的人看得到自己；新增、移除只能用 set_reset_editor（老闆）
+alter table public.reset_editors enable row level security;
+create policy reset_editors_read on public.reset_editors for select to authenticated
+  using (public.is_owner() or user_id = auth.uid());
+revoke insert, update, delete, truncate on public.reset_editors from anon, authenticated;
+
+create or replace function public.set_reset_editor(p_user uuid, p_on boolean) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not public.is_owner() then
+    raise exception '只有老闆可以設定換線日權限' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.profiles where id = p_user) then
+    raise exception '找不到這個帳號' using errcode = 'P0002';
+  end if;
+  if p_on then
+    insert into public.reset_editors (user_id, created_by) values (p_user, auth.uid()) on conflict (user_id) do nothing;
+  else
+    delete from public.reset_editors where user_id = p_user;
+  end if;
+  perform public.write_audit(null, case when p_on then 'reset_editor.grant' else 'reset_editor.revoke' end, p_user,
+    (select jsonb_build_object('nickname', nickname, 'username', username) from public.profiles where id = p_user));
+end $$;
+revoke execute on function public.set_reset_editor(uuid, boolean) from public, anon;
+grant execute on function public.set_reset_editor(uuid, boolean) to authenticated;
+
+-- 老闆看授權名單（含帳號名稱與暱稱）
+create or replace function public.reset_editor_list()
+returns table (id uuid, username text, nickname text)
+language sql stable security definer set search_path = '' as $$
+  select p.id, p.username, p.nickname
+    from public.reset_editors e join public.profiles p on p.id = e.user_id
+   where public.is_owner()
+   order by e.created_at
+$$;
+revoke execute on function public.reset_editor_list() from public, anon;
+grant execute on function public.reset_editor_list() to authenticated;
+
+-- 選館頁、行事曆用：一段日期內的公告，順便標出是不是只有 Spray Wall（選館頁放在 Spray Wall 那一列）
+create or replace function public.reset_calendar(p_from date, p_to date)
+returns table (id uuid, gym_id text, label text, zone_ids uuid[], starts_on date, ends_on date, spray boolean)
+language sql stable set search_path = '' as $$
+  select e.id, e.gym_id, e.label, e.zone_ids, e.starts_on, e.ends_on,
+         cardinality(e.zone_ids) > 0 and not exists (
+           select 1 from public.zones z where z.id = any (e.zone_ids) and z.kind <> 'spray')
+    from public.reset_events e
+   where e.ends_on >= p_from and e.starts_on <= p_to
+   order by e.starts_on, e.gym_id, e.label
+$$;
+grant execute on function public.reset_calendar(date, date) to anon, authenticated;
+
+-- 整區換線：換線日改接這一區之後的下一筆公告（沒有就清空）
+create or replace function public.archive_zone(p_zone uuid) returns int
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_gym   text := public.zone_gym(p_zone);
+  v_codes text[];
+begin
+  if v_gym is null then
+    raise exception '找不到這個區域' using errcode = 'P0002';
+  end if;
+  if not public.is_staff(v_gym) then
+    raise exception '沒有權限' using errcode = '42501';
+  end if;
+
+  perform set_config('app.bulk_archive', 'on', true);
+  -- 不用 select … into：Supabase SQL Editor 會把它當成建新表，自動插入 enable RLS 而把函式弄壞
+  v_codes := (select coalesce(array_agg(code order by code), '{}') from public.routes
+               where zone_id = p_zone and archived_at is null);
+  update public.routes set archived_at = now()
+   where zone_id = p_zone and archived_at is null;
+  perform set_config('app.bulk_archive', 'off', true);
+
+  perform set_config('app.internal', 'on', true);
+  update public.zones
+     set next_reset_on = (select min(e.starts_on) from public.reset_events e
+                           where p_zone = any (e.zone_ids) and e.starts_on > public.taipei_today())
+   where id = p_zone;
+  perform set_config('app.internal', 'off', true);
+
+  perform public.write_audit(v_gym, 'zone.archive_all', p_zone,
+    jsonb_build_object('count', cardinality(v_codes), 'codes', to_jsonb(v_codes),
+                       'zone', (select name from public.zones where id = p_zone)));
+  return cardinality(v_codes);
+end $$;
+
+-- my_access 多回傳 can_edit_resets（App 決定要不要顯示「換線日」管理頁）
+create or replace function public.my_access() returns jsonb
+language sql stable security definer set search_path = '' as $$
+  select case when auth.uid() is null then null else jsonb_build_object(
+    'id', p.id,
+    'username', p.username,
+    'phone', p.phone,
+    'nickname', p.nickname,
+    'avatar_url', p.avatar_url,
+    'is_owner', p.is_owner,
+    'can_edit_resets', p.is_owner or exists (select 1 from public.reset_editors e where e.user_id = p.id),
+    'roles', coalesce((
+      select jsonb_agg(jsonb_build_object('gym_id', s.gym_id, 'role', s.role) order by s.gym_id)
+        from public.staff_roles s where s.user_id = p.id), '[]'::jsonb)
+  ) end
+  from public.profiles p where p.id = auth.uid()
+$$;

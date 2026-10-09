@@ -48,6 +48,8 @@ export function createMock() {
     routeLikes: [], // route_likes
     opens: [], // app_opens
     feedback: [],
+    resetEvents: [], // 換線公告
+    resetEditors: [], // 老闆授權輸入換線日的人（user_id）
     likes: [], // comment_likes
     audit: [],
     files: {},
@@ -116,6 +118,17 @@ export function createMock() {
   const zoneOf = (id) => db.zones.find((z) => z.id === id);
   const isOwner = (uid) => !!prof(uid)?.is_owner;
   const isStaff = (uid, g) => isOwner(uid) || db.staff_roles.some((s) => s.user_id === uid && s.gym_id === g);
+  const canEditResets = (uid) => isOwner(uid) || db.resetEditors.includes(uid);
+  // 同 sync_zone_resets：區域的下次換線日＝還沒結束的公告裡最早的開始日；沒有公告時，正是舊公告的日期就清空
+  const syncZoneResets = (zoneIds, oldStart) => {
+    const today = taipeiDay();
+    for (const id of zoneIds ?? []) {
+      const z = db.zones.find((x) => x.id === id);
+      if (!z) continue;
+      const next = db.resetEvents.filter((e) => e.zone_ids.includes(id) && e.ends_on >= today).map((e) => e.starts_on).sort()[0];
+      z.next_reset_on = next ?? (z.next_reset_on === oldStart ? null : z.next_reset_on);
+    }
+  };
   const isMgr = (uid, g) => isOwner(uid) || db.staff_roles.some((s) => s.user_id === uid && s.gym_id === g && s.role === "manager");
   const gymOfRoute = (id) => zoneOf(db.routes.find((r) => r.id === id).zone_id).gym_id;
   // 路線下架時刪掉影片資料（資料庫觸發器）
@@ -176,7 +189,25 @@ export function createMock() {
   async function rpc(route, fn, a, uid) {
     if (fn === "my_access") {
       const p = prof(uid);
-      return J(route, 200, p ? { id: p.id, username: p.username, nickname: p.nickname, avatar_url: null, is_owner: p.is_owner, roles: db.staff_roles.filter((s) => s.user_id === uid).map((s) => ({ gym_id: s.gym_id, role: s.role })) } : null);
+      return J(route, 200, p ? { id: p.id, username: p.username, nickname: p.nickname, avatar_url: null, is_owner: p.is_owner, can_edit_resets: canEditResets(uid), roles: db.staff_roles.filter((s) => s.user_id === uid).map((s) => ({ gym_id: s.gym_id, role: s.role })) } : null);
+    }
+    if (fn === "reset_calendar") {
+      const rows = db.resetEvents
+        .filter((e) => e.ends_on >= a.p_from && e.starts_on <= a.p_to)
+        .map((e) => ({ ...e, spray: e.zone_ids.length > 0 && e.zone_ids.every((id) => zoneOf(id)?.kind === "spray") }))
+        .sort((x, y) => x.starts_on.localeCompare(y.starts_on) || x.gym_id.localeCompare(y.gym_id));
+      return J(route, 200, rows.map(({ created_by, ...e }) => e));
+    }
+    if (fn === "reset_editor_list") {
+      if (!isOwner(uid)) return J(route, 200, []);
+      return J(route, 200, db.resetEditors.map((id) => ({ id, username: prof(id)?.username, nickname: prof(id)?.nickname })));
+    }
+    if (fn === "set_reset_editor") {
+      if (!isOwner(uid)) return J(route, 403, { code: "42501", message: "只有老闆可以設定換線日權限" });
+      db.resetEditors = db.resetEditors.filter((id) => id !== a.p_user);
+      if (a.p_on) db.resetEditors.push(a.p_user);
+      audit(uid, null, a.p_on ? "reset_editor.grant" : "reset_editor.revoke", a.p_user, { nickname: prof(a.p_user)?.nickname });
+      return empty(route);
     }
     if (fn === "zone_view") {
       const z = db.zones.find((x) => x.id === a.p_zone);
@@ -229,7 +260,8 @@ export function createMock() {
       if (!isStaff(uid, z.gym_id)) return J(route, 403, { code: "42501", message: "沒有權限" });
       let n = 0;
       db.routes.forEach((r) => { if (r.zone_id === z.id && !r.archived_at) { r.archived_at = now(); dropVideos(r.id); n++; } });
-      z.next_reset_on = null;
+      // 換線日改接這一區之後的下一筆公告
+      z.next_reset_on = db.resetEvents.filter((e) => e.zone_ids.includes(z.id) && e.starts_on > taipeiDay()).map((e) => e.starts_on).sort()[0] ?? null;
       audit(uid, z.gym_id, "zone.archive_all", z.id, { count: n, zone: z.name });
       return J(route, 200, n);
     }
@@ -547,6 +579,47 @@ export function createMock() {
       }
       if (m === "DELETE") { const del = filt(mine, sp); db.ascents = db.ascents.filter((a) => !del.includes(a)); return empty(route); }
     }
+    if (t === "reset_events") {
+      if (!uid || !canEditResets(uid)) return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "reset_events"' });
+      const check = (e) => {
+        if (!e.label?.trim()) return "名稱不能空白";
+        if (e.ends_on < e.starts_on) return "結束日不能早於開始日";
+        if (e.zone_ids.some((id) => zoneOf(id)?.gym_id !== e.gym_id)) return "換線的區域要是這間館的";
+        return null;
+      };
+      if (m === "POST") {
+        const e = { id: uuid(), zone_ids: [], ...body, label: body.label.trim(), created_by: uid };
+        const bad = check(e);
+        if (bad) return J(route, 400, { code: "22023", message: bad });
+        db.resetEvents.push(e);
+        syncZoneResets(e.zone_ids, null);
+        audit(uid, e.gym_id, "reset.add", e.id, { label: e.label, starts_on: e.starts_on, ends_on: e.ends_on });
+        return J(route, 201, [{ id: e.id }]);
+      }
+      if (m === "PATCH") {
+        const rows = filt(db.resetEvents, sp);
+        for (const e of rows) {
+          const old = { ...e };
+          const next = { ...e, ...body, label: (body.label ?? e.label).trim() };
+          const bad = check(next);
+          if (bad) return J(route, 400, { code: "22023", message: bad });
+          Object.assign(e, next);
+          syncZoneResets(old.zone_ids, old.starts_on);
+          syncZoneResets(e.zone_ids, null);
+          audit(uid, e.gym_id, "reset.update", e.id, { label: e.label, starts_on: e.starts_on, ends_on: e.ends_on });
+        }
+        return J(route, 200, rows.map((e) => ({ id: e.id })));
+      }
+      if (m === "DELETE") {
+        const rows = filt(db.resetEvents, sp);
+        db.resetEvents = db.resetEvents.filter((e) => !rows.includes(e));
+        rows.forEach((e) => {
+          syncZoneResets(e.zone_ids, e.starts_on);
+          audit(uid, e.gym_id, "reset.delete", e.id, { label: e.label, starts_on: e.starts_on, ends_on: e.ends_on });
+        });
+        return J(route, 200, rows.map((e) => ({ id: e.id })));
+      }
+    }
     if (t === "feedback") {
       if (!uid) return J(route, 401, { message: "JWT" });
       if (m === "GET") return out(filt(db.feedback.filter((f) => f.user_id === uid || isOwner(uid)), sp).sort((x, y) => y.created_at.localeCompare(x.created_at)));
@@ -656,5 +729,13 @@ export function createMock() {
     return J(route, 404, { message: `mock: 沒處理 ${m} ${p}` });
   }
 
-  return { db, state, addUser, addRoute, addAscent, addVideo, handler };
+  // 測試用：新增一筆換線公告（offset 是離今天幾天），區域用代碼
+  const addReset = (gymId, label, codes, startOffset, endOffset = startOffset) => {
+    const zone_ids = codes.map((c) => db.zones.find((z) => z.gym_id === gymId && z.code === c).id);
+    const e = { id: uuid(), gym_id: gymId, label, zone_ids, starts_on: taipeiDay(startOffset), ends_on: taipeiDay(endOffset), created_by: null };
+    db.resetEvents.push(e);
+    syncZoneResets(zone_ids, null);
+    return e;
+  };
+  return { db, state, addUser, addRoute, addAscent, addVideo, addReset, handler };
 }
