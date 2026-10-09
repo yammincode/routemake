@@ -119,15 +119,21 @@ export function createMock() {
   const isOwner = (uid) => !!prof(uid)?.is_owner;
   const isStaff = (uid, g) => isOwner(uid) || db.staff_roles.some((s) => s.user_id === uid && s.gym_id === g);
   const canEditResets = (uid) => isOwner(uid) || db.resetEditors.includes(uid);
-  // 同 sync_zone_resets：區域的下次換線日＝還沒結束的公告裡最早的開始日；沒有公告時，正是舊公告的日期就清空
+  // 同 sync_zone_resets：區域的下次換線日＝今天以後開始的公告裡最早的開始日；沒有公告時，正是舊公告的日期就清空
   const syncZoneResets = (zoneIds, oldStart) => {
     const today = taipeiDay();
     for (const id of zoneIds ?? []) {
       const z = db.zones.find((x) => x.id === id);
       if (!z) continue;
-      const next = db.resetEvents.filter((e) => e.zone_ids.includes(id) && e.ends_on >= today).map((e) => e.starts_on).sort()[0];
+      const next = db.resetEvents.filter((e) => e.zone_ids.includes(id) && e.starts_on >= today).map((e) => e.starts_on).sort()[0];
       z.next_reset_on = next ?? (z.next_reset_on === oldStart ? null : z.next_reset_on);
     }
+  };
+  // 同 zone_reset_on：顧客看到的換線日以公告為準，沒有公告才用員工設的日期（已經過去的不顯示）
+  const zoneResetOn = (z) => {
+    const today = taipeiDay();
+    const ev = db.resetEvents.filter((e) => e.zone_ids.includes(z.id) && e.starts_on >= today).map((e) => e.starts_on).sort()[0];
+    return ev ?? (z.next_reset_on && z.next_reset_on >= today ? z.next_reset_on : null);
   };
   const isMgr = (uid, g) => isOwner(uid) || db.staff_roles.some((s) => s.user_id === uid && s.gym_id === g && s.role === "manager");
   const gymOfRoute = (id) => zoneOf(db.routes.find((r) => r.id === id).zone_id).gym_id;
@@ -220,7 +226,7 @@ export function createMock() {
       const ids = new Set(rs.map((r) => r.id));
       const pick = (o, ks) => Object.fromEntries(ks.map((k) => [k, o[k] ?? null]));
       return J(route, 200, {
-        z: { ...pick(z, ["id", "gym_id", "code", "name", "photo_path", "photo_width", "photo_height", "next_reset_on", "sort", "grade_system"]), kind: z.kind ?? "wall" },
+        z: { ...pick(z, ["id", "gym_id", "code", "name", "photo_path", "photo_width", "photo_height", "next_reset_on", "sort", "grade_system"]), next_reset_on: zoneResetOn(z), kind: z.kind ?? "wall" },
         g: pick(g, ["id", "name", "is_live", "comments_enabled", "sort"]),
         rs: rs.map((r) => ({ kind: "gym", name: null, description: null, holds: null, created_by: null, ...r })),
         as: Object.fromEntries(db.ascents.filter((x) => x.user_id === uid && ids.has(x.route_id)).map((x) => [x.route_id, pick(x, ["id", "route_id", "status", "climbed_on", "feel", "grade_feel", "private_note"])])),
@@ -230,7 +236,7 @@ export function createMock() {
     if (fn === "zone_progress")
       return J(route, 200, db.zones.filter((z) => z.gym_id === a.p_gym && z.kind !== "spray").sort((x, y) => x.sort - y.sort).map((z) => {
         const rs = db.routes.filter((r) => r.zone_id === z.id && !r.archived_at);
-        return { zone_id: z.id, code: z.code, name: z.name, sort: z.sort, photo_path: z.photo_path, next_reset_on: z.next_reset_on, route_count: rs.length, done_count: rs.filter((r) => db.ascents.some((x) => x.route_id === r.id && x.user_id === uid && x.status !== "project")).length };
+        return { zone_id: z.id, code: z.code, name: z.name, sort: z.sort, photo_path: z.photo_path, next_reset_on: zoneResetOn(z), route_count: rs.length, done_count: rs.filter((r) => db.ascents.some((x) => x.route_id === r.id && x.user_id === uid && x.status !== "project")).length };
       }));
     if (fn === "monthly_stats") {
       const { from, to, prev } = monthBounds(a.p_year, a.p_month);

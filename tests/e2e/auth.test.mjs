@@ -7,6 +7,12 @@ let browser;
 before(async () => (browser = await launch()));
 after(async () => browser?.close());
 
+// 等畫面出現這段字再讀（帳號資料讀取的快慢不一定，不用固定等幾毫秒）
+const mainText = async (page, text) => {
+  await page.locator("main", { hasText: text }).waitFor({ timeout: 10000 });
+  return page.textContent("main");
+};
+
 test("註冊流程與錯誤提示", async () => {
   const mock = createMock();
   const { page, errors } = await phone(browser, mock);
@@ -100,28 +106,25 @@ test("管理後台：未登入、沒權限、員工", async () => {
 
   const a = await phone(browser, mock);
   await a.page.goto(BASE + "/admin", { waitUntil: "networkidle" });
-  assert.ok((await a.page.textContent("main")).includes("請先登入"));
+  assert.ok((await mainText(a.page, "請先登入")).includes("請先登入"));
   await login(a.page, "climber88", "password1", "/admin");
-  const denied = await a.page.textContent("main");
+  const denied = await mainText(a.page, "給原岩員工用");
   assert.ok(denied.includes("給原岩員工用") && denied.includes("climber88"), "顧客看到說明和自己的帳號");
   assert.ok(!/SQL|update public|is_owner/.test(denied), "顧客看不到資料庫指令");
 
   const b = await phone(browser, mock);
   await login(b.page, "setter1", "password1", "/admin");
-  await b.page.waitForTimeout(800);
-  assert.ok(await b.page.isVisible("text=你的身分：定線長"));
+  assert.ok((await mainText(b.page, "你的身分：定線長")).includes("你的身分：定線長"));
   assert.match(await b.page.textContent("main"), /正在管理\s*明德館/, "後台寫出正在管理哪一館");
   await b.page.goto(BASE + "/me", { waitUntil: "networkidle" });
-  await b.page.waitForTimeout(500);
-  assert.ok((await b.page.textContent("main")).includes("員工身分：明德館定線長"));
+  assert.ok((await mainText(b.page, "員工身分：明德館定線長")).includes("員工身分：明德館定線長"));
 
   // 別館的定線員：頁首不再寫「明德館」，看得到自己管的館
   const g2 = mock.addUser("setter2", "password1", { nickname: "萬華定線" });
   mock.db.staff_roles.push({ user_id: g2, gym_id: "g2", role: "setter" });
   const c = await phone(browser, mock);
   await login(c.page, "setter2", "password1", "/admin");
-  await c.page.waitForTimeout(800);
-  assert.match(await c.page.textContent("main"), /正在管理\s*萬華館/);
+  assert.match(await mainText(c.page, /正在管理\s*萬華館/), /正在管理\s*萬華館/);
   assert.equal(await c.page.locator('main button:has-text("明德館")').count(), 0, "後台頁首沒有「明德館」切換按鈕");
   assert.deepEqual([...a.errors, ...b.errors, ...c.errors], []);
 });

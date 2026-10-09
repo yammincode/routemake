@@ -1056,6 +1056,13 @@ values ('g2', '臨時牆', array[(select id from public.zones where gym_id = 'g2
 delete from public.zones where gym_id = 'g2' and code = 'TMP';
 select tests.ok('換線日：刪掉區域，公告裡也拿掉', (select cardinality(zone_ids) from public.reset_events where label = '臨時牆') = 1);
 select tests.lives('換線日：刪掉區域後公告還改得動', $q$update public.reset_events set label = '臨時牆（改）' where label = '臨時牆'$q$);
+insert into public.zones (gym_id, code, name, sort) values ('g2', 'T1', '臨時 T1', 98), ('g2', 'T2', '臨時 T2', 99);
+insert into public.reset_events (gym_id, label, zone_ids, starts_on, ends_on)
+values ('g2', '臨時 T', array[(select id from public.zones where gym_id = 'g2' and code = 'T1'), (select id from public.zones where gym_id = 'g2' and code = 'T2'),
+                              (select v from rz where k = 'd1')], public.taipei_today() + 41, public.taipei_today() + 41);
+select tests.lives('換線日：同一筆公告的兩區一次刪掉（重新分區）也刪得掉', $q$delete from public.zones where gym_id = 'g2' and code in ('T1', 'T2')$q$);
+select tests.ok('換線日：一次刪掉的兩區都從公告拿掉',
+  (select zone_ids from public.reset_events where label = '臨時 T') = array[(select v from rz where k = 'd1')]);
 
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));

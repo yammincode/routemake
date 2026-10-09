@@ -51,7 +51,8 @@ export default function ResetAdmin() {
   const [month, setMonth] = useState(() => todayYmd().slice(0, 7));
   const [gymId, setGymId] = useState(() => lastLiveGym().id);
   const [events, setEvents] = useState<ResetEvent[] | null>(null);
-  const [zones, setZones] = useState<Zone[]>([]);
+  // 區域連同是哪一館的一起記：換館時舊館的區域不會被拿來勾（比較慢回來的舊館資料也不會蓋掉）
+  const [zoneSet, setZoneSet] = useState<{ gym: string; list: Zone[] } | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,10 +77,15 @@ export default function ResetAdmin() {
   }, [allowed, month, reload, toast]);
   useEffect(() => {
     if (!allowed) return;
+    let alive = true;
     getZones(gymId)
-      .then(setZones)
-      .catch((e) => toast((e as Error).message));
+      .then((list) => alive && setZoneSet({ gym: gymId, list }))
+      .catch((e) => alive && toast((e as Error).message));
+    return () => {
+      alive = false;
+    };
   }, [allowed, gymId, toast]);
+  const zones = zoneSet?.gym === gymId ? zoneSet.list : [];
 
   if (!ready) return <Empty>讀取中…</Empty>;
   if (!session)
@@ -208,6 +214,7 @@ export default function ResetAdmin() {
             <SheetSub>{gymName}</SheetSub>
             <Label>哪幾區（可以複選）</Label>
             <div className="flex flex-wrap gap-2">
+              {zoneSet?.gym !== gymId && <small className="text-meta text-muted">讀取區域中…</small>}
               {zones.map((z) => (
                 <Chip key={z.id} pressed={draft.zone_ids.includes(z.id)} onClick={() => toggleZone(z.id)}>
                   {z.name}

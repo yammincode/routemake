@@ -200,3 +200,27 @@ test("資料庫還沒套用 step27：選館頁、行事曆、館首頁照常（�
   assert.equal(await page.locator('main button:text-is("📅 換線日")').count(), 0, "還沒套用 step27 時不顯示換線日按鈕");
   assert.deepEqual(errors, []);
 });
+
+test("換線日後台：網路慢時換館，勾的區域是現在這間館的（慢回來的舊館區域不會蓋掉）", async () => {
+  const mock = createMock();
+  mock.addUser("owner1", "password1", { nickname: "老闆", is_owner: true });
+  const { page, ctx, errors } = await phone(browser, mock);
+  // 明德館的區域很慢才回來（掛在 context 上：App 的請求可能經過 service worker，page.route 攔不到）
+  await ctx.route(
+    (u) => u.pathname.endsWith("/rest/v1/zones") && u.searchParams.get("gym_id") === "eq.mingde",
+    async (route) => {
+      await new Promise((r) => setTimeout(r, 3000));
+      await route.fallback();
+    }
+  );
+  await login(page, "owner1", "password1", "/admin/resets");
+  await page.click('main button[aria-pressed]:text-is("萬華館")');
+  await page.waitForTimeout(3800);
+  await page.click('main button:has-text("新增萬華館換線日")');
+  const sheet = page.locator("[role=dialog]");
+  await sheet.waitFor();
+  const chips = await sheet.locator("button[aria-pressed]").allTextContents();
+  assert.ok(chips.includes("教學區 Slab"), `顯示萬華館的區域（實際：${chips.join("、")}）`);
+  assert.ok(!chips.includes("比賽牆 1"), "不會出現明德館的區域");
+  assert.deepEqual(errors, []);
+});
