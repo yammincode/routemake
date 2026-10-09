@@ -160,16 +160,16 @@ export default function HomeView({ gymId }: { gymId: string }) {
       return { days: p.days, ongoing: false, text: `${resetRange(e)} 換線・${p.days === 0 ? "今天" : `${p.days} 天後`}`, warn: p.days <= 7 };
     }
     const d = daysUntil(z.next_reset_on);
-    return d == null ? null : { days: d, ongoing: false, text: dueText(d), warn: d >= 0 && d <= 7 };
+    return d == null || d < 0 ? null : { days: d, ongoing: false, text: dueText(d), warn: d <= 7 };
   };
   const zoneResets = new Map(zones.map((z) => [z.zone_id, resetOf(z)]));
   const goZone = (id: string) => router.push(`/zone?id=${id}`);
-  // 提醒：最快換線（7 天內）、而且還有沒完攀路線的區
+  // 提醒：最快換線（7 天內、還沒開始換）、而且還有沒完攀路線的區；正在換的牆不提醒
   const guest = !session;
   const goal = zones
     .filter((z) => {
       const r = zoneResets.get(z.zone_id);
-      return r != null && r.days >= 0 && r.days <= 7 && z.route_count > 0 && (guest || z.done_count < z.route_count);
+      return r != null && !r.ongoing && r.days >= 0 && r.days <= 7 && z.route_count > 0 && (guest || z.done_count < z.route_count);
     })
     .sort((a, b) => zoneResets.get(a.zone_id)!.days - zoneResets.get(b.zone_id)!.days)[0];
   const goalReset = goal ? zoneResets.get(goal.zone_id)! : null;
@@ -207,7 +207,7 @@ export default function HomeView({ gymId }: { gymId: string }) {
 
       {goal && goalReset && (
         <GoalLine label={guest ? "快換線" : "下一個目標"} onClick={() => goZone(goal.zone_id)}>
-          {goal.name} {goalReset.ongoing ? "換線中" : dueText(goalReset.days)}，{guest ? `共 ${goal.route_count} 條路線` : `還有 ${goal.route_count - goal.done_count} 條沒完攀`}
+          {goal.name} {dueText(goalReset.days)}，{guest ? `共 ${goal.route_count} 條路線` : `還有 ${goal.route_count - goal.done_count} 條沒完攀`}
         </GoalLine>
       )}
 

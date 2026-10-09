@@ -2,9 +2,12 @@
 -- 換線公告（各館每月換線日）
 -- - reset_events：哪間館、公告上的名稱（例如「A 區」）、包含哪些區域、開始日（拆線）、結束日（定線，當天晚上起新路線）
 -- - 大家都看得到（沒登入也可以）；只有老闆和老闆授權的人（reset_editors）能新增、修改、刪除，都寫操作紀錄
--- - 存檔時自動更新那些區域的「下次換線日」（zones.next_reset_on）：那一區還沒結束的公告裡最早的開始日
+-- - 存檔時自動更新那些區域的「下次換線日」（zones.next_reset_on）：那一區今天以後開始的公告裡最早的開始日
 --   刪掉或改掉公告時，如果區域的換線日正是舊公告的日期、又沒有別的公告，就清空
 -- - 整區換線後不再一律清空換線日，改接這一區之後的下一筆公告
+-- - 畫面讀的換線日（zone_progress、zone_view）改用 zone_reset_on()：有公告照公告，沒有就用員工設的日期，已經過了的不算
+--   （換線結束後沒人按整區換線，也不會一直顯示「換線日已過」）
+-- - 區域被刪掉時，從公告裡拿掉那一區
 -- =====================================================================
 -- 用 execute 建表：Supabase SQL Editor 看到建表指令會跳出「開啟 RLS」提示並改寫整份 SQL，會把後面的函式切壞。下面已經自己開啟 RLS。
 do $do$ begin
@@ -40,7 +43,8 @@ language sql stable set search_path = '' as $$
   select (now() at time zone 'Asia/Taipei')::date
 $$;
 
--- 重新算這些區域的下次換線日：還沒結束的公告裡最早的開始日；沒有公告時，換線日正是 p_old（剛刪掉或改掉的公告日期）就清空，其他保留（員工手動設定的）
+-- 重新算這些區域的下次換線日：今天以後開始的公告裡最早的開始日（已經開始換的不算）；
+-- 沒有公告時，換線日正是 p_old（剛刪掉或改掉的公告日期）就清空，其他保留（員工手動設定的）
 create or replace function public.sync_zone_resets(p_zones uuid[], p_old date) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
@@ -49,7 +53,7 @@ begin
   update public.zones z
      set next_reset_on = coalesce(
            (select min(e.starts_on) from public.reset_events e
-             where z.id = any (e.zone_ids) and e.ends_on >= public.taipei_today()),
+             where z.id = any (e.zone_ids) and e.starts_on >= public.taipei_today()),
            case when z.next_reset_on = p_old then null else z.next_reset_on end)
    where z.id = any (p_zones);
   perform set_config('app.internal', 'off', true);
@@ -158,8 +162,8 @@ create or replace function public.reset_calendar(p_from date, p_to date)
 returns table (id uuid, gym_id text, label text, zone_ids uuid[], starts_on date, ends_on date, spray boolean)
 language sql stable set search_path = '' as $$
   select e.id, e.gym_id, e.label, e.zone_ids, e.starts_on, e.ends_on,
-         cardinality(e.zone_ids) > 0 and not exists (
-           select 1 from public.zones z where z.id = any (e.zone_ids) and z.kind <> 'spray')
+         exists (select 1 from public.zones z where z.id = any (e.zone_ids) and z.kind = 'spray')
+         and not exists (select 1 from public.zones z where z.id = any (e.zone_ids) and z.kind <> 'spray')
     from public.reset_events e
    where e.ends_on >= p_from and e.starts_on <= p_to
    order by e.starts_on, e.gym_id, e.label
@@ -218,3 +222,68 @@ language sql stable security definer set search_path = '' as $$
   ) end
   from public.profiles p where p.id = auth.uid()
 $$;
+
+-- 畫面上的下次換線日：今天以後開始的公告裡最早的開始日；沒有公告就用員工設的日期（已經過了就不算）
+create or replace function public.zone_reset_on(p_zone uuid, p_manual date) returns date
+language sql stable set search_path = '' as $$
+  select coalesce(
+    (select min(e.starts_on) from public.reset_events e
+      where p_zone = any (e.zone_ids) and e.starts_on >= public.taipei_today()),
+    case when p_manual >= public.taipei_today() then p_manual end)
+$$;
+
+create or replace function public.zone_progress(p_gym text)
+returns table (
+  zone_id uuid, code text, name text, sort int, photo_path text, next_reset_on date,
+  route_count int, done_count int
+)
+language sql stable security invoker set search_path = '' as $$
+  select z.id, z.code, z.name, z.sort, z.photo_path, public.zone_reset_on(z.id, z.next_reset_on),
+         count(r.id)::int,
+         count(a.id)::int
+    from public.zones z
+    left join public.routes r on r.zone_id = z.id and r.archived_at is null
+    left join public.ascents a on a.route_id = r.id and a.user_id = auth.uid() and a.status in ('flash', 'send')
+   where z.gym_id = p_gym and z.kind = 'wall'
+   group by z.id
+   order by z.sort, z.code
+$$;
+
+create or replace function public.zone_view(p_zone uuid) returns jsonb
+language sql stable security invoker set search_path = '' as $$
+  with r as (
+    select id, zone_id, code, grade, hold_color, style_tags, setter_note, pin_x, pin_y, comments_enabled,
+           created_at, archived_at, kind, name, description, holds, created_by
+      from public.routes
+     where zone_id = p_zone and archived_at is null
+  )
+  select jsonb_build_object(
+    'z', (select to_jsonb(z) from (
+            select id, gym_id, code, name, photo_path, photo_width, photo_height,
+                   public.zone_reset_on(id, next_reset_on) as next_reset_on, sort, grade_system, kind
+              from public.zones where id = p_zone) z),
+    'g', (select to_jsonb(g) from (
+            select id, name, is_live, comments_enabled, sort
+              from public.gyms where id = (select gym_id from public.zones where id = p_zone)) g),
+    'rs', coalesce((select jsonb_agg(to_jsonb(r) order by r.grade, r.code) from r), '[]'::jsonb),
+    'as', coalesce((select jsonb_object_agg(a.route_id, to_jsonb(a)) from (
+            select a.id, a.route_id, a.status, a.climbed_on, a.feel, a.grade_feel, a.private_note
+              from public.ascents a join r on r.id = a.route_id
+             where a.user_id = auth.uid()) a), '{}'::jsonb),
+    'cs', coalesce((select jsonb_object_agg(c.route_id, c.n) from (
+            select c.route_id, count(*)::int as n
+              from public.comments c join r on r.id = c.route_id
+             group by c.route_id) c), '{}'::jsonb)
+  );
+$$;
+
+-- 區域被刪掉：從公告裡拿掉那一區（公告才改得動，Spray Wall 判斷也不會錯）
+create or replace function public.zones_drop_from_resets() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  update public.reset_events set zone_ids = array_remove(zone_ids, old.id) where old.id = any (zone_ids);
+  return null;
+end $$;
+-- 刪掉之後才改公告（改公告會同步區域的換線日，不能碰到正在刪的那一筆）
+create trigger zones_drop_from_resets after delete on public.zones
+  for each row execute function public.zones_drop_from_resets();

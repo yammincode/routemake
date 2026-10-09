@@ -984,7 +984,7 @@ select tests.throws('換線日：顧客不能授權自己', format('select publi
 select tests.ok('換線日：顧客 my_access 沒有輸入權限', not (public.my_access()->>'can_edit_resets')::boolean);
 reset role;
 set role authenticated; select tests.login(:MG);
-select tests.throws('換線日：店長沒被授權也不能新增', $q$insert into public.reset_events (gym_id, label, starts_on, ends_on) values ('g2', 'C 區', current_date + 3, current_date + 4)$q$);
+select tests.throws('換線日：店長沒被授權也不能新增（自己的館也不行）', $q$insert into public.reset_events (gym_id, label, starts_on, ends_on) values ('mingde', 'C 區', current_date + 3, current_date + 4)$q$);
 reset role;
 set role authenticated; select tests.login(:OW);
 select tests.lives('換線日：老闆可以新增（C1、C2 兩區）', format($q$insert into public.reset_events (gym_id, label, zone_ids, starts_on, ends_on) values ('g2', ' C 區 ', array[%L, %L]::uuid[], public.taipei_today() + 3, public.taipei_today() + 4)$q$,
@@ -1003,9 +1003,8 @@ select tests.ok('換線日：被授權的人 my_access 有輸入權限', (public
 select tests.lives('換線日：被授權的人可以新增', format($q$insert into public.reset_events (gym_id, label, zone_ids, starts_on, ends_on) values ('g2', 'D 區', array[%L]::uuid[], public.taipei_today() + 10, public.taipei_today() + 11)$q$, (select v from rz where k = 'd1')));
 select tests.ok('換線日：被授權的人可以改日期', tests.rows($q$update public.reset_events set starts_on = public.taipei_today() + 12, ends_on = public.taipei_today() + 13 where label = 'D 區'$q$) = 1);
 select tests.ok('換線日：改日期，區域的換線日跟著改', (select next_reset_on from public.zones where id = (select v from rz where k = 'd1')) = public.taipei_today() + 12);
-select tests.ok('換線日：不能改建立者',
-  tests.rows(format($q$update public.reset_events set created_by = %L where label = 'D 區'$q$, :B)) = 1
-  and (select created_by from public.reset_events where label = 'D 區') = :A);
+select tests.ok('換線日：改建立者的指令執行了', tests.rows(format($q$update public.reset_events set created_by = %L where label = 'D 區'$q$, :B)) = 1);
+select tests.ok('換線日：不能改建立者', (select created_by from public.reset_events where label = 'D 區') = :A);
 select tests.throws('換線日：被授權的人不能授權別人', format('select public.set_reset_editor(%L, true)', :B));
 select tests.ok('換線日：被授權的人看不到授權名單', (select count(*) from public.reset_editor_list()) = 0);
 reset role;
@@ -1033,8 +1032,30 @@ select tests.lives('換線日：老闆取消授權', format('select public.set_r
 reset role;
 set role authenticated; select tests.login(:A);
 select tests.throws('換線日：取消授權後不能新增', $q$insert into public.reset_events (gym_id, label, starts_on, ends_on) values ('g2', 'C 區', current_date + 3, current_date + 4)$q$);
-select tests.ok('換線日：取消授權後也改不到、刪不到', tests.rows($q$delete from public.reset_events$q$) = 0);
+select tests.ok('換線日：取消授權後改不到', tests.rows($q$update public.reset_events set label = 'X'$q$) = 0);
+select tests.ok('換線日：取消授權後刪不到', tests.rows($q$delete from public.reset_events$q$) = 0);
 reset role;
+
+-- 換線日：畫面讀的換線日（有公告照公告；員工設的日期過了就不算）、已經開始換的公告不會把日期改回去、刪區域
+select tests.login(null);
+update public.zones set next_reset_on = public.taipei_today() - 3 where id = (select v from rz where k = 'd1');
+select tests.ok('換線日：員工設的日期已經過了，畫面上不顯示', (select next_reset_on from public.zone_progress('g2') where code = 'D1') is null);
+update public.zones set next_reset_on = public.taipei_today() + 5 where id = (select v from rz where k = 'd1');
+select tests.ok('換線日：沒有公告時用員工設的日期', (select next_reset_on from public.zone_progress('g2') where code = 'D1') = public.taipei_today() + 5);
+select tests.ok('換線日：有公告時照公告（今天開始換的 C 區）', (select next_reset_on from public.zone_progress('g2') where code = 'C1') = public.taipei_today());
+select tests.ok('換線日：區域頁也一樣', (public.zone_view((select v from rz where k = 'c1'))->'z'->>'next_reset_on')::date = public.taipei_today());
+update public.zones set next_reset_on = null where id = (select v from rz where k = 'd1');
+insert into public.reset_events (gym_id, label, zone_ids, starts_on, ends_on)
+values ('g2', 'D 區', array[(select v from rz where k = 'd1')], public.taipei_today() - 1, public.taipei_today() + 1);
+select tests.ok('換線日：昨天就開始換的公告不會設成下次換線日', (select next_reset_on from public.zones where id = (select v from rz where k = 'd1')) is null);
+update public.reset_events set label = 'D 區（延後）', ends_on = public.taipei_today() + 2 where label = 'D 區';
+select tests.ok('換線日：換線途中改公告，也不會把日期改回已經開始的那天', (select next_reset_on from public.zones where id = (select v from rz where k = 'd1')) is null);
+insert into public.zones (gym_id, code, name, sort) values ('g2', 'TMP', '臨時牆', 99);
+insert into public.reset_events (gym_id, label, zone_ids, starts_on, ends_on)
+values ('g2', '臨時牆', array[(select id from public.zones where gym_id = 'g2' and code = 'TMP'), (select v from rz where k = 'd1')], public.taipei_today() + 40, public.taipei_today() + 40);
+delete from public.zones where gym_id = 'g2' and code = 'TMP';
+select tests.ok('換線日：刪掉區域，公告裡也拿掉', (select cardinality(zone_ids) from public.reset_events where label = '臨時牆') = 1);
+select tests.lives('換線日：刪掉區域後公告還改得動', $q$update public.reset_events set label = '臨時牆（改）' where label = '臨時牆'$q$);
 
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));

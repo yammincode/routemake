@@ -17,7 +17,7 @@ test("換線日：老闆輸入 → 選館頁、行事曆、館首頁卡片都更
   const o = O.page;
   await login(o, "owner1", "password1", "/admin");
   await o.waitForTimeout(800);
-  await o.click('main button:has-text("換線日")');
+  await o.click('main button:text-is("📅 換線日")');
   await o.waitForURL("**/admin/resets");
   await o.waitForTimeout(600);
   await o.click('main button[aria-pressed]:text-is("萬華館")');
@@ -47,16 +47,21 @@ test("換線日：老闆輸入 → 選館頁、行事曆、館首頁卡片都更
   assert.match((await row.textContent()).replace(/\s+/g, ""), /3天後換線・C區/, "選館頁寫幾天後換線");
   assert.ok(!(await row.textContent()).includes("已上線"), "不再寫已上線");
 
-  // 換線行事曆
+  // 換線行事曆（3 天後如果已經是下個月，先換到下個月）
   await g.click('main a:has-text("看各館換線日")');
   await g.waitForURL("**/resets");
   await g.waitForTimeout(800);
+  if (taipeiDay(3).slice(0, 7) !== taipeiDay().slice(0, 7)) {
+    await g.click('main button[aria-label="下個月"]');
+    await g.waitForTimeout(800);
+  }
   const bar = g.locator('main button[aria-label^="萬華館 C 區"]').first();
   assert.ok(await bar.count(), "月曆上有萬華 C 區的色塊");
   await bar.click();
   await g.waitForTimeout(300);
   const detail = (await g.textContent("main")).replace(/\s+/g, "");
-  assert.ok(detail.includes("萬華館C區") && detail.includes("晚上起新路線"), "點色塊看那天的細節");
+  const md = (d) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+  assert.ok(detail.includes("萬華館C區") && detail.includes(`拆線日，${md(taipeiDay(4))}晚上起新路線`), "點色塊看那天的細節：定線日晚上起新路線");
   await g.click('main button[aria-pressed]:has-text("明德")');
   await g.waitForTimeout(300);
   assert.equal(await g.locator('main button[aria-label^="萬華館 C 區"]').count(), 0, "只看明德館時萬華的色塊不見");
@@ -118,7 +123,7 @@ test("換線日權限：顧客不能輸入；老闆授權後可以，取消後�
   await c.click('nav a:has-text("管理後台")');
   await c.waitForURL("**/admin");
   await c.waitForTimeout(600);
-  await c.click('main button:has-text("換線日")');
+  await c.click('main button:text-is("📅 換線日")');
   await c.waitForURL("**/admin/resets");
   await c.waitForTimeout(600);
   await c.click('main button:has-text("新增")');
@@ -141,12 +146,15 @@ test("換線日權限：顧客不能輸入；老闆授權後可以，取消後�
   assert.deepEqual([...C.errors, ...O.errors], []);
 });
 
-test("選館頁：換線中、剛換好（NEW）、Spray Wall 那一列各自寫；沒有公告的館不寫", async () => {
+test("選館頁：換線中、剛換好（NEW）、Spray Wall 那一列各自寫；沒有公告的館不寫；館首頁卡片寫換線中、提醒不指向正在換的牆", async () => {
   const mock = createMock();
   mock.addReset("mingde", "比賽牆", ["W1", "W2", "W3", "W4"], -2, -1);
   mock.addReset("mingde", "D 區", ["D1", "D2"], 3);
   mock.addReset("g3", "抱石區", ["BO"], 0, 1);
+  mock.addReset("g5", "上攀 E 區", ["E"], -1, 0);
   mock.addReset("mingde", "Spray wall", ["S"], 20, 21);
+  const e5 = mock.db.zones.find((z) => z.gym_id === "g5" && z.code === "E");
+  mock.addRoute(e5, 104, "藍");
   const { page, errors } = await phone(browser, mock);
   await page.goto(BASE + "/gyms", { waitUntil: "networkidle" });
   await page.waitForTimeout(800);
@@ -155,8 +163,40 @@ test("選館頁：換線中、剛換好（NEW）、Spray Wall 那一列各自寫
   assert.ok(mingde.includes("比賽牆新路線") && mingde.includes("NEW"), "剛換好的寫新路線＋NEW");
   assert.ok(mingde.includes("3天後換線・D區"), "之後的換線");
   assert.ok(!mingde.includes("Spray"), "Spray Wall 的換線不寫在明德館那一列");
-  assert.ok((await row("中和館")).includes("換線中・抱石區"), "換線中");
+  const md = (d) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+  assert.ok((await row("中和館")).includes(`換線中・抱石區（${md(taipeiDay(1))}晚上起新路線）`), "換線中，寫定線日晚上起新路線");
+  assert.ok((await row("新店館")).includes("換線中・上攀E區（今晚起新路線）"), "今天定線：今晚起新路線");
   assert.ok((await row("明德 SPRAY WALL")).includes("20天後換線"), "Spray Wall 那一列寫自己的換線");
   assert.equal(await row("萬華館"), "萬華館", "沒有公告的館不寫");
+
+  // 館首頁卡片
+  await page.goto(BASE + "/gym/g5", { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  assert.ok((await page.locator("main button.rounded-card", { hasText: "上攀 E 區" }).textContent()).includes("換線中・今晚起新路線"), "卡片寫換線中");
+  assert.ok(!(await page.textContent("main")).includes("快換線"), "正在換的牆不出現在快換線提醒");
+  await page.goto(BASE + "/gym/g3", { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  assert.ok((await page.locator("main button.rounded-card", { hasText: "抱石區" }).textContent()).includes(`換線中・${md(taipeiDay(1))} 晚上起新路線`));
+  assert.deepEqual(errors, []);
+});
+
+test("資料庫還沒套用 step27：選館頁、行事曆、館首頁照常（沒有換線資訊），後台不出現換線日按鈕", async () => {
+  const mock = createMock();
+  mock.state.noResets = true;
+  mock.addUser("owner1", "password1", { nickname: "老闆", is_owner: true });
+  const { page, errors } = await phone(browser, mock);
+  await page.goto(BASE + "/gyms", { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  assert.equal((await page.locator("main button[aria-pressed]", { hasText: "萬華館" }).textContent()).replace(/\s+/g, ""), "萬華館", "選館頁照常，沒有換線小字");
+  await page.goto(BASE + "/resets", { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  assert.ok((await page.textContent("main")).includes("這天沒有換線"), "行事曆照常顯示（沒有公告）");
+  await page.goto(BASE + "/gym/g2", { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  assert.ok(await page.locator("main button.rounded-card").count(), "館首頁照常");
+  await login(page, "owner1", "password1", "/admin");
+  await page.waitForTimeout(800);
+  // 只認「📅 換線日」入口按鈕（操作紀錄的篩選也有「換線日」，那個不算）
+  assert.equal(await page.locator('main button:text-is("📅 換線日")').count(), 0, "還沒套用 step27 時不顯示換線日按鈕");
   assert.deepEqual(errors, []);
 });

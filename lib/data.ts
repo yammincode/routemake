@@ -175,19 +175,29 @@ export async function getResetCalendar(from: string, to: string): Promise<ResetE
   return must(r) as ResetEvent[];
 }
 export type ResetInput = { gym_id: string; label: string; zone_ids: string[]; starts_on: string; ends_on: string };
+// 資料庫還沒套用 step27（沒有換線公告的表和函式）時，給看得懂的說明
+const NO_RESETS = "資料庫還沒套用換線日設定（step27），請先請老闆在 Supabase 執行 step27";
+function mustResets<T>(r: { data: T | null; error: { message?: string; code?: string } | null }): T {
+  if (r.error?.code === "PGRST202" || r.error?.code === "PGRST205" || r.error?.code === "42P01") throw new Error(NO_RESETS);
+  return must(r);
+}
+// 修改、刪除：權限不夠或那一筆已經被刪掉時，資料庫不會報錯、只是改不到，這裡要自己檢查
 export async function saveResetEvent(input: ResetInput, id?: string) {
-  if (id) must(await supabase().from("reset_events").update(input).eq("id", id).select("id"));
-  else must(await supabase().from("reset_events").insert(input).select("id"));
+  if (id) {
+    const rows = mustResets(await supabase().from("reset_events").update(input).eq("id", id).select("id"));
+    if (!rows.length) throw new Error("沒有權限，或這筆換線日已經被刪掉了");
+  } else mustResets(await supabase().from("reset_events").insert(input).select("id"));
 }
 export async function deleteResetEvent(id: string) {
-  must(await supabase().from("reset_events").delete().eq("id", id).select("id"));
+  const rows = mustResets(await supabase().from("reset_events").delete().eq("id", id).select("id"));
+  if (!rows.length) throw new Error("沒有權限，或這筆換線日已經被刪掉了");
 }
 // 老闆：可以輸入換線日的人
 export async function getResetEditors(): Promise<{ id: string; username: string | null; nickname: string | null }[]> {
-  return must(await supabase().rpc("reset_editor_list"));
+  return mustResets(await supabase().rpc("reset_editor_list"));
 }
 export async function setResetEditor(userId: string, on: boolean) {
-  must(await supabase().rpc("set_reset_editor", { p_user: userId, p_on: on }));
+  mustResets(await supabase().rpc("set_reset_editor", { p_user: userId, p_on: on }));
 }
 
 // 自己在這些路線上的紀錄（RLS 只回傳自己的）

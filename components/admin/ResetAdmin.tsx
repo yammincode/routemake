@@ -57,17 +57,23 @@ export default function ResetAdmin() {
   const [busy, setBusy] = useState(false);
   const allowed = canEditResets(access);
 
-  const load = useCallback(() => {
-    const { from, to } = monthRange(month);
-    getResetCalendar(from, to)
-      .then(setEvents)
-      .catch((e) => toast((e as Error).message));
-  }, [month, toast]);
-
+  // 換月份時先清掉上個月的；比較慢回來的舊月份資料不要蓋掉現在這個月
+  const [reload, setReload] = useState(0);
+  const load = useCallback(() => setReload((n) => n + 1), []);
   useEffect(() => {
     if (!allowed) return;
-    void Promise.resolve().then(load);
-  }, [allowed, load]);
+    let alive = true;
+    const { from, to } = monthRange(month);
+    void Promise.resolve().then(() => {
+      setEvents(null);
+      getResetCalendar(from, to)
+        .then((d) => alive && setEvents(d))
+        .catch((e) => alive && toast((e as Error).message));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [allowed, month, reload, toast]);
   useEffect(() => {
     if (!allowed) return;
     getZones(gymId)
@@ -245,6 +251,7 @@ export default function ResetAdmin() {
 function ResetEditors() {
   const toast = useToast();
   const [list, setList] = useState<{ id: string; username: string | null; nickname: string | null }[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<UserHit[] | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
@@ -252,9 +259,9 @@ function ResetEditors() {
 
   const load = useCallback(() => {
     getResetEditors()
-      .then(setList)
-      .catch((e) => toast((e as Error).message));
-  }, [toast]);
+      .then((l) => (setList(l), setError(null)))
+      .catch((e) => setError((e as Error).message));
+  }, []);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -298,7 +305,7 @@ function ResetEditors() {
     <>
       <SectionTitle>可以輸入換線日的人</SectionTitle>
       {list == null ? (
-        <Empty>讀取中…</Empty>
+        <Empty>{error ?? "讀取中…"}</Empty>
       ) : list.length === 0 ? (
         <Empty>目前只有老闆可以輸入。</Empty>
       ) : (

@@ -64,7 +64,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0 };
+  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -189,8 +189,11 @@ export function createMock() {
   async function rpc(route, fn, a, uid) {
     if (fn === "my_access") {
       const p = prof(uid);
-      return J(route, 200, p ? { id: p.id, username: p.username, nickname: p.nickname, avatar_url: null, is_owner: p.is_owner, can_edit_resets: canEditResets(uid), roles: db.staff_roles.filter((s) => s.user_id === uid).map((s) => ({ gym_id: s.gym_id, role: s.role })) } : null);
+      return J(route, 200, p ? { id: p.id, username: p.username, nickname: p.nickname, avatar_url: null, is_owner: p.is_owner, ...(state.noResets ? {} : { can_edit_resets: canEditResets(uid) }), roles: db.staff_roles.filter((s) => s.user_id === uid).map((s) => ({ gym_id: s.gym_id, role: s.role })) } : null);
     }
+    // state.noResets：模擬資料庫還沒套用 step27（沒有換線公告的函式），跟 PostgREST 一樣回 PGRST202
+    if (state.noResets && ["reset_calendar", "reset_editor_list", "set_reset_editor"].includes(fn))
+      return J(route, 404, { code: "PGRST202", message: `Could not find the function public.${fn} in the schema cache` });
     if (fn === "reset_calendar") {
       const rows = db.resetEvents
         .filter((e) => e.ends_on >= a.p_from && e.starts_on <= a.p_to)
@@ -580,7 +583,9 @@ export function createMock() {
       if (m === "DELETE") { const del = filt(mine, sp); db.ascents = db.ascents.filter((a) => !del.includes(a)); return empty(route); }
     }
     if (t === "reset_events") {
-      if (!uid || !canEditResets(uid)) return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "reset_events"' });
+      if (state.noResets) return J(route, 404, { code: "PGRST205", message: "Could not find the table 'public.reset_events' in the schema cache" });
+      // 沒權限：新增被 RLS 擋（403）；修改、刪除跟 PostgREST 一樣只是改不到（200 空陣列）
+      if (!uid || !canEditResets(uid)) return m === "POST" ? J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "reset_events"' }) : J(route, 200, []);
       const check = (e) => {
         if (!e.label?.trim()) return "名稱不能空白";
         if (e.ends_on < e.starts_on) return "結束日不能早於開始日";

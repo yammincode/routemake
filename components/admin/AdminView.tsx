@@ -338,6 +338,7 @@ export default function AdminView() {
                   defaultValue={zone.next_reset_on ?? ""}
                   onChange={(e) => void saveZone({ next_reset_on: e.target.value || null }, e.target.value ? "已更新換線日" : "已清除換線日")}
                 />
+                {access.can_edit_resets !== undefined && <small className="mt-1 block text-tiny text-muted">有換線公告時以公告為準（老闆在「📅 換線日」輸入）</small>}
               </div>
               <div>
                 <Label>區域照片</Label>
@@ -457,8 +458,8 @@ export default function AdminView() {
           📊 使用狀況
         </Button>
       )}
-      {/* 換線日：老闆和老闆授權的人（各館一起輸入） */}
-      {canEditResets(access) && (
+      {/* 換線日：老闆和老闆授權的人（各館一起輸入）；資料庫還沒套用 step27 時（帳號資料沒有 can_edit_resets）先不顯示 */}
+      {access.can_edit_resets !== undefined && canEditResets(access) && (
         <Button className="mt-2" onClick={() => router.push("/admin/resets")}>
           📅 換線日
         </Button>

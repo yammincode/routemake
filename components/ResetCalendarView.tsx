@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Logo from "@/components/Logo";
 import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
@@ -41,21 +41,26 @@ export default function ResetCalendarView() {
   const [error, setError] = useState<string | null>(null);
 
   // 前後各多抓一週（月曆頭尾會露出上下個月的日子）；手機裡有上次的先顯示，沒網路也看得到
-  const load = useCallback(async () => {
+  // 換月份時先清掉上個月的資料；比較慢回來的舊月份資料不要蓋掉現在這個月
+  useEffect(() => {
     if (!month) return;
+    let alive = true;
     const from = addDays(`${month}-01`, -7);
     const to = addDays(`${month}-01`, 45);
-    try {
-      const { data } = await withCache(`resets:${month}`, () => getResetCalendar(from, to), setEvents);
-      setEvents(data);
+    void Promise.resolve().then(async () => {
+      setEvents(null);
       setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
+      try {
+        const { data } = await withCache(`resets:${month}`, () => getResetCalendar(from, to), (d) => alive && setEvents(d));
+        if (alive) setEvents(data);
+      } catch (e) {
+        if (alive) setError((e as Error).message);
+      }
+    });
+    return () => {
+      alive = false;
+    };
   }, [month]);
-  useEffect(() => {
-    void Promise.resolve().then(load);
-  }, [load]);
 
   if (!month || !today) return <PageTitle sub="讀取中…">換線行事曆</PageTitle>;
   const [y, m] = month.split("-").map(Number);
@@ -96,7 +101,7 @@ export default function ResetCalendarView() {
             {day === today && <small className="ml-2 text-meta font-normal text-muted">今天</small>}
           </SectionTitle>
           {events == null ? (
-            <Empty>讀取中…</Empty>
+            <Empty>{error ?? "讀取中…"}</Empty>
           ) : onDay.length === 0 ? (
             <Empty>這天沒有換線{gym ? `（只看${gymName(gym)}）` : ""}。</Empty>
           ) : (

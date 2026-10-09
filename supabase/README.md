@@ -33,7 +33,7 @@
 | `setup/step24-nangang-c3.sql` | migration 0028：南港中間長牆切成 C2（左半）／C3（右半），新增 C3 區 | 已套用 |
 | `setup/step25-video-tags.sql` | migration 0029：影片標籤（身高 4 段、動態／靜態，選填、只能選固定選項）；還沒套用時 App 照舊顯示影片、只是不能加標籤 | 已套用 |
 | `setup/step26-nangang-b3-d.sql` | migration 0030：南港重新分區，新增 B3（1F 左下斜牆左半）、D1／D2（2F D 牆左右兩半）；原本的區域和路線不動（B1、B2 範圍變了，要整區換線後重拍、重標） | 已套用 |
-| `setup/step27-reset-events.sql` | migration 0031：換線公告（reset_events、授權名單 reset_editors、can_edit_resets()、reset_calendar()；存檔自動更新各區下次換線日；整區換線改接下一筆公告；my_access 多回傳 can_edit_resets） | 待套用 |
+| `setup/step27-reset-events.sql` | migration 0031：換線公告（reset_events、授權名單 reset_editors、can_edit_resets()、reset_calendar()；存檔自動更新各區下次換線日；整區換線改接下一筆公告；各區換線日讀取時以公告為準、刪掉的區自動從公告移除；my_access 多回傳 can_edit_resets） | 待套用 |
 
 ## 規則摘要
 
