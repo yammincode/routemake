@@ -99,7 +99,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Route.tsx` | `Points`、`Grade`、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`（compact：路線卡片一排小按鈕）、`RouteRow`、`RouteList`、`CommentCount`、`SetterNote` |
 | `Wall.tsx` | `WallPhoto`（`hideable`：左上角「隱藏路線／顯示路線」按鈕，只用在顧客區域頁）、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`（難度色帶版：小縮圖、完成數、`GradeStrip`、難度範圍或篩選結果、換線倒數；guest 只寫條數）、`ZoneList`、`GradeStrip`（區域難度色帶）、`GradeChart`（全館難度分布）、`BandPicker`（全部／入門 VB–V2／進階 V3–V5／挑戰 V6+）、`GoalLine`（快換線提醒）、`ResetList`（沒登入寫「共 ○ 條路線」）、`NewRouteRow`、`NewRouteCard`、`GymRow`、`SoonBox`、`dueText` |
-| `FloorPlan.tsx` | `FloorPlan`（guest：每區寫條數、統一底色；7 天內換線只畫虛線框，不寫字） |
+| `FloorPlan.tsx` | `FloorPlan`（guest：每區寫條數、統一底色；7 天內換線只畫虛線框，不寫字；有好幾層的館（南港）同一張卡片由上到下畫，每層上方標 1F、2F） |
 | `Comments.tsx` | `CommentItem`（含 👍 按讚；刪除要按兩次）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
 | `Spray.tsx` | `HoldMarks`（照片上的圈圈：起攀 S 綠、路線點 藍、完攀 T 紅）、`HoldLegend`、`HoldTools`（選種類與大小）、`SprayRow`、`RouteThumb`（列表縮圖，放大到路線範圍）、`HOLD_TYPES`、`HOLD_SIZES` |
 | `Profile.tsx` | `Avatar`（暱稱第一個字）、`HexChart`（六角形能力表）、`ProfileCardView`（人物卡） |

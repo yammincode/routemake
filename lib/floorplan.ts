@@ -8,6 +8,7 @@ export type FloorPlanShape = {
   fixtures: [number, number, number, number][]; // 櫃台、大門等方框 [x, y, 寬, 高]
   texts?: { x: number; y: number; t: string }[]; // 櫃台、大門等文字
   entrance?: { x: number; y: number };
+  label?: string; // 樓層（例如 1F）：同一館有好幾層時畫在每層上方
   // t：圖上顯示的短名稱（沒有就用區域名稱去掉「區」）
   zones: Record<string, { polys: string[]; lx: number; ly: number; t?: string }>;
 };
@@ -80,20 +81,23 @@ export const ZHONGHE_PLAN: FloorPlanShape = {
 };
 
 export const NANGANG_PLAN: FloorPlanShape = {
+  label: "1F",
   viewBox: "74 442 1370 640",
   outline: "104,472 1414,472 1414,904 1164,904 1164,1052 104,1052",
   walls: ["540,472 540,904 1164,904"],
   fixtures: [[1282, 472, 132, 112], [1016, 794, 398, 110], [470, 660, 70, 180]],
   texts: [{ x: 1348, y: 540, t: "大門" }, { x: 1215, y: 860, t: "櫃台" }],
   zones: {
-    // 2026/10 起細分成 8 區：A1／A2（入口長牆左右兩段）、A3（左上小牆）、B1／B2（左側上下，B2 含左下角整塊斜牆）、C1（最下面的短牆）、C2／C3（中間長條牆左右兩半）
+    // 2026/10 起：A1／A2（入口長牆左右兩段）、A3（左上小牆）、B1（上方牆＋左上角）、B2（左側牆中段）、B3（左下斜牆的左半）、
+    // C1（斜牆的右下角＋最下面的短牆）、C2／C3（中間長條牆左右兩半）；斜牆右上那塊不屬於任何區（2F 是 D1／D2，見 NANGANG_2F）
     // C 區的牆很薄，圖上畫厚一點、名稱放在旁邊，手指才點得到（名稱和條數也可以點）
     A1: { t: "A1", lx: 1180, ly: 625, polys: ["1090,477 1090,542 1212,542 1263,578 1272,577 1272,477"] },
     A2: { t: "A2", lx: 1000, ly: 665, polys: ["896,476 896,629 929,612 956,583 967,542 1090,542 1090,477"] },
     A3: { t: "A3", lx: 440, ly: 640, polys: ["375,477 375,556 467,595 498,545 498,477"] },
-    B1: { t: "B1", lx: 255, ly: 650, polys: ["371,476 189,476 177,512 183,544 152,537 103,551 103,760 135,760 135,698 195,679 203,544 267,544 287,556 373,556"] },
-    B2: { t: "B2", lx: 200, ly: 905, polys: ["103,760 103,1048 369,1048 369,1030 360,992 368,939 362,866 264,819 211,831 136,805 135,760"] },
-    C1: { t: "C1", lx: 450, ly: 958, polys: ["369,1003 530,1003 530,1048 369,1048"] },
+    B1: { t: "B1", lx: 290, ly: 625, polys: ["371,476 189,476 177,512 183,544 152,537 103,551 103,600 200,600 203,544 267,544 287,556 373,556"] },
+    B2: { t: "B2", lx: 235, ly: 745, polys: ["103,600 200,600 195,679 135,698 135,805 103,805"] },
+    B3: { t: "B3", lx: 160, ly: 960, polys: ["103,805 136,805 202,828 237,974 294,974 266,1048 103,1048"] },
+    C1: { t: "C1", lx: 450, ly: 958, polys: ["294,974 363,974 360,992 363,1003 530,1003 530,1048 266,1048"] },
     C2: { t: "C2", lx: 794, ly: 1002, polys: ["692,908 896,908 896,962 692,962"] },
     C3: { t: "C3", lx: 998, ly: 1002, polys: ["896,908 1100,908 1100,962 896,962"] },
   },
@@ -119,11 +123,26 @@ export const WANHUA_PLAN: FloorPlanShape = {
   },
 };
 
-// 各館平面圖（中壢館還沒有）
-export const PLANS: Record<string, FloorPlanShape> = {
-  mingde: MINGDE_PLAN,
-  g2: WANHUA_PLAN,
-  g3: ZHONGHE_PLAN,
-  g4: NANGANG_PLAN,
-  g5: XINDIAN_PLAN,
+// 南港 2F（照南港換線公告圖畫的示意）：左上樓梯間，上方整面 D 牆從中間分成 D1（左）／D2（右）
+export const NANGANG_2F: FloorPlanShape = {
+  label: "2F",
+  viewBox: "74 -30 1370 390",
+  outline: "104,0 1126,0 1126,90 1414,90 1414,330 104,330",
+  fixtures: [[166, 0, 273, 110]],
+  texts: [{ x: 302, y: 68, t: "樓梯間" }],
+  zones: {
+    D1: { t: "D1", lx: 610, ly: 140, polys: ["439,4 780,4 780,80 439,80"] },
+    D2: { t: "D2", lx: 951, ly: 140, polys: ["780,4 1122,4 1122,80 780,80"] },
+  },
 };
+
+// 各館平面圖，一層一張（中壢館還沒有）；有兩層的館依序畫在同一張卡片
+export const PLANS: Record<string, FloorPlanShape[]> = {
+  mingde: [MINGDE_PLAN],
+  g2: [WANHUA_PLAN],
+  g3: [ZHONGHE_PLAN],
+  g4: [NANGANG_PLAN, NANGANG_2F],
+  g5: [XINDIAN_PLAN],
+};
+// 這個區域有沒有畫在平面圖上（任何一層）
+export const planHas = (floors: FloorPlanShape[] | null | undefined, code: string) => !!floors?.some((f) => f.zones[code]);

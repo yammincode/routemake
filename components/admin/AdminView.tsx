@@ -42,7 +42,7 @@ import {
   type Zone,
 } from "@/lib/data";
 import { ago, daysUntil } from "@/lib/date";
-import { PLANS } from "@/lib/floorplan";
+import { PLANS, planHas } from "@/lib/floorplan";
 import { LIVE_GYM, SPRAY_WALLS } from "@/lib/gyms";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
@@ -125,7 +125,7 @@ export default function AdminView() {
   const spray = walls.find((w) => w.id === sprayId) ?? null;
   // 有平面圖的館：點圖選區域；圖上沒畫到的區域（例如新增的）放在下面的按鈕
   const plan = PLANS[gymId] ?? null;
-  const offPlan = (zones ?? []).filter((z) => !plan?.zones[z.code]);
+  const offPlan = (zones ?? []).filter((z) => !planHas(plan, z.code));
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);

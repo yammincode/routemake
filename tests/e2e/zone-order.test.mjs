@@ -33,29 +33,42 @@ test("後台點平面圖切換區域；圖上沒有的區域用按鈕", async ()
   assert.deepEqual(B.errors, []);
 });
 
-test("南港平面圖：左下角整塊斜牆是 B2，C1 是最下面的短牆，中間長牆左半 C2、右半 C3；C 區畫厚一點好點", async () => {
+test("南港平面圖：1F 左側牆 B1（上）／B2（中）／B3（左下斜牆左半），斜牆右下角和最下面短牆是 C1，中間長牆左半 C2、右半 C3；2F D1／D2", async () => {
   const mock = createMock();
   const { page, errors } = await phone(browser, mock);
   await page.goto(BASE + "/gym/g4", { waitUntil: "networkidle" });
   await page.waitForTimeout(800);
+  assert.deepEqual(
+    await page.locator("svg[role=img]").evaluateAll((s) => s.map((x) => x.getAttribute("aria-label"))),
+    ["南港館 1F 平面圖", "南港館 2F 平面圖"],
+    "1F、2F 畫在同一張卡片"
+  );
+  assert.ok((await page.textContent("main")).includes("2F"), "標出樓層");
   // 用平面圖座標找畫面上那一點是哪一區
-  const zoneAt = (x, y) =>
-    page.evaluate(([x, y]) => {
-      const svg = document.querySelector('svg[role=img][aria-label="南港館平面圖"]');
-      svg.scrollIntoView({ block: "center" });
-      const pt = new DOMPoint(x, y).matrixTransform(svg.getScreenCTM());
-      return document.elementFromPoint(pt.x, pt.y)?.closest("g[role=button]")?.getAttribute("aria-label")?.split("，")[0] ?? null;
-    }, [x, y]);
-  assert.equal(await zoneAt(150, 850), "B2 區", "斜線上方是 B2");
-  assert.equal(await zoneAt(230, 1010), "B2 區", "斜線下方的三角形也是 B2");
-  assert.equal(await zoneAt(340, 1040), "B2 區", "左下角是 B2");
-  assert.equal(await zoneAt(450, 1040), "C1 區", "最下面的短牆是 C1");
-  assert.equal(await zoneAt(450, 1010), "C1 區", "C1 加厚：上緣也點得到");
-  assert.equal(await zoneAt(720, 935), "C2 區", "中間長牆左半是 C2");
-  assert.equal(await zoneAt(1070, 935), "C3 區", "中間長牆右半是 C3");
-  assert.equal(await zoneAt(794, 955), "C2 區", "C2 加厚：下緣也點得到");
-  assert.equal(await zoneAt(998, 915), "C3 區", "C3 加厚：上緣也點得到");
-  assert.equal(await zoneAt(450, 900), null, "短牆上方是走道，不屬於任何區");
+  const zoneAt = (floor, x, y) =>
+    page.evaluate(
+      ([floor, x, y]) => {
+        const svg = document.querySelector(`svg[role=img][aria-label="南港館 ${floor} 平面圖"]`);
+        svg.scrollIntoView({ block: "center" });
+        const pt = new DOMPoint(x, y).matrixTransform(svg.getScreenCTM());
+        return document.elementFromPoint(pt.x, pt.y)?.closest("g[role=button]")?.getAttribute("aria-label")?.split("，")[0] ?? null;
+      },
+      [floor, x, y]
+    );
+  assert.equal(await zoneAt("1F", 300, 510), "B1 區", "上方牆是 B1");
+  assert.equal(await zoneAt("1F", 150, 580), "B1 區", "左上角是 B1");
+  assert.equal(await zoneAt("1F", 120, 700), "B2 區", "左側牆中段是 B2");
+  assert.equal(await zoneAt("1F", 150, 900), "B3 區", "左下斜牆左半是 B3");
+  assert.equal(await zoneAt("1F", 200, 1030), "B3 區", "左下角是 B3");
+  assert.equal(await zoneAt("1F", 300, 1030), "C1 區", "斜牆右下角是 C1");
+  assert.equal(await zoneAt("1F", 450, 1040), "C1 區", "最下面的短牆是 C1");
+  assert.equal(await zoneAt("1F", 300, 880), null, "斜牆右上那塊不屬於任何區");
+  assert.equal(await zoneAt("1F", 720, 935), "C2 區", "中間長牆左半是 C2");
+  assert.equal(await zoneAt("1F", 1070, 935), "C3 區", "中間長牆右半是 C3");
+  assert.equal(await zoneAt("1F", 450, 900), null, "短牆上方是走道，不屬於任何區");
+  assert.equal(await zoneAt("2F", 600, 40), "D1 區", "2F D 牆左半是 D1");
+  assert.equal(await zoneAt("2F", 950, 40), "D2 區", "2F D 牆右半是 D2");
+  assert.equal(await zoneAt("2F", 300, 60), null, "樓梯間不屬於任何區");
 
   // 點 C1 的字樣可以進 C1 區
   await page.locator('svg[role=img] g[aria-label^="C1 區"] text').first().click();
@@ -63,14 +76,14 @@ test("南港平面圖：左下角整塊斜牆是 B2，C1 是最下面的短牆�
   await page.waitForTimeout(600);
   assert.equal(await page.textContent("h1"), "C1 區");
 
-  // 點 C3 的字樣可以進 C3 區
+  // 點 2F 的 D2 可以進 D2 區
   await page.goBack();
   await page.waitForURL("**/gym/g4");
   await page.waitForTimeout(600);
-  await page.locator('svg[role=img] g[aria-label^="C3 區"] text').first().click();
+  await page.locator('svg[role=img] g[aria-label^="D2 區"] text').first().click();
   await page.waitForURL(/\/zone\?id=/);
   await page.waitForTimeout(600);
-  assert.equal(await page.textContent("h1"), "C3 區");
+  assert.equal(await page.textContent("h1"), "D2 區");
   assert.deepEqual(errors, []);
 });
 
