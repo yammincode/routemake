@@ -29,6 +29,11 @@ test("顧客分享影片、刪除自己的；員工刪影片並記錄；下架�
   await c.waitForTimeout(600);
   const dialog = c.locator("[role=dialog]");
   const thumbs = dialog.locator('button[aria-label^="播放"]');
+  // 沒點「影片」分頁前不放影片縮圖（不下載影片）
+  assert.equal(await dialog.locator("video").count(), 0, "打開路線卡片時不下載影片");
+  assert.match(await dialog.locator('[role=tab]:has-text("影片")').textContent(), /1/, "影片分頁顯示有 1 支");
+  await dialog.locator('[role=tab]:has-text("影片")').click();
+  await c.waitForTimeout(300);
   assert.equal(await thumbs.count(), 1, "看得到別人分享的影片縮圖");
   await thumbs.first().click();
   const viewer = c.locator('[aria-label="影片播放"]');
@@ -132,6 +137,8 @@ test("未登入看得到影片、要登入才能分享；留言關閉且沒有�
   await g.waitForTimeout(600);
   await g.locator("main ul li button", { hasText: "A1-01" }).click();
   await g.waitForTimeout(600);
+  await g.click('[role=dialog] [role=tab]:has-text("影片")');
+  await g.waitForTimeout(300);
   const text = await g.textContent("[role=dialog]");
   assert.ok(text.includes("看我的") || (await g.locator('[role=dialog] button[aria-label*="看我的"]').count()) === 1);
   assert.ok(text.includes("登入後分享影片"));

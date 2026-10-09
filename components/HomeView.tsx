@@ -67,6 +67,11 @@ export default function HomeView({ gymId }: { gymId: string }) {
     };
   }, [ready, load]);
 
+  // 先把區域頁的程式和畫面抓好，點區域時不用等
+  useEffect(() => {
+    router.prefetch("/zone");
+  }, [router]);
+
   if (error && !zones)
     return (
       <>

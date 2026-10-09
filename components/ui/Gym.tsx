@@ -22,8 +22,14 @@ export function ProgressBar({ done, total }: { done: number; total: number }) {
 
 // 區域卡片（原型 .zcard）
 // 縮圖載入失敗（舊照片還沒有縮圖）就改用原圖
+// 照片載入失敗：縮圖還沒產生就改用原圖；最後再不用 crossOrigin 重抓一次（照樣看得到，只是不會存進離線快取）
+// 照片加 crossOrigin="anonymous" 是為了讓 Service Worker 能把照片存進手機（沒加的話回應看不到內容，快取不會存）
 export function imgFallback(img: HTMLImageElement, fallback?: string) {
   if (fallback && img.src !== fallback) img.src = fallback;
+  else if (img.hasAttribute("crossorigin")) {
+    img.removeAttribute("crossorigin");
+    img.src = img.src;
+  }
 }
 
 export function ZoneCard({
@@ -39,7 +45,14 @@ export function ZoneCard({
   return (
     <button className="flex w-full items-center gap-3.5 rounded-card bg-surface p-2.5 text-left shadow-card" {...rest}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={photo} alt="" loading="lazy" onError={(e) => imgFallback(e.currentTarget, fallback)} className="h-[72px] w-24 flex-none rounded-field bg-line object-cover" />
+      <img
+        src={photo}
+        alt=""
+        loading="lazy"
+        crossOrigin="anonymous"
+        onError={(e) => imgFallback(e.currentTarget, fallback)}
+        className="h-[72px] w-24 flex-none rounded-field bg-line object-cover"
+      />
       <span className="grid min-w-0 flex-1 gap-0.5">
         <span className="text-section font-bold">{name}</span>
         <span className="flex items-center gap-2 font-num text-[16px] leading-[1.3] font-semibold text-muted">

@@ -4,6 +4,8 @@ import type { NextConfig } from "next";
 const withSerwist = withSerwistInit({
   swSrc: "app/sw.ts",
   swDest: "public/sw.js",
+  // 字型（中文切成上百片、約 4MB）不放進安裝時的預先下載：第一次打開不會被背景下載塞滿網路；用到的字由 sw.ts 的字型快取存起來
+  exclude: [/\.map$/, /^manifest.*\.js$/, /\.woff2$/],
   disable: process.env.NODE_ENV === "development",
   reloadOnOnline: false,
 });

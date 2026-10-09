@@ -23,7 +23,7 @@ import {
 import { ago, daysUntil, isNew } from "@/lib/date";
 import { gradeColor, gradeLabel, type HoldColor, STYLE_TAGS } from "@/lib/design";
 import { backOr, upTo } from "@/lib/nav";
-import { overlayPending, withCache } from "@/lib/offline";
+import { overlayPending, peekCache, withCache } from "@/lib/offline";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
@@ -31,11 +31,13 @@ import { useScoring } from "@/lib/useScoring";
 export default function ZoneView({ zoneId }: { zoneId: string }) {
   const { session, ready } = useAuth();
   const router = useRouter();
-  const [zone, setZone] = useState<Zone | null>(null);
-  const [gym, setGym] = useState<Gym | null>(null);
-  const [routes, setRoutes] = useState<Route[]>([]);
-  const [ascents, setAscents] = useState<Record<string, Ascent>>({});
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  // 從館首頁點進來時，手機裡有上次的資料就直接先畫出來（不會先閃一下「讀取中」）；最新的資料由下面的 load 補上
+  const [init] = useState(() => (ready ? peekCache<ZoneData>(`zone:${zoneId}:${session?.user.id ?? "guest"}`) : null));
+  const [zone, setZone] = useState<Zone | null>(init?.z ?? null);
+  const [gym, setGym] = useState<Gym | null>(init?.g ?? null);
+  const [routes, setRoutes] = useState<Route[]>(init?.rs ?? []);
+  const [ascents, setAscents] = useState<Record<string, Ascent>>(() => (init ? overlayPending(init.as, session?.user.id) : {}));
+  const [counts, setCounts] = useState<Record<string, number>>(init?.cs ?? {});
   const [error, setError] = useState<string | null>(null);
   const [grade, setGrade] = useState<number | null>(null);
   const [color, setColor] = useState<HoldColor | null>(null);

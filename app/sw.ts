@@ -15,8 +15,8 @@ declare const self: ServiceWorkerGlobalScope;
 const OFFLINE_PAGES = ["/", "/gyms", "/gym/mingde", "/gym/g2", "/gym/g3", "/gym/g4", "/gym/g5", "/card", "/me", "/admin"];
 // 區域頁 /zone?id=… 不管哪一區都是同一份頁面，快取時忽略網址參數
 const ZONE_CACHE = "zone-shell";
-// 網路幾秒沒回應就先用手機裡存的頁面
-const PAGE_TIMEOUT = 3;
+// 網路幾秒沒回應就先用手機裡存的頁面（館內訊號差時不用乾等；頁面只是空殼，資料另外抓）
+const PAGE_TIMEOUT = 1;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -53,7 +53,13 @@ const wallPhotos = {
   handler: new CacheFirst({ cacheName: "zone-photos", plugins: [new ExpirationPlugin({ maxEntries: 80, maxAgeSeconds: 60 * 86400 })] }),
 };
 
-// 換頁：網路 3 秒沒回應就先用手機裡的畫面（預設會一直等網路），網路回來後下次就是最新的
+// 字型：檔名含內容雜湊，存過就直接用；中文字型切成上百片，上限要夠大（預設的字型快取只存 4 個）
+const fonts = {
+  matcher: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) => sameOrigin && url.pathname.startsWith("/_next/static/media/") && url.pathname.endsWith(".woff2"),
+  handler: new CacheFirst({ cacheName: "fonts", plugins: [new ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 365 * 86400 })] }),
+};
+
+// 換頁：網路 1 秒沒回應就先用手機裡的畫面（預設會一直等網路），網路回來後下次就是最新的
 const pages = defaultCache.map((entry) =>
   entry.handler instanceof NetworkFirst && ["pages-rsc-prefetch", "pages-rsc", "pages", "others"].includes(entry.handler.cacheName)
     ? { ...entry, handler: new NetworkFirst({ cacheName: entry.handler.cacheName, plugins: entry.handler.plugins, networkTimeoutSeconds: PAGE_TIMEOUT }) }
@@ -65,7 +71,7 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  runtimeCaching: [wallPhotos, supabaseData, zoneShell, ...pages],
+  runtimeCaching: [wallPhotos, supabaseData, zoneShell, fonts, ...pages],
 });
 
 serwist.addEventListeners();

@@ -46,6 +46,11 @@ export async function withCache<T>(key: string, fetcher: () => Promise<T>, onCac
   }
 }
 
+// 直接拿手機裡上次的資料（沒有就 null），畫面一打開就能先畫出來
+export function peekCache<T>(key: string): T | null {
+  return read<T>(PREFIX + key);
+}
+
 // 登出時清掉個人資料快取
 export function clearCache() {
   try {

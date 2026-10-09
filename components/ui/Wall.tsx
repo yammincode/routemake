@@ -2,6 +2,7 @@
 
 import { useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { gradeShort, holdTextColor, HOLD_COLORS, type HoldColor, type Status } from "@/lib/design";
+import { imgFallback } from "./Gym";
 
 // 起步點標記（原型 .pin）：顏色＝岩點色、數字＝難度（V 級數字或 YDS 去掉 5.）；完攀加酒紅外圈，Flash 黃圈；不符合篩選時變淡
 export function Pin({
@@ -168,7 +169,7 @@ export function WallPhoto({
         style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, ["--inv" as string]: 1 / view.s }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt={alt} draggable={false} className="block h-auto w-full select-none" />
+        <img src={src} alt={alt} crossOrigin="anonymous" draggable={false} onError={(e) => imgFallback(e.currentTarget)} className="block h-auto w-full select-none" />
         <div className={`absolute inset-0 transition-[opacity,visibility] duration-150 ${hideable && hidden ? "invisible opacity-0" : ""}`}>{children}</div>
       </div>
       {zoomed && (

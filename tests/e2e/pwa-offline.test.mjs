@@ -1,4 +1,4 @@
-// 離線使用、離線紀錄自動送出、Service Worker 不存個人資料、雙指放大、隱藏路線點、LINE、加到主畫面、QR code
+// 離線使用、離線紀錄自動送出、Service Worker 不存個人資料、岩牆照片存進手機、雙指放大、隱藏路線點、LINE、加到主畫面、QR code
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { BASE, IPHONE_UA, createMock, launch, login, phone } from "./helpers.mjs";
@@ -67,6 +67,41 @@ test("離線：看路線、記錄排隊、連線後送出；快取裡沒有 Supa
   await page.waitForTimeout(3000);
   assert.equal(mock.db.ascents.length, 1, "連線後自動送出");
   assert.deepEqual(errors, []);
+});
+
+test("岩牆照片存進手機：第二次不用重抓、離線也看得到；Supabase 沒開 CORS 時照樣顯示", async () => {
+  const mock = createMock();
+  const zA = seed(mock);
+  const { page, ctx, errors } = await phone(browser, mock);
+  // Service Worker 接手後才會存照片：先開一次，等它裝好再重新整理
+  await page.goto(BASE + "/zone?id=" + zA.id, { waitUntil: "networkidle" });
+  await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, { timeout: 30000 }).catch(() => {});
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(1500);
+  const img = page.locator('main img[alt$="照片"]');
+  assert.ok((await img.evaluate((el) => el.naturalWidth)) > 0, "照片顯示");
+  const cached = await page.evaluate(async () => ((await caches.has("zone-photos")) ? (await (await caches.open("zone-photos")).keys()).length : 0));
+  assert.ok(cached >= 1, `照片存進手機的快取（${cached} 張）`);
+
+  // 離線：照片照樣看得到
+  mock.state.offline = true;
+  await ctx.setOffline(true);
+  await page.reload();
+  await page.waitForTimeout(1500);
+  assert.ok((await page.locator('main img[alt$="照片"]').evaluate((el) => el.naturalWidth)) > 0, "離線也看得到照片");
+  mock.state.offline = false;
+  await ctx.setOffline(false);
+  assert.deepEqual(errors.filter((e) => !/ERR_INTERNET_DISCONNECTED|net::/.test(e)), []);
+
+  // Supabase 沒有回 CORS 標頭：改用一般方式重抓，照片照樣顯示
+  const mock2 = createMock();
+  const z2 = seed(mock2);
+  mock2.state.noCors = true;
+  const B = await phone(browser, mock2);
+  await B.page.goto(BASE + "/zone?id=" + z2.id, { waitUntil: "networkidle" });
+  await B.page.waitForTimeout(1200);
+  assert.ok((await B.page.locator('main img[alt$="照片"]').evaluate((el) => el.naturalWidth)) > 0, "沒有 CORS 也看得到照片");
+  await B.ctx.close();
 });
 
 test("照片雙指放大、還原", async () => {

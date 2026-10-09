@@ -8,9 +8,10 @@ import SyncManager from "@/components/SyncManager";
 import UpdateWatcher from "@/components/UpdateWatcher";
 import "./globals.css";
 
+// 中文字用可變字型：一份宣告就涵蓋 400–900 各種粗細（列出多個粗細會把同一批字型檔重複宣告好幾次，擋住第一次畫面）
 const noto = Noto_Sans_TC({
   variable: "--font-noto",
-  weight: ["400", "500", "700", "900"],
+  weight: "variable",
   subsets: ["latin"],
   display: "swap",
 });

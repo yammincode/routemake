@@ -19,6 +19,7 @@ export default function RouteVideos({
   route: r,
   gymId,
   open,
+  active = true,
   staff,
   myStatus,
   onLogin,
@@ -29,6 +30,7 @@ export default function RouteVideos({
   route: Route;
   gymId: string;
   open: boolean;
+  active?: boolean; // 「影片」分頁打開時才放影片縮圖（縮圖會下載影片開頭，打開路線卡片時不跟記錄搶網路）
   staff: boolean;
   myStatus: Status | null;
   onLogin: () => void;
@@ -116,7 +118,7 @@ export default function RouteVideos({
   return (
     <>
       {videos && videos.length > 0 ? (
-        <>
+        active && <>
           <VideoStrip items={cards} onOpen={(i) => (setConfirmDel(null), setPlaying(i))} />
           <VideoViewer
             items={cards}

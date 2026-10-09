@@ -207,11 +207,6 @@ export default function AdminView() {
         正在管理 <b>{spray ? spray.name : (gym?.name ?? "")}</b>
         <span className="text-meta text-muted">・你的身分：{roleLabel(access, gymId)}</span>
       </p>
-      {(access.is_owner || access.roles.some((r) => r.role === "manager")) && (
-        <Button className="mb-3" onClick={() => router.push("/admin/usage")}>
-          📊 使用狀況
-        </Button>
-      )}
 
       {(gyms.length > 1 || walls.length > 0) && (
         <ChipRow>
@@ -456,6 +451,12 @@ export default function AdminView() {
         </SetBox>
       )}
       {gym && <VideoPanel gymId={gymId} gymName={gym.name} />}
+      {/* 使用狀況：只有老闆和這一館的店長看得到（資料庫也只給這兩種人看） */}
+      {manager && gym && (
+        <Button className="mt-6" onClick={() => router.push("/admin/usage")}>
+          📊 使用狀況
+        </Button>
+      )}
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <AuditPanel gymId={gymId} gymName={gym.name} />}
       {access.is_owner && <ScoringPanel />}

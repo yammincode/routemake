@@ -31,6 +31,10 @@ test("使用狀況：記錄打開、店長與老闆看統計", async () => {
   await login(M.page, "manager1", "password1", "/admin");
   await M.page.waitForTimeout(1200);
   assert.ok(!(await M.page.textContent("main")).includes("每天使用人數"), "管理後台不再塞使用狀況");
+  // 按鈕在下方（平面圖和區域之後，員工管理之前），不再佔最上面
+  const btnY = (await M.page.locator('main button:has-text("使用狀況")').boundingBox()).y;
+  const planY = (await M.page.locator("main svg[role=img]").first().boundingBox()).y;
+  assert.ok(btnY > planY, "使用狀況按鈕在平面圖下面");
   await M.page.click('main button:has-text("使用狀況")');
   await M.page.waitForURL("**/admin/usage");
   await M.page.waitForTimeout(1000);
@@ -61,4 +65,29 @@ test("使用狀況：記錄打開、店長與老闆看統計", async () => {
   await C.page.waitForTimeout(800);
   assert.ok(!(await C.page.textContent("main")).includes("活躍人數"), "顧客看不到");
   assert.deepEqual([...C.errors, ...M.errors, ...B.errors], []);
+});
+
+test("使用狀況按鈕：只有老闆和這一館的店長看得到，定線員看不到", async () => {
+  const mock = createMock();
+  const setter = mock.addUser("setter1", "password1", { nickname: "阿定" });
+  const mix = mock.addUser("mix1", "password1", { nickname: "兼職" });
+  mock.db.staff_roles.push({ user_id: setter, gym_id: "mingde", role: "setter" });
+  // 在萬華當店長、在明德當定線員：看明德時不顯示
+  mock.db.staff_roles.push({ user_id: mix, gym_id: "g2", role: "manager" }, { user_id: mix, gym_id: "mingde", role: "setter" });
+
+  const S = await phone(browser, mock);
+  await login(S.page, "setter1", "password1", "/admin");
+  await S.page.waitForTimeout(1200);
+  assert.equal(await S.page.locator('main button:has-text("使用狀況")').count(), 0, "定線員看不到");
+
+  const X = await phone(browser, mock);
+  await login(X.page, "mix1", "password1", "/admin");
+  await X.page.waitForTimeout(1200);
+  await X.page.click('main button:text-is("明德館")');
+  await X.page.waitForTimeout(800);
+  assert.equal(await X.page.locator('main button:has-text("使用狀況")').count(), 0, "看自己當定線員的館時不顯示");
+  await X.page.click('main button:text-is("萬華館")');
+  await X.page.waitForTimeout(800);
+  assert.equal(await X.page.locator('main button:has-text("使用狀況")').count(), 1, "看自己當店長的館時顯示");
+  assert.deepEqual([...S.errors, ...X.errors], []);
 });

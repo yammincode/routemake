@@ -269,7 +269,8 @@ function RouteBody({
   const sorted = [...(comments ?? [])].sort(
     (a, b) => Number(b.user_id === uid) - Number(a.user_id === uid) || b.likers.length - a.likers.length || b.created_at.localeCompare(a.created_at)
   );
-  const shownTab = tab ?? (videoCount ? "video" : comments?.length ? "comment" : "log");
+  // 預設不開「影片」分頁：影片縮圖要下載影片開頭，點了「影片」才載入
+  const shownTab = tab ?? (comments?.length ? "comment" : "log");
 
   return (
     <>
@@ -399,7 +400,7 @@ function RouteBody({
       </div>
 
       <div role="tabpanel" hidden={shownTab !== "video"}>
-        <RouteVideos route={r} gymId={gymId} open={commentsOpen} staff={staff} myStatus={ascent?.status ?? null} onLogin={toLogin} onCount={onVideoCount} onProfile={setProfile} />
+        <RouteVideos route={r} gymId={gymId} open={commentsOpen} active={shownTab === "video"} staff={staff} myStatus={ascent?.status ?? null} onLogin={toLogin} onCount={onVideoCount} onProfile={setProfile} />
       </div>
 
       <div role="tabpanel" hidden={shownTab !== "comment"}>

@@ -62,7 +62,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false };
+  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -426,7 +426,8 @@ export function createMock() {
     // Storage
     if (p.startsWith("/storage/v1/object/public/zone-photos/")) {
       const f = db.files[p.replace("/storage/v1/object/public/zone-photos/", "")];
-      return f ? route.fulfill({ status: 200, headers: { ...cors, "content-type": "image/jpeg" }, body: f }) : route.fulfill({ status: 404 });
+      // state.noCors：模擬 Supabase 沒回 CORS 標頭（照片要能退回一般方式顯示）
+      return f ? route.fulfill({ status: 200, headers: { ...(state.noCors ? {} : cors), "content-type": "image/jpeg" }, body: f }) : route.fulfill({ status: 404 });
     }
     if (p.startsWith("/storage/v1/object/zone-photos/") && m === "POST") {
       const path = p.replace("/storage/v1/object/zone-photos/", "");
