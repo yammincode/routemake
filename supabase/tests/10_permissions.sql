@@ -1134,6 +1134,64 @@ set role authenticated; select tests.login(:MG);
 select tests.throws('營運：取消後店長又看不到', $q$select public.usage_stats('mingde')$q$);
 reset role;
 
+-- ---------------------------------------------------------------------
+-- 長耐力區域：照順序標 2–50 點、YDS、紀錄最高爬到第幾點、照比例算分
+-- ---------------------------------------------------------------------
+insert into ids select 'zoneEN', id from public.zones where gym_id = 'g2' and code = 'TR';
+set role authenticated; select tests.login(:OW);
+select tests.lives('長耐力：老闆把萬華訓練區改成長耐力（沒有路線時）', $q$update public.zones set grade_system = 'endurance' where gym_id = 'g2' and code = 'TR'$q$);
+select tests.throws('長耐力：沒有點不能新增', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 108, ''紅'', 1, 1)', (select v from ids where k = 'zoneEN')));
+select tests.throws('長耐力：只有 1 點不能新增', format($q$insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, holds) values (%L, 108, '紅', 1, 1, '[{"x":1,"y":1}]')$q$, (select v from ids where k = 'zoneEN')));
+select tests.throws('長耐力：超過 50 點不能新增', format($q$insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, holds) values (%L, 108, '紅', 1, 1, %L)$q$,
+  (select v from ids where k = 'zoneEN'), (select jsonb_agg(jsonb_build_object('x', i, 'y', 50)) from generate_series(1, 51) i)::text));
+select tests.throws('長耐力：點要在照片裡', format($q$insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, holds) values (%L, 108, '紅', 1, 1, '[{"x":1,"y":1},{"x":120,"y":1}]')$q$, (select v from ids where k = 'zoneEN')));
+select tests.throws('長耐力：難度不能用 V 級', format($q$insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, holds) values (%L, 4, '紅', 1, 1, '[{"x":1,"y":1},{"x":2,"y":2}]')$q$, (select v from ids where k = 'zoneEN')));
+select tests.lives('長耐力：照順序 5 點、5.11a 可以新增', format($q$insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, holds) values (%L, 108, '紅', 1, 1,
+  '[{"x":10,"y":80},{"x":20,"y":70,"t":"x","r":3},{"x":30.126,"y":60},{"x":40,"y":50},{"x":50,"y":40}]')$q$, (select v from ids where k = 'zoneEN')));
+select tests.lives('長耐力：50 點也可以', format($q$insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, holds) values (%L, 110, '紅', 1, 1, %L)$q$,
+  (select v from ids where k = 'zoneEN'), (select jsonb_agg(jsonb_build_object('x', i, 'y', 50)) from generate_series(1, 50) i)::text));
+reset role;
+insert into ids select 'en1', id from public.routes where zone_id = (select v from ids where k = 'zoneEN') and grade = 108;
+insert into ids select 'en2', id from public.routes where zone_id = (select v from ids where k = 'zoneEN') and grade = 110;
+select tests.ok('長耐力：起步點是第 1 點、顏色固定白色（不用選顏色）',
+  (select pin_x = 10 and pin_y = 80 and hold_color = '白' from public.routes where id = (select v from ids where k = 'en1')));
+select tests.ok('長耐力：點照順序整理（第 1 點 s、最後一點 t、中間 h，小數兩位，多的欄位拿掉）',
+  (select jsonb_array_length(holds) = 5 and holds -> 0 ->> 't' = 's' and holds -> 1 ->> 't' = 'h' and holds -> 4 ->> 't' = 't'
+          and (holds -> 2 ->> 'x')::numeric = 30.13 and not (holds -> 1 ? 'r')
+     from public.routes where id = (select v from ids where k = 'en1')),
+  (select holds::text from public.routes where id = (select v from ids where k = 'en1')));
+select tests.ok('長耐力：比例分數（5.11a 完攀 17 分，爬到 3／5 點 ≈ 10 分）', public.ascent_points(108, '{}', 'project', 3, 5) = 10);
+select tests.ok('長耐力：沒填最高點的嘗試中 0 分；完攀、Flash 跟原本一樣',
+  public.ascent_points(108, '{}', 'project', null, 5) = 0 and public.ascent_points(108, '{}', 'send', 3, 5) = 17
+  and public.ascent_points(108, '{}', 'flash', null, 5) = public.ascent_points(108, '{}', 'flash'));
+set role authenticated; select tests.login(:A);
+select (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'total')::int as en_before \gset
+select tests.throws('長耐力：最高點不能是最後一點（那就是完攀）', format('insert into public.ascents (route_id, status, highpoint) values (%L, ''project'', 5)', (select v from ids where k = 'en1')));
+select tests.throws('長耐力：最高點不能超過總點數', format('insert into public.ascents (route_id, status, highpoint) values (%L, ''project'', 9)', (select v from ids where k = 'en1')));
+select tests.throws('長耐力：最高點最多 50', format('insert into public.ascents (route_id, status, highpoint) values (%L, ''project'', 51)', (select v from ids where k = 'en2')));
+select tests.lives('長耐力：嘗試中、最高爬到第 3 點', format('insert into public.ascents (route_id, status, highpoint) values (%L, ''project'', 3)', (select v from ids where k = 'en1')));
+select tests.ok('長耐力：沒爬完也照比例算進積分（+10）',
+  (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'total')::int = :en_before + 10);
+select tests.ok('長耐力：區域頁帶出自己的最高點',
+  (public.zone_view((select v from ids where k = 'zoneEN')) -> 'as' -> (select v from ids where k = 'en1')::text ->> 'highpoint')::int = 3);
+select tests.ok('長耐力：改成完攀的指令執行了', tests.rows(format('update public.ascents set status = ''send'' where route_id = %L', (select v from ids where k = 'en1'))) = 1);
+select tests.ok('長耐力：完攀自動記成最後一點', (select highpoint from public.ascents where route_id = (select v from ids where k = 'en1') and user_id = :A) = 5);
+select tests.ok('長耐力：完攀得分照舊（+17）',
+  (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'total')::int = :en_before + 17);
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.ok('長耐力：一般路線填最高點的指令執行了', tests.rows('update public.ascents set highpoint = 3') >= 1);
+select tests.ok('長耐力：一般路線不會存最高點', (select bool_and(highpoint is null) from public.ascents where user_id = :B));
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.throws('長耐力：有人記錄過的路線，點不能再改', format($q$update public.routes set holds = '[{"x":11,"y":80},{"x":20,"y":70}]' where id = %L$q$, (select v from ids where k = 'en1')));
+select tests.ok('長耐力：有人記錄過的路線，難度還是可以改', tests.rows(format('update public.routes set grade = 109 where id = %L', (select v from ids where k = 'en1'))) = 1);
+select tests.ok('長耐力：沒人記錄過的路線可以改點', tests.rows(format($q$update public.routes set holds = '[{"x":5,"y":5},{"x":6,"y":6},{"x":7,"y":7}]' where id = %L$q$, (select v from ids where k = 'en2'))) = 1);
+select tests.ok('長耐力：改點後起步點跟著第 1 點', (select pin_x = 5 and jsonb_array_length(holds) = 3 from public.routes where id = (select v from ids where k = 'en2')));
+select tests.throws('長耐力：還有路線時不能改回抱石', $q$update public.zones set grade_system = 'v' where gym_id = 'g2' and code = 'TR'$q$);
+select tests.throws('長耐力：抱石區還是不能有點', format($q$insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, holds) values (%L, 3, '紅', 1, 1, '[{"x":1,"y":1},{"x":2,"y":2}]')$q$, (select v from ids where k = 'zoneG2')));
+reset role;
+
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));
 

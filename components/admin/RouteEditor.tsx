@@ -4,29 +4,77 @@ import { gradeLabel } from "@/lib/design";
 import { useEffect, useState } from "react";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CommentItem, CommentList } from "@/components/ui/Comments";
+import { NumberMarks } from "@/components/ui/Endurance";
 import { ColorPicker, GradePicker, Label, TagPicker, TextField, Toggle } from "@/components/ui/Form";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/Toast";
-import { archiveRoute, createRoute, deleteComment, getComments, newId, updateRoute, type Comment, type Route, type Zone } from "@/lib/data";
+import { WallPhoto } from "@/components/ui/Wall";
+import {
+  archiveRoute,
+  createRoute,
+  deleteComment,
+  getComments,
+  newId,
+  routeHasAscents,
+  updateRoute,
+  type Comment,
+  type Route,
+  type RouteInput,
+  type Zone,
+} from "@/lib/data";
 import { ago } from "@/lib/date";
 import type { HoldColor } from "@/lib/design";
 
 export type EditTarget = { route: Route } | { x: number; y: number } | null;
 
 // 新增／編輯路線（底部彈出）：顏色、難度、風格、評語、留言開關；編輯時可看並刪留言、下架
-export default function RouteEditor({ zone, target, onClose, onChanged }: { zone: Zone; target: EditTarget; onClose: () => void; onChanged: () => void }) {
+// 長耐力區：不選顏色，改成在照片上照順序點岩點（最多 50 點）；已經有人記錄過的路線，點不能再改
+export default function RouteEditor({
+  zone,
+  photo,
+  target,
+  onClose,
+  onChanged,
+}: {
+  zone: Zone;
+  photo?: string | null;
+  target: EditTarget;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
   return (
     <Sheet open={!!target} onClose={onClose}>
-      {target && <Body key={"route" in target ? target.route.id : `${target.x},${target.y}`} zone={zone} target={target} onClose={onClose} onChanged={onChanged} />}
+      {target && (
+        <Body key={"route" in target ? target.route.id : `${target.x},${target.y}`} zone={zone} photo={photo ?? null} target={target} onClose={onClose} onChanged={onChanged} />
+      )}
     </Sheet>
   );
 }
 
-function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNullable<EditTarget>; onClose: () => void; onChanged: () => void }) {
+const MAX_POINTS = 50;
+
+function Body({
+  zone,
+  photo,
+  target,
+  onClose,
+  onChanged,
+}: {
+  zone: Zone;
+  photo: string | null;
+  target: NonNullable<EditTarget>;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
   const toast = useToast();
   const r = "route" in target ? target.route : null;
+  const endurance = zone.grade_system === "endurance";
   const [color, setColor] = useState<HoldColor>(r?.hold_color ?? "紅");
-  const [grade, setGrade] = useState(r?.grade ?? (zone.grade_system === "yds" ? 104 : 3));
+  const [grade, setGrade] = useState(r?.grade ?? (zone.grade_system === "v" ? 3 : 104));
+  // 長耐力的點：新增時第 1 點就是剛剛點的位置
+  const startHolds = r?.holds?.map(({ x, y }) => ({ x, y })) ?? ("x" in target ? [{ x: +target.x.toFixed(2), y: +target.y.toFixed(2) }] : []);
+  const [holds, setHolds] = useState(startHolds);
+  const [locked, setLocked] = useState(false);
   const [tags, setTags] = useState<string[]>(r?.style_tags ?? []);
   const [note, setNote] = useState(r?.setter_note ?? "");
   const [cm, setCm] = useState(r?.comments_enabled ?? true);
@@ -39,10 +87,28 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
   useEffect(() => {
     if (r) getComments(r.id).then(setComments).catch(() => setComments([]));
   }, [r]);
+  // 長耐力：已經有人記錄過，點的位置和順序不能改（資料庫也會擋）
+  useEffect(() => {
+    if (r && endurance) routeHasAscents(r.id).then(setLocked).catch(() => setLocked(false));
+  }, [r, endurance]);
 
-  const input = { grade, hold_color: color, style_tags: tags, setter_note: note.trim() || null, comments_enabled: cm };
+  const holdsChanged = JSON.stringify(holds) !== JSON.stringify(startHolds);
+  const input: RouteInput = {
+    grade,
+    hold_color: endurance ? "白" : color,
+    style_tags: tags,
+    setter_note: note.trim() || null,
+    comments_enabled: cm,
+    ...(endurance && (!r || (holdsChanged && !locked)) ? { holds } : {}),
+  };
+  const addPoint = (x: number, y: number) => {
+    if (locked) return toast("已經有人記錄過這條路線，點不能再改");
+    if (holds.length >= MAX_POINTS) return toast(`最多 ${MAX_POINTS} 點`);
+    setHolds((hs) => [...hs, { x: +x.toFixed(2), y: +y.toFixed(2) }]);
+  };
 
   const save = async () => {
+    if (endurance && holds.length < 2) return toast("至少要標 2 個點（第 1 點是起攀、最後一點是完攀）");
     setBusy(true);
     try {
       if (r) {
@@ -50,7 +116,7 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
         toast("已儲存");
       } else if ("x" in target) {
         const created = await createRoute(zone.id, input, target.x, target.y, routeId);
-        toast(`已新增 ${created.code}（${gradeLabel(grade)} ${color}色）`);
+        toast(endurance ? `已新增 ${created.code}（${gradeLabel(grade)}・${holds.length} 點）` : `已新增 ${created.code}（${gradeLabel(grade)} ${color}色）`);
       }
       onChanged();
       onClose();
@@ -92,8 +158,39 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
         {zone.name}
         {r ? `，${ago(r.created_at)}設定` : "，編號會自動產生"}
       </SheetSub>
-      <Label>岩點顏色</Label>
-      <ColorPicker value={color} onChange={setColor} />
+      {endurance ? (
+        <>
+          <Label>照順序點岩點（最多 {MAX_POINTS} 點）</Label>
+          {photo ? (
+            <WallPhoto src={photo} alt={`${zone.name}照片`} setter={!locked} onPick={addPoint}>
+              <NumberMarks holds={holds} onTap={locked ? undefined : (i) => setHolds((hs) => hs.filter((_, j) => j !== i))} />
+            </WallPhoto>
+          ) : (
+            <p className="mt-0 text-meta text-muted">這區還沒有照片，請先上傳照片再標點。</p>
+          )}
+          <div className="-mt-2 mb-1 flex items-center justify-between gap-2 text-meta text-muted">
+            <span>
+              已標 <b className="font-num text-ink">{holds.length}</b> 點
+              {locked ? "・已經有人記錄過，點不能改" : "・點照片加下一點，點圈圈刪掉"}
+            </span>
+            {!locked && (
+              <span className="flex flex-none gap-1">
+                <button disabled={!holds.length} onClick={() => setHolds((hs) => hs.slice(0, -1))} className="px-1 py-1 font-bold text-accent disabled:opacity-40">
+                  復原上一點
+                </button>
+                <button disabled={!holds.length} onClick={() => setHolds([])} className="px-1 py-1 text-warn disabled:opacity-40">
+                  全部清除
+                </button>
+              </span>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <Label>岩點顏色</Label>
+          <ColorPicker value={color} onChange={setColor} />
+        </>
+      )}
       <Label>難度</Label>
       <GradePicker system={zone.grade_system} value={grade} onChange={setGrade} />
       <Label>路線風格（可複選）</Label>
@@ -102,7 +199,7 @@ function Body({ zone, target, onClose, onChanged }: { zone: Zone; target: NonNul
       <TextField id="rnote" maxLength={40} value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如：最後一手要果斷" />
       <Toggle checked={cm} onChange={setCm} label="開放這條路線留言" hint="關閉後也不能分享影片" />
       <Button variant="primary" disabled={busy} onClick={save}>
-        {busy ? "儲存中…" : r ? "儲存變更" : "新增路線"}
+        {busy ? "儲存中…" : r ? "儲存變更" : endurance ? `新增路線（${holds.length} 點）` : "新增路線"}
       </Button>
       {r && (
         <>

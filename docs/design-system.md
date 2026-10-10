@@ -98,9 +98,9 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Chip.tsx` | `ChipRow`（wrap：排不下就換行）、`Chip` |
 | `Sheet.tsx` | `Sheet`、`SheetTitle`、`SheetSub`、`SheetSection` |
 | `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`、`Segmented`（small：一排小膠囊）、`OptionGrid`（單選方塊、選填，再按一次取消；2 或 4 格一排，可加小字說明）、`Rating`（1–5 分）、`ColorPicker`、`GradePicker`、`TagPicker`、`Check` |
-| `Route.tsx` | `Points`、`Grade`、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`（compact：路線卡片一排小按鈕）、`RouteRow`、`RouteList`、`CommentCount`、`SetterNote` |
+| `Route.tsx` | `Points`、`Grade`、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`（compact：路線卡片一排小按鈕）、`RouteRow`（color 不給＝長耐力路線，不畫膠帶）、`RouteList`、`CommentCount`、`SetterNote` |
 | `Wall.tsx` | `WallPhoto`（`hideable`：左上角「隱藏路線／顯示路線」按鈕，只用在顧客區域頁）、`Pin`、`TempPin` |
-| `Gym.tsx` | `ZoneCard`（難度色帶版：小縮圖、完成數、`GradeStrip`、難度範圍或篩選結果、換線倒數；guest 只寫條數）、`ZoneList`、`GradeStrip`（區域難度色帶）、`GradeChart`（全館難度分布）、`BandPicker`（全部／入門 VB–V2／進階 V3–V5／挑戰 V6+）、`GoalLine`（快換線提醒）、`NewRouteRow`、`NewRouteCard`、`GymRow`（lines：館名下面的換線小字；tag 給空字串不顯示右邊的字）、`SoonBox`、`dueText`；`ZoneCard` 的 due 是換線（7 天內 warn） |
+| `Gym.tsx` | `ZoneCard`（難度色帶版：小縮圖、完成數、`GradeStrip`、難度範圍或篩選結果、換線倒數；guest 只寫條數）、`ZoneList`、`GradeStrip`（區域難度色帶）、`GradeChart`（全館難度分布）、`BandPicker`（全部／入門 VB–V2／進階 V3–V5／挑戰 V6+）、`GoalLine`（快換線提醒）、`NewRouteRow`、`NewRouteCard`（color 不給就不畫色點）、`GymRow`（lines：館名下面的換線小字；tag 給空字串不顯示右邊的字）、`SoonBox`、`dueText`；`ZoneCard` 的 due 是換線（7 天內 warn） |
 | `Resets.tsx` | `ResetLines`（選館頁換線小字：換線中、剛換好 NEW、○ 天後換線）、`ResetMonth`（換線行事曆：一列一週，館的顏色長條，兩天跨兩格，點日期／色塊選日子）、`ResetDateRow`（日期＋名稱一列）、`GymDot`（館的顏色色票） |
 | `FloorPlan.tsx` | `FloorPlan`（guest：每區寫條數、統一底色；7 天內換線只畫虛線框，不寫字；有好幾層的館（南港）同一張卡片由上到下畫，每層上方標 1F、2F；區域名字沒改過寫簡稱，店長改過名字就寫新名字，依旁邊的空間縮小、放不下截短加「…」，見 `lib/floorplan.ts` 的 `planLabel`、`planText`） |
 | `Comments.tsx` | `CommentItem`（含 👍 按讚；刪除要按兩次）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
@@ -111,6 +111,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Video.tsx` | `VideoRow`、`VideoList`（路線卡片影片分頁：一支一列，方形縮圖＋片長、說明、誰・多久前、`VideoResult` 分享者紀錄、身高・動作）、`VideoStrip`（橫向滑動縮圖，後台用）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`（顧客分享影片） |
 | `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`TotalRow`、`SetBox` |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
+| `Endurance.tsx` | `NumberMarks`（長耐力路線照順序的點：細圈＋號碼，第 1 點綠、最後一點紅、中間藍；放大照片時線和號碼不變粗；reached 之後的點變淡；onTap 編輯時刪點）、`HighpointPicker`（最高爬到第幾點：－／拉桿／＋，最多到倒數第 2 點，下面大字「30 ／ 38 點」） |
 | `Grant.tsx` | `GrantList`、`GrantRow`（授權名單的一個人：暱稱、帳號）、`GrantGroup`（一組權限：小標＋膠囊，按下去＝有權限，再按一次取消；營運分頁老闆用） |
 | `HowTo.tsx` | `HowTo`（「怎麼看」說明：第一次展開，按「知道了」收成一行，記在這支手機） |
 | `Toast.tsx` | `ToastProvider`、`useToast` |

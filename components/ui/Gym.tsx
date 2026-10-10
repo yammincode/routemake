@@ -260,11 +260,13 @@ export function GoalLine({ label, children, ...rest }: ComponentProps<"button"> 
 export function NewRouteRow({ children }: { children: ReactNode }) {
   return <div className="no-scrollbar -mx-4 flex gap-2.5 overflow-x-auto px-4 pt-0.5 pb-2">{children}</div>;
 }
-export function NewRouteCard({ color, grade, zone, ago, ...rest }: ComponentProps<"button"> & { color: HoldColor; grade: number; zone: string; ago: string }) {
+// color 不給：長耐力路線（不分顏色）不畫色點
+export function NewRouteCard({ color, grade, zone, ago, ...rest }: ComponentProps<"button"> & { color?: HoldColor; grade: number; zone: string; ago: string }) {
   return (
     <button className="w-[118px] flex-none rounded-tile bg-surface p-3 text-left shadow-card" {...rest}>
       <span className="mb-1.5 flex items-center gap-2 font-num text-num-card font-bold">
-        <HoldDot color={color} />{gradeLabel(grade)}
+        {color && <HoldDot color={color} />}
+        {gradeLabel(grade)}
       </span>
       <small className="block text-meta leading-[1.4] text-muted">
         {zone}

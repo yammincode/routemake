@@ -16,6 +16,7 @@ import {
   getNewRoutes,
   getZoneProgress,
   photoUrl,
+  seqTotal,
   thumbUrl,
   type Ascent,
   type GradeRow,
@@ -254,7 +255,7 @@ export default function HomeView({ gymId }: { gymId: string }) {
       {fresh.length ? (
         <NewRouteRow>
           {fresh.map((r) => (
-            <NewRouteCard key={r.id} color={r.hold_color} grade={r.grade} zone={r.zone_name} ago={ago(r.created_at)} onClick={() => setOpen(r)} />
+            <NewRouteCard key={r.id} color={seqTotal(r) ? undefined : r.hold_color} grade={r.grade} zone={r.zone_name} ago={ago(r.created_at)} onClick={() => setOpen(r)} />
           ))}
         </NewRouteRow>
       ) : (

@@ -65,7 +65,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false, noOps: false };
+  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -159,6 +159,7 @@ export function createMock() {
   const cond = (r, k, v) => {
     const [op, ...rest] = v.split(".");
     const val = rest.join(".");
+    if (op === "not") return !cond(r, k, val);
     const x = k.includes(".") ? (r[k.split(".")[0]] || {})[k.split(".")[1]] : r[k];
     if (op === "eq") return String(x) === val;
     if (op === "is") return val === "null" ? x == null : true;
@@ -171,8 +172,16 @@ export function createMock() {
     for (const [k, v] of sp) {
       if (["select", "order", "on_conflict", "limit", "offset"].includes(k)) continue;
       if (k === "or") {
-        const parts = v.replace(/^\(|\)$/g, "").split(",").map((p) => p.split(/\.(.*)/s));
-        rows = rows.filter((r) => parts.some(([pk, pv]) => cond(r, pk, pv)));
+        // 用逗號分開，但括號裡的逗號（例如 status.in.(flash,send)）不算
+        const parts = [];
+        let depth = 0, cur = "";
+        for (const ch of v.replace(/^\(|\)$/g, "")) {
+          if (ch === "," && depth === 0) (parts.push(cur), (cur = ""));
+          else ((depth += ch === "(" ? 1 : ch === ")" ? -1 : 0), (cur += ch));
+        }
+        parts.push(cur);
+        const pairs = parts.map((p) => p.split(/\.(.*)/s));
+        rows = rows.filter((r) => pairs.some(([pk, pv]) => cond(r, pk, pv)));
         continue;
       }
       rows = rows.filter((r) => cond(r, k, v));
@@ -182,10 +191,14 @@ export function createMock() {
   };
   const base = (g) => (g >= 100 ? db.scoring.yds_points[g - 100] : g < 0 ? db.scoring.vb_points : db.scoring.grade_points[g]);
   const rawPoints = (r) => base(r.grade) * (100 + Math.min(db.scoring.max_style_bonus, r.style_tags.reduce((s, t) => s + (db.scoring.style_bonus[t] || 0), 0)));
+  // 長耐力路線：照順序標的點數（其他路線 0）
+  const seqN = (r) => (r && !r.name && r.holds?.length >= 2 && zoneOf(r.zone_id)?.grade_system === "endurance" ? r.holds.length : 0);
   const points = (a) => {
     const r = db.routes.find((x) => x.id === a.route_id);
     if (a.status === "send") return Math.round(rawPoints(r) / 100);
     if (a.status === "flash") return Math.round((rawPoints(r) * Math.round(db.scoring.flash_multiplier * 100)) / 10000);
+    // 同 ascent_points 5 個參數版：長耐力嘗試中照比例
+    if (a.highpoint != null && seqN(r)) return Math.round((rawPoints(r) * a.highpoint) / (100 * seqN(r)));
     return 0;
   };
   const monthBounds = (y, m) => {
@@ -218,6 +231,11 @@ export function createMock() {
     }
     if (noOps() && ["usage_viewer_list", "set_usage_viewer"].includes(fn))
       return J(route, 404, { code: "PGRST202", message: `Could not find the function public.${fn}` });
+    // 長耐力：這條路線有沒有人記錄過（資料庫還沒套用 step30 時沒有這個函式）
+    if (fn === "route_has_ascents") {
+      if (state.noHighpoint) return J(route, 404, { code: "PGRST202", message: "Could not find the function public.route_has_ascents" });
+      return J(route, 200, db.ascents.some((x) => x.route_id === a.p_route));
+    }
     if (fn === "usage_viewer_list") {
       if (!isOwner(uid)) return J(route, 200, []);
       const ids = [...new Set(db.usageViewers.map((v) => v.user_id))];
@@ -249,7 +267,7 @@ export function createMock() {
         z: { ...pick(z, ["id", "gym_id", "code", "name", "photo_path", "photo_width", "photo_height", "next_reset_on", "sort", "grade_system"]), next_reset_on: zoneResetOn(z), kind: z.kind ?? "wall" },
         g: pick(g, ["id", "name", "is_live", "comments_enabled", "sort"]),
         rs: rs.map((r) => ({ kind: "gym", name: null, description: null, holds: null, created_by: null, ...r })),
-        as: Object.fromEntries(db.ascents.filter((x) => x.user_id === uid && ids.has(x.route_id)).map((x) => [x.route_id, pick(x, ["id", "route_id", "status", "climbed_on", "feel", "grade_feel", "private_note"])])),
+        as: Object.fromEntries(db.ascents.filter((x) => x.user_id === uid && ids.has(x.route_id)).map((x) => [x.route_id, pick(x, ["id", "route_id", "status", "climbed_on", "feel", "grade_feel", "private_note", "highpoint"])])),
         cs: db.comments.filter((c) => !c.deleted_at && ids.has(c.route_id)).reduce((m, c) => ((m[c.route_id] = (m[c.route_id] ?? 0) + 1), m), {}),
       });
     }
@@ -561,6 +579,15 @@ export function createMock() {
         if (!isStaff(uid, z.gym_id) && !community) return J(route, 403, { code: "42501", message: "沒有權限" });
         if (z.kind === "spray" && !(body.holds?.some((h) => h.t === "s") && body.holds?.some((h) => h.t === "t")))
           return J(route, 400, { code: "22023", message: "路線要有起攀（S）和完攀（T），圈圈最多 60 個" });
+        // 同 routes_spray_check／routes_grade_system：長耐力要照順序 2–50 點、YDS；其他一般區域不能有點
+        if (z.kind !== "spray" && z.grade_system === "endurance") {
+          if (!(body.holds?.length >= 2 && body.holds.length <= 50)) return J(route, 400, { code: "22023", message: "長耐力路線要照順序標 2–50 個點" });
+          if (body.grade < 100) return J(route, 400, { code: "22023", message: "這個區域是長耐力，難度要用 YDS（5.6–5.13d）" });
+          body.holds = body.holds.map((h, i, all) => ({ x: Math.round(h.x * 100) / 100, y: Math.round(h.y * 100) / 100, t: i === 0 ? "s" : i === all.length - 1 ? "t" : "h" }));
+          body.hold_color = "白";
+          body.pin_x = body.holds[0].x;
+          body.pin_y = body.holds[0].y;
+        } else if (z.kind !== "spray" && body.holds) return J(route, 400, { code: "22023", message: "一般區域只能有岩館路線" });
         // 手機產生的 id 重送：跟資料庫一樣回「已經有這筆」
         if (body.id && db.routes.some((x) => x.id === body.id)) return J(route, 409, { code: "23505", message: 'duplicate key value violates unique constraint "routes_pkey"' });
         z.route_seq++;
@@ -575,21 +602,30 @@ export function createMock() {
         return out([r]);
       }
       if (m === "PATCH") {
+        // 同資料庫：長耐力路線有人記錄過，點不能再改
+        if (body.holds && filt(db.routes, sp).some((r) => seqN(r) && db.ascents.some((x) => x.route_id === r.id)))
+          return J(route, 400, { code: "22023", message: "已經有人記錄過這條路線，點的位置和順序不能再改（難度、說明可以改）" });
+        if (body.holds) body.holds = body.holds.map((h, i, all) => ({ x: h.x, y: h.y, t: i === 0 ? "s" : i === all.length - 1 ? "t" : "h" }));
         filt(db.routes, sp).filter((r) => isStaff(uid, zoneOf(r.zone_id).gym_id) || (r.kind === "community" && r.created_by === uid)).forEach((r) => {
           if (!r.archived_at && body.archived_at && !(r.kind === "community" && r.created_by === uid)) {
             audit(uid, zoneOf(r.zone_id).gym_id, "route.archive", r.id, { code: r.code, zone: zoneOf(r.zone_id).name, grade: r.grade, color: r.hold_color });
             dropVideos(r.id);
           }
-          Object.assign(r, body);
+          Object.assign(r, body, body.holds ? { pin_x: body.holds[0].x, pin_y: body.holds[0].y } : {});
         });
         return empty(route);
       }
     }
     if (t === "ascents") {
       const mine = db.ascents.filter((a) => a.user_id === uid);
+      // state.noHighpoint：模擬資料庫還沒套用 step30（ascents 沒有 highpoint 欄位）
+      if (state.noHighpoint && m === "GET" && (sel.includes("highpoint") || (sp.get("or") || "").includes("highpoint")))
+        return J(route, 400, { code: "42703", message: "column ascents.highpoint does not exist" });
+      if (state.noHighpoint && m === "POST" && body && "highpoint" in body)
+        return J(route, 400, { code: "PGRST204", message: "Could not find the 'highpoint' column of 'ascents' in the schema cache" });
       if (m === "GET") {
         let rows = filt(mine, sp);
-        if (sel.includes("routes(")) rows = rows.map((x) => { const r = db.routes.find((y) => y.id === x.route_id); const z = zoneOf(r.zone_id); return { ...x, routes: { ...r, zones: { name: z.name, gym_id: z.gym_id } } }; }).sort((p1, p2) => p2.climbed_on.localeCompare(p1.climbed_on));
+        if (sel.includes("routes(")) rows = rows.map((x) => { const r = db.routes.find((y) => y.id === x.route_id); const z = zoneOf(r.zone_id); return { ...x, routes: { ...r, zones: { name: z.name, gym_id: z.gym_id, photo_path: z.photo_path } } }; }).sort((p1, p2) => p2.climbed_on.localeCompare(p1.climbed_on));
         return out(rows);
       }
       if (m === "POST") {
@@ -603,6 +639,12 @@ export function createMock() {
           if (body.climbed_on > taipeiDay(0)) return bad("日期不能晚於今天");
           if (rt.archived_at && body.climbed_on > tpe(rt.archived_at)) return bad("日期不能晚於路線下架日");
         }
+        // 同 ascents_before_write：長耐力 Flash、完攀＝最後一點；嘗試中要小於最後一點；其他路線沒有最高點
+        const n = seqN(rt);
+        if (n) {
+          if (body.status !== "project") body.highpoint = n;
+          else if (body.highpoint != null && body.highpoint >= n) return J(route, 400, { code: "22023", message: `爬到最後一點就是完攀，最高點要小於 ${n}` });
+        } else body.highpoint = null;
         const ex = mine.find((a) => a.route_id === body.route_id);
         if (ex) Object.assign(ex, body, { updated_at: now() });
         else db.ascents.push({ id: uuid(), updated_at: now(), ...body, user_id: uid });

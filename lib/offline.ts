@@ -66,7 +66,8 @@ export function clearCache() {
 export type PendingAscent = {
   userId: string;
   routeId: string;
-  ascent: { status: string; climbed_on: string; feel: number | null; grade_feel: number | null; private_note: string | null } | null; // null = 清除紀錄
+  // null = 清除紀錄；highpoint：長耐力最高爬到第幾點（其他路線沒有）
+  ascent: { status: string; climbed_on: string; feel: number | null; grade_feel: number | null; private_note: string | null; highpoint?: number | null } | null;
 };
 
 export const getPending = () => read<PendingAscent[]>(QUEUE_KEY) ?? [];

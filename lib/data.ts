@@ -58,7 +58,13 @@ export type Ascent = {
   feel: number | null;
   grade_feel: number | null;
   private_note: string | null;
+  highpoint?: number | null; // 長耐力：最高爬到第幾點（Flash、完攀＝最後一點；其他路線沒有）
 };
+// 長耐力路線：照順序標的點（holds 2–50 個，第 1 點是起步點）；Spray Wall 的路線不算
+export const seqTotal = (r: Pick<Route, "holds" | "name">): number => (!r.name && r.holds && r.holds.length >= 2 ? r.holds.length : 0);
+// 資料庫還沒套用 step30（ascents 沒有 highpoint 欄位）：讀寫紀錄時自動退回原本的欄位
+const NO_COLUMN = new Set(["42703", "PGRST204"]);
+let hasHighpoint = true;
 export type Comment = {
   id: string;
   route_id: string;
@@ -217,9 +223,13 @@ export async function setUsageViewer(userId: string, gym: string, on: boolean) {
 // 自己在這些路線上的紀錄（RLS 只回傳自己的）
 export async function getMyAscents(routeIds: string[]): Promise<Record<string, Ascent>> {
   if (!routeIds.length) return {};
-  const rows = must(
-    await supabase().from("ascents").select("id,route_id,status,climbed_on,feel,grade_feel,private_note").in("route_id", routeIds)
-  ) as Ascent[];
+  const cols: string = "id,route_id,status,climbed_on,feel,grade_feel,private_note";
+  let r = await supabase().from("ascents").select(hasHighpoint ? `${cols},highpoint` : cols).in("route_id", routeIds);
+  if (hasHighpoint && NO_COLUMN.has(r.error?.code ?? "")) {
+    hasHighpoint = false;
+    r = await supabase().from("ascents").select(cols).in("route_id", routeIds);
+  }
+  const rows = must(r) as unknown as Ascent[];
   return Object.fromEntries(rows.map((a) => [a.route_id, a]));
 }
 export async function getComments(routeId: string): Promise<Comment[]> {
@@ -247,10 +257,13 @@ export async function getCommentCounts(routeIds: string[]): Promise<Record<strin
 
 // ---------- 顧客：紀錄與留言 ----------
 export async function saveAscent(userId: string, routeId: string, a: Omit<Ascent, "id" | "route_id">) {
+  // 只有長耐力路線才送最高點（資料庫還沒套用 step30 時，送了不存在的欄位會整筆存不進去）
+  const { highpoint, ...rest } = a;
+  const row = highpoint != null ? { ...rest, highpoint } : rest;
   must(
     await supabase()
       .from("ascents")
-      .upsert({ user_id: userId, route_id: routeId, ...a }, { onConflict: "user_id,route_id" })
+      .upsert({ user_id: userId, route_id: routeId, ...row }, { onConflict: "user_id,route_id" })
   );
 }
 export async function clearAscent(routeId: string) {
@@ -300,7 +313,8 @@ export function newId(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-export type RouteInput = Pick<Route, "grade" | "hold_color" | "style_tags" | "setter_note" | "comments_enabled">;
+// holds：長耐力路線照順序標的點（其他區域不給）
+export type RouteInput = Pick<Route, "grade" | "hold_color" | "style_tags" | "setter_note" | "comments_enabled"> & { holds?: { x: number; y: number }[] };
 const SAVE_WAIT_MS = 15000;
 // 新增路線：id 由手機產生（同一次新增重按都用同一個 id）
 // 訊號差時資料可能已經存進去、只是手機沒收到回覆：重按時資料庫回「已經有這筆」，就直接拿那一筆，不會多一條
@@ -322,7 +336,7 @@ export async function createRoute(zoneId: string, input: RouteInput, x: number, 
         // 重按前改過顏色、難度等：照這次填的更新
         const changed = (Object.keys(input) as (keyof RouteInput)[]).some((k) => JSON.stringify(old[k]) !== JSON.stringify(input[k]));
         if (changed) await updateRoute(id, input);
-        return { ...old, ...input };
+        return { ...old, ...input, holds: old.holds };
       }
     }
     if (ctl.signal.aborted) throw new Error("網路太慢，請確認網路後再按一次（不會多一條）");
@@ -333,6 +347,12 @@ export async function createRoute(zoneId: string, input: RouteInput, x: number, 
 }
 export async function updateRoute(id: string, input: RouteInput) {
   must(await supabase().from("routes").update(input).eq("id", id));
+}
+// 長耐力：這條路線有沒有人記錄過（有的話點不能再改）；資料庫還沒套用 step30 時當作沒有
+export async function routeHasAscents(id: string): Promise<boolean> {
+  const r = await supabase().rpc("route_has_ascents", { p_route: id });
+  if (r.error?.code === "PGRST202") return false;
+  return !!must(r);
 }
 // 下架時資料庫會刪掉影片資料，App 再刪 Storage 的檔案（先取得路徑）
 export async function archiveRoute(id: string) {
@@ -425,24 +445,30 @@ export type MonthStats = {
 export async function getMonthlyStats(year: number, month: number): Promise<MonthStats> {
   return must(await supabase().rpc("monthly_stats", { p_year: year, p_month: month }));
 }
-export type MonthAscent = Ascent & { route: Route & { zone_name: string; gym_id: string } };
+export type MonthAscent = Ascent & { route: Route & { zone_name: string; gym_id: string; zone_photo?: string | null } };
 // 這個月的完攀（Flash＋完攀），含路線與區域
 export async function getMonthAscents(year: number, month: number): Promise<MonthAscent[]> {
   const from = `${year}-${String(month).padStart(2, "0")}-01`;
   const next = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
-  const rows = must(
-    await supabase()
+  // 完攀、Flash，加上長耐力沒爬完但有最高點的（照比例有分數）
+  const query = (withHigh: boolean) =>
+    supabase()
       .from("ascents")
-      .select(`id,route_id,status,climbed_on,feel,grade_feel,private_note,updated_at,routes(${ROUTE_COLS},zones(name,gym_id))`)
-      .in("status", ["flash", "send"])
+      .select(`id,route_id,status,climbed_on,feel,grade_feel,private_note,${withHigh ? "highpoint," : ""}updated_at,routes(${ROUTE_COLS},zones(name,gym_id,photo_path))`)
+      .or(withHigh ? "status.in.(flash,send),highpoint.not.is.null" : "status.in.(flash,send)")
       .gte("climbed_on", from)
       .lt("climbed_on", next)
       .order("climbed_on", { ascending: false })
-      .order("updated_at", { ascending: false })
-  ) as unknown as (Ascent & { routes: Route & { zones: { name: string; gym_id: string } } })[];
+      .order("updated_at", { ascending: false });
+  let res = await query(hasHighpoint);
+  if (hasHighpoint && NO_COLUMN.has(res.error?.code ?? "")) {
+    hasHighpoint = false;
+    res = await query(false);
+  }
+  const rows = must(res) as unknown as (Ascent & { routes: Route & { zones: { name: string; gym_id: string; photo_path: string | null } } })[];
   return rows.map(({ routes, ...a }) => {
     const { zones, ...r } = routes;
-    return { ...a, route: { ...r, zone_name: zones.name, gym_id: zones.gym_id } };
+    return { ...a, route: { ...r, zone_name: zones.name, gym_id: zones.gym_id, zone_photo: zones.photo_path } };
   });
 }
 // 場館目前牆上所有路線（算各難度進度）

@@ -35,7 +35,8 @@
 | `setup/step26-nangang-b3-d.sql` | migration 0030：南港重新分區，新增 B3（1F 左下斜牆左半）、D1／D2（2F D 牆左右兩半）；原本的區域和路線不動（B1、B2 範圍變了，要整區換線後重拍、重標） | 已套用 |
 | `setup/step27-reset-events.sql` | migration 0031：換線公告（reset_events、授權名單 reset_editors、can_edit_resets()、reset_calendar()；存檔自動更新各區下次換線日；整區換線改接下一筆公告；各區換線日讀取時以公告為準、刪掉的區自動從公告移除；my_access 多回傳 can_edit_resets） | 已套用（10/10 前的版本，少的「一次刪多區」修正由 step29 補上） |
 | `setup/step28-ops-access.sql` | migration 0032：營運分頁權限（usage_viewers：老闆授權誰看哪幾館的使用狀況；usage_stats 改成老闆＋被授權的人，店長不再自動看得到；set_usage_viewer()、usage_viewer_list()；my_access 多回傳 usage_gyms）。要先套用 step27 | 已套用 |
-| `setup/step29-zone-delete-fix.sql` | migration 0033：補 step27 舊版少的修正（重新分區一次刪好幾區時，換線公告裡已刪掉的區一起拿掉；重複執行沒有影響） | 待套用 |
+| `setup/step29-zone-delete-fix.sql` | migration 0033：補 step27 舊版少的修正（重新分區一次刪好幾區時，換線公告裡已刪掉的區一起拿掉；第二次執行會在最後登記那一行報錯，代表已經套用過） | 已套用 |
+| `setup/step30-endurance.sql` | migration 0034：長耐力區域（第三種等級制 endurance；路線照順序標 2–50 點、YDS、不用顏色；有人記錄過點就不能改；ascents.highpoint 最高爬到第幾點；嘗試中照比例算分：ascent_points 5 個參數版、points_summary、zone_view） | 待套用 |
 
 ## 規則摘要
 

@@ -12,6 +12,7 @@ import { AppVersion } from "@/components/ui/Version";
 import { FeedbackItem, FeedbackList } from "@/components/ui/Feedback";
 import { PickList } from "@/components/ui/PickList";
 import { GrantGroup, GrantList, GrantRow } from "@/components/ui/Grant";
+import { HighpointPicker, NumberMarks } from "@/components/ui/Endurance";
 import { Tabs } from "@/components/ui/Tabs";
 import { HoldLegend, HoldMarks, HoldTools, RouteThumb, SprayRow } from "@/components/ui/Spray";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
@@ -152,6 +153,8 @@ export default function DesignShowcase() {
   const [pickColor, setPickColor] = useState<HoldColor>("紅");
   const [pickPerson, setPickPerson] = useState<string | null>("a");
   const [grantGyms, setGrantGyms] = useState<string[]>(["g2"]);
+  const [seq, setSeq] = useState(() => Array.from({ length: 12 }, (_, i) => ({ x: 8 + i * 7.5, y: 70 - i * 3.5 + (i % 2 ? 6 : 0) })));
+  const [hp, setHp] = useState<number | null>(7);
   const [grantResets, setGrantResets] = useState(true);
   const [pickGrade, setPickGrade] = useState(3);
   const [pickTags, setPickTags] = useState<string[]>(["技巧"]);
@@ -541,6 +544,14 @@ export default function DesignShowcase() {
           selected={trendPick}
           onSelect={setTrendPick}
         />
+      </Block>
+
+      <Block title="長耐力（照順序的點、最高爬到第幾點）">
+        <WallPhoto src={wall.uri} alt="長耐力路線" setter onPick={(x, y) => setSeq((p) => (p.length >= 50 ? p : [...p, { x, y }]))}>
+          <NumberMarks holds={seq} reached={hp} onTap={(i) => setSeq((p) => p.filter((_, j) => j !== i))} />
+        </WallPhoto>
+        <HighpointPicker value={hp} total={seq.length} onChange={setHp} aside={hp ? `得 ${Math.round((17 * hp) / seq.length)} 分` : undefined} />
+        <Tip>點照片加下一點、點圈圈刪掉；第 1 點綠、最後一點紅；拉桿子選最高爬到第幾點（之後的點變淡）。</Tip>
       </Block>
 
       <Block title="Spray Wall">

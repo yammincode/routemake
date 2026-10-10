@@ -89,8 +89,14 @@ export const CLIMBING_YEARS = [
   { v: "5+", t: "5 年以上" },
 ] as const;
 
-// 等級制：抱石 VB、V0–V10（grade -1、0–10）；上攀 YDS 5.6–5.13d（grade 100–119，跟資料庫一樣）
-export type GradeSystem = "v" | "yds";
+// 等級制：抱石 VB、V0–V10（grade -1、0–10）；上攀 YDS 5.6–5.13d（grade 100–119，跟資料庫一樣）；
+// 長耐力：路線照順序標 1–50 點，難度也用 YDS，顧客記錄最高爬到第幾點
+export type GradeSystem = "v" | "yds" | "endurance";
+export const GRADE_SYSTEMS: readonly { id: GradeSystem; label: string; done: string }[] = [
+  { id: "v", label: "抱石 V 級", done: "已改成抱石 V 級" },
+  { id: "yds", label: "上攀 YDS", done: "已改成上攀 YDS 等級" },
+  { id: "endurance", label: "長耐力", done: "已改成長耐力（照順序標點、YDS 難度）" },
+];
 export const YDS_GRADES = [
   "5.6", "5.7", "5.8", "5.9",
   "5.10a", "5.10b", "5.10c", "5.10d",
@@ -113,4 +119,4 @@ export const inBand = (g: number, band: GradeBand | null) => !band || (!isYds(g)
 export const gradeLabel = (g: number) => (isYds(g) ? (YDS_GRADES[g - 100] ?? "?") : g < 0 ? "VB" : `V${g}`);
 // 起步點圓圈裡放的短標籤：V 級只寫數字，YDS 去掉「5.」
 export const gradeShort = (g: number) => (isYds(g) ? (YDS_GRADES[g - 100] ?? "?").slice(2) : g < 0 ? "B" : String(g));
-export const gradesFor = (s: GradeSystem): number[] => (s === "yds" ? YDS_GRADES.map((_, i) => 100 + i) : [...GRADES]);
+export const gradesFor = (s: GradeSystem): number[] => (s === "v" ? [...GRADES] : YDS_GRADES.map((_, i) => 100 + i));

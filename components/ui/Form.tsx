@@ -124,7 +124,7 @@ export function ColorPicker({ value, onChange }: { value: HoldColor; onChange: (
 // 難度選擇（原型 .grades）：抱石 VB、V0–V10（按鈕塗成館內膠帶顏色，選中的加框）、上攀 YDS 5.6–5.13d
 export function GradePicker({ value, onChange, system = "v" }: { value: number; onChange: (g: number) => void; system?: GradeSystem }) {
   return (
-    <div className={`grid gap-1.5 ${system === "yds" ? "grid-cols-4" : "grid-cols-6"}`}>
+    <div className={`grid gap-1.5 ${system === "v" ? "grid-cols-6" : "grid-cols-4"}`}>
       {gradesFor(system).map((g) => {
         const c = gradeColor(g);
         return (

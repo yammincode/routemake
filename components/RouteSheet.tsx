@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import ProfileSheet from "@/components/ProfileSheet";
 import RouteVideos from "@/components/RouteVideos";
 import { Button, LinkButton } from "@/components/ui/Button";
+import { HighpointPicker, NumberMarks } from "@/components/ui/Endurance";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import { Label, Segmented, TextArea, TextField } from "@/components/ui/Form";
 import { Grade, SetterNote, StatusPicker, Tags, Tape } from "@/components/ui/Route";
@@ -16,7 +17,20 @@ import { HoldMarks } from "@/components/ui/Spray";
 import { useToast } from "@/components/ui/Toast";
 import { WallPhoto } from "@/components/ui/Wall";
 import { isStaffOf } from "@/lib/auth";
-import { clearAscent, deleteComment, editComment, getComments, likeComment, postComment, saveAscent, unlikeComment, type Ascent, type Comment, type Route } from "@/lib/data";
+import {
+  clearAscent,
+  deleteComment,
+  editComment,
+  getComments,
+  likeComment,
+  postComment,
+  saveAscent,
+  seqTotal,
+  unlikeComment,
+  type Ascent,
+  type Comment,
+  type Route,
+} from "@/lib/data";
 import { ago, md, todayYmd, ymd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, STATUS_LABEL, type Status } from "@/lib/design";
 import { herePath } from "@/lib/nav";
@@ -25,8 +39,10 @@ import { ascentPoints, routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
 // 路線卡片（底部彈出）：上方路線資訊與一排「點一下就記錄」，下方分頁：紀錄（日期、感受、心得）、影片、留言
+// photo：區域照片（長耐力路線在卡片上畫出全部的點）
 export default function RouteSheet({
   route,
+  photo,
   zoneName,
   gymId,
   gymCommentsOn,
@@ -36,6 +52,7 @@ export default function RouteSheet({
   spray,
 }: {
   route: Route | null;
+  photo?: string | null;
   zoneName: string;
   gymId: string;
   gymCommentsOn: boolean;
@@ -50,6 +67,7 @@ export default function RouteSheet({
         <RouteBody
           key={route.id}
           route={route}
+          photo={photo ?? null}
           zoneName={zoneName}
           gymId={gymId}
           gymCommentsOn={gymCommentsOn}
@@ -77,6 +95,7 @@ export type SprayExtras = {
 
 function RouteBody({
   route: r,
+  photo,
   zoneName,
   gymId,
   gymCommentsOn,
@@ -86,6 +105,7 @@ function RouteBody({
   spray,
 }: {
   route: Route;
+  photo: string | null;
   zoneName: string;
   gymId: string;
   gymCommentsOn: boolean;
@@ -105,8 +125,11 @@ function RouteBody({
   const [note, setNote] = useState(ascent?.private_note ?? "");
   const [busy, setBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  // 打開卡片時的紀錄：判斷「上次嘗試中、這次爬完」用（這次打開後按錯又改回來不算）
-  const [opened] = useState(() => ({ status: ascent?.status ?? null, date: ascent?.climbed_on ?? null }));
+  // 長耐力：總點數（其他路線 0）、最高爬到第幾點（只有嘗試中才有意義）
+  const total = spray ? 0 : seqTotal(r);
+  const [hp, setHp] = useState<number | null>(ascent?.status === "project" ? (ascent?.highpoint ?? null) : null);
+  // 打開卡片時的紀錄：判斷「上次嘗試中、這次爬完／爬得更高」用（這次打開後按錯又改回來不算）
+  const [opened] = useState(() => ({ status: ascent?.status ?? null, date: ascent?.climbed_on ?? null, hp: ascent?.highpoint ?? null }));
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [draft, setDraft] = useState("");
   const [tab, setTab] = useState<"log" | "video" | "comment" | null>(null);
@@ -144,13 +167,41 @@ function RouteBody({
     }
     setBusy(false);
   };
-  const current = (s: Status, day = date) => ({
+  const current = (s: Status, day = date, high = hp) => ({
     status: s,
     climbed_on: day || todayYmd(),
     feel: s === "project" ? null : feel,
     grade_feel: s === "project" ? null : gfeel,
     private_note: note.trim() || null,
+    // 長耐力才帶最高點：Flash、完攀＝最後一點
+    ...(total ? { highpoint: s === "project" ? high : total } : {}),
   });
+  // 長耐力：拉桿子選最高點，停 0.7 秒才存（拉的過程不會一直送）；關掉卡片前還沒存的會馬上存
+  const hpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hpPending = useRef<(() => void) | null>(null);
+  useEffect(
+    () => () => {
+      if (hpTimer.current) clearTimeout(hpTimer.current);
+      hpPending.current?.();
+    },
+    []
+  );
+  const pickHp = (v: number) => {
+    setHp(v);
+    if (hpTimer.current) clearTimeout(hpTimer.current);
+    // 爬得比上次高：日期改成今天（分數算在進步那天）；自己改過日期就照改的
+    const better = v > (opened.hp ?? 0) && date === opened.date;
+    const day = better ? (todayYmd() > maxDate ? maxDate : todayYmd()) : date;
+    const pts = rules ? ascentPoints(r.grade, r.style_tags, "project", rules, v, total) : 0;
+    const run = () => {
+      hpPending.current = null;
+      hpTimer.current = null;
+      setDate(day);
+      void persist(current("project", day, v), `已記錄：爬到第 ${v} 點 +${pts} 分`);
+    };
+    hpPending.current = run;
+    hpTimer.current = setTimeout(run, 700);
+  };
 
   // 點 Flash／完攀／嘗試中：直接記錄；點已選的狀態就打開細節
   const quick = async (s: Status) => {
@@ -166,11 +217,15 @@ function RouteBody({
     const day = wasProject && date === opened.date ? (todayYmd() > maxDate ? maxDate : todayYmd()) : date;
     setStatus(s);
     setDate(day);
-    const pts = rules ? ascentPoints(r.grade, r.style_tags, s, rules) : 0;
+    const pts = rules ? ascentPoints(r.grade, r.style_tags, s, rules, s === "project" ? hp : null, total) : 0;
     // 岩友路線不算積分
     const msg =
       r.kind === "community"
         ? `已記錄：${STATUS_LABEL[s]}（岩友路線不算積分）`
+        : s === "project" && total
+          ? hp
+            ? `已記錄：嘗試中，爬到第 ${hp} 點 +${pts} 分`
+            : "已記錄：嘗試中，拉下面的桿子記錄最高爬到第幾點"
         : s === "flash"
           ? wasProject
             ? `Flash +${pts} 分（試過幾次的一般記完攀）`
@@ -279,8 +334,18 @@ function RouteBody({
           <HoldMarks holds={r.holds} />
         </WallPhoto>
       )}
+      {total > 0 && photo && r.holds && (
+        <WallPhoto src={photo} alt={`${r.code} 的 ${total} 個點`}>
+          <NumberMarks holds={r.holds} reached={status === "project" ? hp : null} />
+        </WallPhoto>
+      )}
       <SheetTitle>
-        {r.name ? (
+        {total > 0 ? (
+          <>
+            <Grade grade={r.grade} className="text-num-sheet" />
+            {r.code}・{total} 點
+          </>
+        ) : r.name ? (
           <>
             <Grade grade={r.grade} className="text-num-sheet" />
             <span className="min-w-0 break-words">{r.name}</span>
@@ -301,6 +366,7 @@ function RouteBody({
           <>
             {"・"}完攀 <b className="font-num text-[16px] text-ink">{routePoints(r.grade, r.style_tags, rules)}</b> 分・Flash{" "}
             <b className="font-num text-[16px] text-ink">{ascentPoints(r.grade, r.style_tags, "flash", rules)}</b> 分
+            {total > 0 && "・沒爬完照比例"}
           </>
         )}
       </SheetSub>
@@ -332,6 +398,14 @@ function RouteBody({
 
       <div className="mt-3">
         <StatusPicker compact value={session ? status : null} onChange={(s) => void quick(s)} />
+        {session && total > 0 && status === "project" && (
+          <HighpointPicker
+            value={hp}
+            total={total}
+            onChange={pickHp}
+            aside={hp && rules ? `得 ${ascentPoints(r.grade, r.style_tags, "project", rules, hp, total)} 分` : undefined}
+          />
+        )}
       </div>
 
       <Tabs
@@ -358,7 +432,8 @@ function RouteBody({
           <>
             <div className="flex items-center justify-between text-note">
               <span className="text-muted">
-                已記錄 <b className="text-ink">{STATUS_LABEL[status]}</b>・{md(date || todayYmd())}
+                已記錄 <b className="text-ink">{STATUS_LABEL[status]}</b>
+                {total > 0 && status === "project" && hp ? `（${hp}／${total} 點）` : ""}・{md(date || todayYmd())}
               </span>
               <button onClick={() => setDetails(!details)} className="px-1 py-1 text-note font-bold text-accent">
                 {details ? "收起" : "＋ 加上心得與感受"}

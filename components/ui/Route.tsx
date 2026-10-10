@@ -98,7 +98,7 @@ export function RouteRow({
   statusOld,
   ...rest
 }: Omit<ComponentProps<"button">, "title"> & {
-  color: HoldColor;
+  color?: HoldColor; // 長耐力路線不分顏色：不給就不畫膠帶
   grade: number;
   title: ReactNode;
   isNew?: boolean;
@@ -116,7 +116,7 @@ export function RouteRow({
         }`}
         {...rest}
       >
-        <Tape color={color} />
+        {color && <Tape color={color} />}
         <Grade grade={grade} />
         <span className="min-w-0 flex-1 text-meta leading-normal text-muted">
           <b className="text-sub font-medium text-ink">{title}</b>

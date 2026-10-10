@@ -15,6 +15,8 @@ import {
   getMonthlyStats,
   getMyAscents,
   getPointsSummary,
+  photoUrl,
+  seqTotal,
   type Ascent,
   type Gym,
   type MonthAscent,
@@ -166,18 +168,22 @@ export default function MeView({ gymId }: { gymId: string }) {
           <RouteList>
             {list.map((a) => {
               const gf = gradeFeel(a.grade_feel);
+              // 長耐力：不分顏色，寫爬到第幾點（沒爬完的照比例有分數）
+              const n = seqTotal(a.route);
+              const hp = n ? (a.status === "project" ? a.highpoint : n) : null;
               return (
                 <RouteRow
                   key={a.id}
-                  color={a.route.hold_color}
+                  color={n ? undefined : a.route.hold_color}
                   grade={a.route.grade}
                   title={
                     <>
-                      {a.route.name ? `${a.route.zone_name}・${a.route.name}` : `${a.route.zone_name} ${a.route.hold_color}色`} {feelEmoji(a.feel)}
-                      {rules && a.route.kind !== "community" && <Points prefix="+" n={ascentPoints(a.route.grade, a.route.style_tags, a.status, rules)} />}
+                      {a.route.name ? `${a.route.zone_name}・${a.route.name}` : n ? `${a.route.zone_name} ${a.route.code}` : `${a.route.zone_name} ${a.route.hold_color}色`}{" "}
+                      {feelEmoji(a.feel)}
+                      {rules && a.route.kind !== "community" && <Points prefix="+" n={ascentPoints(a.route.grade, a.route.style_tags, a.status, rules, hp, n)} />}
                     </>
                   }
-                  meta={`${+a.climbed_on.slice(5, 7)}/${+a.climbed_on.slice(8, 10)}${gf ? `，體感${gf}` : ""}${a.route.archived_at ? "，已下架" : ""}`}
+                  meta={`${+a.climbed_on.slice(5, 7)}/${+a.climbed_on.slice(8, 10)}${hp ? `，爬到 ${hp}／${n} 點` : ""}${gf ? `，體感${gf}` : ""}${a.route.archived_at ? "，已下架" : ""}`}
                   quote={a.private_note ?? undefined}
                   status={a.status}
                   statusOld={!!a.route.archived_at}
@@ -206,6 +212,7 @@ export default function MeView({ gymId }: { gymId: string }) {
 
       <RouteSheet
         route={open?.route ?? null}
+        photo={open && seqTotal(open.route) ? photoUrl(open.route.zone_photo ?? null) : null}
         zoneName={open?.route.zone_name ?? ""}
         gymId={open?.route.gym_id ?? gymId}
         gymCommentsOn={gym?.comments_enabled ?? true}

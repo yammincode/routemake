@@ -32,6 +32,7 @@ import {
   getZones,
   makeMissingThumbs,
   photoUrl,
+  seqTotal,
   reorderZones,
   setGymComments,
   updateZone,
@@ -41,6 +42,7 @@ import {
   type Zone,
 } from "@/lib/data";
 import { ago, daysUntil } from "@/lib/date";
+import { GRADE_SYSTEMS } from "@/lib/design";
 import { PLANS, planHas } from "@/lib/floorplan";
 import { LIVE_GYM, SPRAY_WALLS } from "@/lib/gyms";
 import { routePoints } from "@/lib/scoring";
@@ -305,14 +307,14 @@ export default function AdminView() {
             <ZoneNameField key={`name-${zone.id}-${zone.name}`} name={zone.name} editable={manager} onSave={(v) => saveZone({ name: v }, "已更新區域名稱")} />
             <Label>等級制{manager ? "" : "（店長可切換）"}</Label>
             <div className="flex flex-wrap items-center gap-2">
-              {(["v", "yds"] as const).map((g) => (
+              {GRADE_SYSTEMS.map((g) => (
                 <Chip
-                  key={g}
-                  pressed={zone.grade_system === g}
-                  disabled={!manager || busy || (zone.grade_system !== g && routes.length > 0)}
-                  onClick={() => zone.grade_system !== g && void saveZone({ grade_system: g }, g === "yds" ? "已改成上攀 YDS 等級" : "已改成抱石 V 級")}
+                  key={g.id}
+                  pressed={zone.grade_system === g.id}
+                  disabled={!manager || busy || (zone.grade_system !== g.id && routes.length > 0)}
+                  onClick={() => zone.grade_system !== g.id && void saveZone({ grade_system: g.id }, g.done)}
                 >
-                  {g === "v" ? "抱石 V 級" : "上攀 YDS"}
+                  {g.label}
                 </Chip>
               ))}
               {manager && routes.length > 0 && <span className="text-tiny text-muted">整區換線後才能切換</span>}
@@ -373,18 +375,22 @@ export default function AdminView() {
           ) : (
             <NoPhoto>先上傳這區的岩牆照片，再點照片標路線</NoPhoto>
           )}
-          <Tip>點照片空白處新增路線，點標記編輯、管理留言或下架。</Tip>
+          <Tip>
+            {zone.grade_system === "endurance"
+              ? "長耐力：點照片上的起攀點新增路線，再照順序點下一個點（最多 50 點）；點標記編輯、管理留言或下架。"
+              : "點照片空白處新增路線，點標記編輯、管理留言或下架。"}
+          </Tip>
 
           {routes.length ? (
             <RouteList>
               {routes.map((r) => (
                 <RouteRow
                   key={r.id}
-                  color={r.hold_color}
+                  color={seqTotal(r) ? undefined : r.hold_color}
                   grade={r.grade}
                   title={
                     <>
-                      {r.hold_color}色 {r.code}
+                      {seqTotal(r) ? `${r.code}・${seqTotal(r)} 點` : `${r.hold_color}色 ${r.code}`}
                       {rules && <Points n={routePoints(r.grade, r.style_tags, rules)} />}
                     </>
                   }
@@ -409,6 +415,7 @@ export default function AdminView() {
           {/* 關掉時也重新讀路線：訊號差時「新增」其實可能已經存進去，要讓那個點出現，才不會在同一個位置再標一次 */}
           <RouteEditor
             zone={zone}
+            photo={src}
             target={target}
             onClose={() => {
               setTarget(null);
@@ -453,7 +460,11 @@ export default function AdminView() {
         {confirm?.kind === "photo" && zone && (
           <>
             <SheetTitle>更換 {zone.name} 照片</SheetTitle>
-            <SheetSub>牆上還有 {routes.length} 條路線，換照片後起步點的位置可能會對不上。通常是整區換線後再換照片。</SheetSub>
+            <SheetSub>
+              {zone?.grade_system === "endurance"
+                ? `牆上還有 ${routes.length} 條長耐力路線，換照片後每條路線標的點都會對不上（點不能改）。請先整區換線再換照片。`
+                : `牆上還有 ${routes.length} 條路線，換照片後起步點的位置可能會對不上。通常是整區換線後再換照片。`}
+            </SheetSub>
             <Button
               variant="primary"
               disabled={busy}

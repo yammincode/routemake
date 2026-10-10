@@ -14,6 +14,7 @@ import { NoPhoto, Pin, WallPhoto } from "@/components/ui/Wall";
 import {
   getZoneView,
   photoUrl,
+  seqTotal,
   type Ascent,
   type Gym,
   type Route,
@@ -100,6 +101,13 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
   const days = daysUntil(zone.next_reset_on);
   const commentsOn = gym.comments_enabled;
   const src = photoUrl(zone.photo_path);
+  // 長耐力：路線不分顏色，照順序標 1–50 點；顧客記錄最高爬到第幾點
+  const endurance = zone.grade_system === "endurance";
+  const progress = (r: Route) => {
+    const n = seqTotal(r);
+    const hp = ascents[r.id]?.status === "project" ? ascents[r.id]?.highpoint : null;
+    return n ? `${n} 點${hp ? `・你爬到 ${hp}／${n}` : ""}` : null;
+  };
 
   return (
     <>
@@ -128,7 +136,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
                 grade={r.grade}
                 status={s === "project" ? null : s}
                 dim={!match(r)}
-                label={`${gradeLabel(r.grade)} ${r.hold_color}色 ${r.code}`}
+                label={seqTotal(r) ? `${gradeLabel(r.grade)} ${seqTotal(r)} 點 ${r.code}` : `${gradeLabel(r.grade)} ${r.hold_color}色 ${r.code}`}
                 onClick={() => setOpen(r)}
               />
             );
@@ -145,7 +153,12 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
             id="zone"
             title="顏色和分數怎麼看"
             lines={[
-              `照片上的圓點：顏色是岩點的顏色（下面的顏色篩選也是），數字是難度${zone.grade_system === "yds" ? "（10a 就是 5.10a）" : ""}`,
+              ...(endurance
+                ? [
+                    "長耐力：照片上的圓點是每條路線的起攀點，數字是難度（10a 就是 5.10a）；點進路線看全部的點，綠圈第 1 點、紅圈最後一點",
+                    `沒爬完記「嘗試中」和最高爬到第幾點，照比例算分（爬到一半拿一半分數）`,
+                  ]
+                : [`照片上的圓點：顏色是岩點的顏色（下面的顏色篩選也是），數字是難度${zone.grade_system === "yds" ? "（10a 就是 5.10a）" : ""}`]),
               // 有膠帶顏色的難度才說（YDS、V9／V10 還沒有顏色）
               ...(tapeExample != null ? [`難度標籤（例如 ${gradeLabel(tapeExample)}）的顏色是牆上膠帶的顏色`] : []),
               `Flash：第一次嘗試就完攀${rules ? `，分數 ×${rules.flash_multiplier}` : ""}；試過幾次才爬完記「完攀」`,
@@ -160,16 +173,18 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
               <GradeChip key={g} grade={g} pressed={grade === g} onClick={() => setGrade(g)} />
             ))}
           </ChipRow>
-          <ChipRow>
-            <Chip pressed={color == null} onClick={() => setColor(null)}>
-              所有顏色
-            </Chip>
-            {colors.map((c) => (
-              <Chip key={c} pressed={color === c} onClick={() => setColor(c)}>
-                {c}
+          {!endurance && (
+            <ChipRow>
+              <Chip pressed={color == null} onClick={() => setColor(null)}>
+                所有顏色
               </Chip>
-            ))}
-          </ChipRow>
+              {colors.map((c) => (
+                <Chip key={c} pressed={color === c} onClick={() => setColor(c)}>
+                  {c}
+                </Chip>
+              ))}
+            </ChipRow>
+          )}
           {tags.length > 0 && (
             <ChipRow>
               <Chip pressed={tag == null} onClick={() => setTag(null)}>
@@ -190,11 +205,11 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
           {routes.filter(match).map((r) => (
             <RouteRow
               key={r.id}
-              color={r.hold_color}
+              color={seqTotal(r) ? undefined : r.hold_color}
               grade={r.grade}
               title={
                 <>
-                  {r.hold_color}色 {r.code}
+                  {seqTotal(r) ? r.code : `${r.hold_color}色 ${r.code}`}
                   {rules && <Points n={routePoints(r.grade, r.style_tags, rules)} />}
                 </>
               }
@@ -202,6 +217,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
               status={status(r)}
               meta={
                 <>
+                  {progress(r) && <span className="mr-1.5">{progress(r)}</span>}
                   <Tags tags={r.style_tags} /> {ago(r.created_at)}
                   {commentsOn && r.comments_enabled && (counts[r.id] ?? 0) > 0 && <CommentCount n={counts[r.id]} />}
                 </>
@@ -216,6 +232,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
 
       <RouteSheet
         route={open}
+        photo={src}
         zoneName={zone.name}
         gymId={zone.gym_id}
         gymCommentsOn={commentsOn}

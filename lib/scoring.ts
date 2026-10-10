@@ -22,9 +22,11 @@ const basePoints = (grade: number, r: ScoringRules) =>
 export const routePoints = (grade: number, tags: string[], r: ScoringRules) =>
   Math.round((basePoints(grade, r) * (100 + styleBonus(tags, r))) / 100);
 
-// 一筆紀錄的得分：Flash × 倍數、完攀 ×1、嘗試中 0
-export function ascentPoints(grade: number, tags: string[], status: Status | null, r: ScoringRules) {
+// 一筆紀錄的得分：Flash × 倍數、完攀 ×1、嘗試中 0；
+// 長耐力（有 high、total）嘗試中照比例＝完攀分數 × 最高點 ÷ 總點數（跟資料庫 ascent_points 5 個參數版一樣）
+export function ascentPoints(grade: number, tags: string[], status: Status | null, r: ScoringRules, high?: number | null, total?: number) {
   if (status === "send") return routePoints(grade, tags, r);
+  if (status === "project" && high != null && total) return Math.round((basePoints(grade, r) * (100 + styleBonus(tags, r)) * high) / (100 * total));
   if (status !== "flash") return 0;
   const m = Math.round(r.flash_multiplier * 100);
   return Math.round((basePoints(grade, r) * (100 + styleBonus(tags, r)) * m) / 10000);
