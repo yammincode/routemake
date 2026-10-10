@@ -60,9 +60,15 @@ test("區域改名：按鍵盤完成鍵或「儲存名稱」都會存、只送�
   assert.equal(await m.inputValue("#zname"), "教學區 Slab");
   assert.equal(await m.locator('main button:text-is("儲存名稱")').count(), 0, "沒改名字時沒有儲存按鈕");
 
-  // 鍵盤右下角的鍵（Enter）：存一次、跳出提示，按鈕消失
+  // 注音、拼音選字時按的 Enter（輸入法還在組字）：不存
   await m.fill("#zname", "天花板");
   assert.equal(await m.locator('main button:text-is("儲存名稱")').count(), 1, "改了名字出現儲存按鈕");
+  await m.dispatchEvent("#zname", "keydown", { key: "Enter", isComposing: true });
+  await m.dispatchEvent("#zname", "keydown", { key: "Enter", keyCode: 229 });
+  await m.waitForTimeout(600);
+  assert.equal(patches.length, 0, "選字的 Enter 不會存");
+  assert.equal(zone("SL").name, "教學區 Slab");
+  // 鍵盤右下角的鍵（Enter）：存一次、跳出提示，按鈕消失
   await m.press("#zname", "Enter");
   await m.waitForTimeout(1000);
   assert.equal(zone("SL").name, "天花板", "按完成鍵就存");
@@ -101,3 +107,32 @@ test("區域改名：按鍵盤完成鍵或「儲存名稱」都會存、只送�
   assert.equal(await S.page.locator('main button:text-is("儲存名稱")').count(), 0);
   assert.deepEqual([...M.errors, ...C.errors, ...S.errors], []);
 });
+
+test("平面圖：每一區都改成新名字時，各館平面圖上的字都不會疊在一起（太長的會縮小或截短）", async () => {
+  for (const name of ["測試牆", "非常非常長的區域名字"]) {
+    const mock = createMock();
+    for (const z of mock.db.zones) z.name = name;
+    const { page, ctx, errors } = await phone(browser, mock);
+    for (const gym of ["mingde", "g2", "g3", "g4", "g5"]) {
+      await page.goto(`${BASE}/gym/${gym}`, { waitUntil: "networkidle" });
+      await page.waitForTimeout(600);
+      // 每張平面圖（南港有 1F、2F 兩張）各自檢查：區域標籤的框兩兩不重疊
+      const overlaps = await page.locator("main svg").evaluateAll((svgs) =>
+        svgs.flatMap((svg) => {
+          const boxes = [...svg.querySelectorAll("g[role=button] text:first-of-type")].map((t) => ({ t: t.textContent, b: t.getBBox() }));
+          const hit = [];
+          for (let i = 0; i < boxes.length; i++)
+            for (let j = i + 1; j < boxes.length; j++) {
+              const a = boxes[i].b, c = boxes[j].b;
+              if (a.x < c.x + c.width && c.x < a.x + a.width && a.y < c.y + c.height && c.y < a.y + a.height) hit.push(`${boxes[i].t}／${boxes[j].t}`);
+            }
+          return hit;
+        })
+      );
+      assert.deepEqual(overlaps, [], `${gym}「${name}」標籤不重疊`);
+    }
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+

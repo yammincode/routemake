@@ -153,9 +153,26 @@ export function planLabel(shape: PlanZoneShape, name: string): string {
   const short = name.replace(/\s*區$/, "").trim() || name;
   return !shape.n || name === shape.n ? (shape.t ?? short) : short;
 }
-// 字的大小：新名字比原本的簡稱長就縮小（中文字算 1 個字寬、英數算 0.6），3 個中文字以內維持原本大小，最小 20
+// 改過的名字可以佔的寬度：跟同一排最近的另一區標籤的距離減掉一點間隔（兩邊都改名也不會疊在一起），最多 3 個中文字寬
 const textEm = (s: string) => [...s].reduce((w, c) => w + (c.charCodeAt(0) < 0x2e80 ? 0.6 : 1), 0);
-export function planFontSize(shape: PlanZoneShape, label: string, base = 40): number {
-  const room = Math.max(textEm(shape.t ?? label), 3);
-  return Math.max(20, Math.min(base, Math.round((base * room) / Math.max(textEm(label), 0.1))));
+export function planRoom(shape: FloorPlanShape, code: string, base = 40, gap = 12): number {
+  const P = shape.zones[code];
+  let d = Infinity;
+  for (const [c, Q] of Object.entries(shape.zones)) if (c !== code && Math.abs(Q.ly - P.ly) < base * 1.5) d = Math.min(d, Math.abs(Q.lx - P.lx));
+  return Math.min(base * 3, d - gap);
+}
+// 平面圖上這一區的字和大小：名字沒改過照原本（簡稱、40）；改過的名字依可用寬度縮小（最小 14），還放不下就截短加「…」
+export function planText(shape: FloorPlanShape, code: string, name: string, base = 40): { text: string; size: number } {
+  const P = shape.zones[code];
+  const label = planLabel(P, name);
+  if (label === P.t) return { text: label, size: base };
+  const room = planRoom(shape, code, base);
+  const MIN = 14;
+  const chars = [...label];
+  let text = label;
+  while (chars.length > 1 && textEm(text) * MIN > room) {
+    chars.pop();
+    text = chars.join("") + "…";
+  }
+  return { text, size: Math.max(MIN, Math.min(base, Math.floor(room / Math.max(textEm(text), 0.1)))) };
 }

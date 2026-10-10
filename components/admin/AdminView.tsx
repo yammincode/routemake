@@ -542,7 +542,8 @@ function ZoneNameField({ name, editable, onSave }: { name: string; editable: boo
         enterKeyHint="done"
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key !== "Enter") return;
+          // 注音、拼音選字時按的 Enter 只是選字，不存（打到一半的名字不會被存起來）
+          if (e.key !== "Enter" || e.nativeEvent.isComposing || e.keyCode === 229) return;
           e.preventDefault();
           save();
           e.currentTarget.blur();
