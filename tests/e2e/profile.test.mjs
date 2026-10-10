@@ -92,7 +92,7 @@ test("人物卡：設定、公開、從留言點名字查看、店長清除", as
   assert.deepEqual([...V.errors, ...B.errors, ...M.errors], []);
 });
 
-test("常去的館：原本只填一間的照樣顯示、可以加選；資料庫還沒套用 step31 時存第一間", async () => {
+test("常去的館：原本只填一間的照樣顯示、可以加選；資料庫還沒套用 step31 時維持單選", async () => {
   for (const old of [false, true]) {
     const mock = createMock();
     mock.state.noHomeGyms = old;
@@ -105,13 +105,23 @@ test("常去的館：原本只填一間的照樣顯示、可以加選；資料�
     await p.click('main button:text-is("編輯人物卡")');
     const gymChip = (name) => p.locator(`main button[aria-pressed]:text-is("${name}")`);
     assert.equal(await gymChip("萬華館").getAttribute("aria-pressed"), "true", "原本填的館已選");
+    assert.equal((await p.textContent("main")).includes("可複選"), !old, old ? "還沒套用 step31：不寫可複選" : "寫可複選");
     await gymChip("明德館").click();
+    // 還沒套用 step31：只能存一間，點別間就換成那一間（不會畫面上選兩間、實際只存一間）
+    assert.equal(await gymChip("萬華館").getAttribute("aria-pressed"), old ? "false" : "true");
     await p.click('main button:text-is("儲存人物卡")');
     await p.waitForTimeout(800);
     const saved = mock.db.profiles.find((x) => x.id === b);
-    if (old) assert.equal(saved.home_gym, "mingde", "還沒套用 step31：存第一間");
+    if (old) assert.equal(saved.home_gym, "mingde", "還沒套用 step31：存選的那一間");
     else assert.deepEqual(saved.home_gyms, ["mingde", "g2"], "存兩間");
     assert.ok((await p.locator("[role=status]").last().textContent()).includes("已儲存"));
+    // 存好後畫面照實際存的顯示；重新整理也一樣
+    for (let i = 0; i < 2; i++) {
+      const t = await p.textContent("main");
+      assert.ok(old ? t.includes("常去明德館") && !t.includes("萬華館") : t.includes("常去明德館、萬華館"), `${i ? "重新整理後" : "存好後"}照實際存的顯示`);
+      await p.reload({ waitUntil: "networkidle" });
+      await p.waitForTimeout(1000);
+    }
     assert.deepEqual(errors.filter((e) => !/404/.test(e)), []);
   }
 });

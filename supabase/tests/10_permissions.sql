@@ -773,7 +773,7 @@ select tests.ok('人物卡：清除後自我介紹是空的、有操作紀錄',
   (select bio is null from public.profiles where id = :B)
   and exists (select 1 from public.audit_log where action = 'card.clear' and detail ->> 'bio' = '喜歡動態路線'));
 
--- 常去的館可以複選：照場館順序存、不重複；舊版 App（只送一間）存檔不會洗掉其他館
+-- 常去的館可以複選：照場館順序存、不重複；舊版 App（只送一間、只看得到第一間）存同一間不會洗掉其他館，換別間只留那一間
 set role anon; select tests.login(null);
 select tests.throws('常去的館：未登入不能存', $q$select public.save_my_card(true, '嗨', null, array['mingde'], null)$q$);
 reset role;
@@ -787,6 +787,9 @@ select tests.ok('常去的館：照場館順序、重複的拿掉；home_gym 是
   (select c -> 'home_gyms' = '["mingde", "g3"]'::jsonb and c ->> 'home_gym' = 'mingde' from public.profile_card(:B) c), public.profile_card(:B)::text);
 select tests.lives('常去的館：舊版 App 存同一間', $q$select public.save_my_card(true, '嗨', '1-3', 'mingde'::text, null)$q$);
 select tests.ok('常去的館：舊版 App 存檔不會洗掉其他館', (select c -> 'home_gyms' = '["mingde", "g3"]'::jsonb from public.profile_card(:B) c), public.profile_card(:B)::text);
+select tests.lives('常去的館：舊版 App 換成清單裡的另一間', $q$select public.save_my_card(true, '嗨', '1-3', 'g3'::text, null)$q$);
+select tests.ok('常去的館：舊版 App 換成清單裡的另一間，就只留那一間（舊版畫面上只選著那一間）',
+  (select c -> 'home_gyms' = '["g3"]'::jsonb and c ->> 'home_gym' = 'g3' from public.profile_card(:B) c), public.profile_card(:B)::text);
 select tests.lives('常去的館：舊版 App 換成別間', $q$select public.save_my_card(true, '嗨', '1-3', 'g2'::text, null)$q$);
 select tests.ok('常去的館：舊版 App 換成別間就只有那一間', (select c -> 'home_gyms' = '["g2"]'::jsonb and c ->> 'home_gym' = 'g2' from public.profile_card(:B) c), public.profile_card(:B)::text);
 select tests.lives('常去的館：舊版 App 清空', $q$select public.save_my_card(true, '嗨', '1-3', null::text, null)$q$);

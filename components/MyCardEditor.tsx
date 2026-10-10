@@ -57,13 +57,15 @@ export default function MyCardEditor() {
   }
   if (!card) return <p className="text-note text-muted">讀取中…</p>;
   const selfDone = self.every((v) => v != null) ? (self as number[]) : null;
+  const multi = card.home_gyms != null;
 
   const save = async () => {
     if (self.some((v) => v != null) && !selfDone) return toast("自評要六項都選，或全部不選");
     setBusy(true);
     try {
-      await saveMyCard({ public: pub, bio, years, home_gyms: homes, self_stats: selfDone });
-      setCard({ ...card, public: pub, bio: bio.trim() || null, years, home_gym: homes[0] ?? null, home_gyms: homes, self_stats: selfDone });
+      const kept = await saveMyCard({ public: pub, bio, years, home_gyms: homes, self_stats: selfDone });
+      setHomes(kept);
+      setCard({ ...card, public: pub, bio: bio.trim() || null, years, home_gym: kept[0] ?? null, ...(multi ? { home_gyms: kept } : {}), self_stats: selfDone });
       toast(pub ? "已儲存，人物卡已公開" : "已儲存，人物卡只有你看得到");
       setEditing(false);
     } catch (e) {
@@ -74,7 +76,9 @@ export default function MyCardEditor() {
 
   const preview: ProfileCard = { ...card, years, home_gym: homes[0] ?? null, home_gyms: homes, bio: bio.trim() || null, self_stats: selfDone };
   // 常去的館可以複選：點一下選、再點一下取消，照場館順序排
-  const toggleHome = (id: string) => setHomes((hs) => GYMS.filter((g) => (g.id === id ? !hs.includes(id) : hs.includes(g.id))).map((g) => g.id));
+  // 資料庫還沒套用 step31（人物卡沒有 home_gyms）時只能存一間：維持單選，免得畫面上選了兩間卻只存一間
+  const toggleHome = (id: string) =>
+    setHomes((hs) => (!multi ? (hs[0] === id ? [] : [id]) : GYMS.filter((g) => (g.id === id ? !hs.includes(id) : hs.includes(g.id))).map((g) => g.id)));
 
   const cardView = (
     <SetBox>
@@ -121,7 +125,7 @@ export default function MyCardEditor() {
                 </Chip>
               ))}
             </ChipRow>
-            <Label>常去的館（選填，可複選）</Label>
+            <Label>{multi ? "常去的館（選填，可複選）" : "常去的館（選填）"}</Label>
             <ChipRow wrap>
               {GYMS.filter((g) => g.live).map((g) => (
                 <Chip key={g.id} pressed={homes.includes(g.id)} onClick={() => toggleHome(g.id)}>

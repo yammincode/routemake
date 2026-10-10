@@ -3,7 +3,7 @@
 -- - profiles.home_gyms：常去的館（可以好幾間），照場館順序存、不重複、只能是有的館；跟其他人物卡欄位一樣不開放直接讀寫
 -- - 原本的 home_gym 搬進來；home_gym 留著、永遠＝第一間，給還沒更新的舊版 App 讀
 -- - save_my_card 新版（p_home_gyms 好幾間）；舊版（p_home_gym 一間）照常可用：
---   舊版只認得一間館，存檔時那間本來就在清單裡就不動清單（不會洗掉在新版勾的其他館）；換成別間就只存那一間；清空就清空
+--   舊版只看得到第一間館；存回同一間（沒改館）就不動清單（不會洗掉在新版勾的其他館）；換成別間就只存那一間；清空就清空
 -- - profile_card 多回傳 home_gyms
 -- =====================================================================
 alter table public.profiles add column if not exists home_gyms text[] not null default '{}';
@@ -43,13 +43,16 @@ grant execute on function public.save_my_card(boolean, text, text, text[], small
 create or replace function public.save_my_card(p_public boolean, p_bio text, p_years text, p_home_gym text, p_self smallint[])
 returns void language plpgsql security definer set search_path = '' as $$
 declare
-  v_home text := nullif(p_home_gym, '');
-  v_now  text[];
+  v_home  text := nullif(p_home_gym, '');
+  v_now   text[];
+  v_first text;
 begin
   v_now := coalesce((select home_gyms from public.profiles where id = auth.uid()), '{}');
+  -- 舊版畫面上選著的那一間（跟 profile_card 回傳的 home_gym 一樣：照場館順序的第一間）
+  v_first := (select x.id from public.gyms x where x.id = any (v_now) order by x.sort, x.id limit 1);
   perform public.save_my_card(p_public, p_bio, p_years,
     case when v_home is null then '{}'::text[]
-         when v_home = any (v_now) then v_now
+         when v_home = v_first then v_now
          else array[v_home] end,
     p_self);
 end $$;

@@ -719,12 +719,17 @@ export async function getProfileCard(userId: string): Promise<ProfileCard> {
 }
 // 常去的館：新版有 home_gyms；資料庫還沒套用 step31 時只有一間 home_gym
 export const cardGyms = (c: Pick<ProfileCard, "home_gym" | "home_gyms">): string[] => c.home_gyms ?? (c.home_gym ? [c.home_gym] : []);
-export async function saveMyCard(c: { public: boolean; bio: string; years: string | null; home_gyms: string[]; self_stats: number[] | null }) {
+// 回傳實際存進去的館（畫面照這個顯示）
+export async function saveMyCard(c: { public: boolean; bio: string; years: string | null; home_gyms: string[]; self_stats: number[] | null }): Promise<string[]> {
   const base = { p_public: c.public, p_bio: c.bio, p_years: c.years, p_self: c.self_stats };
   const r = await supabase().rpc("save_my_card", { ...base, p_home_gyms: c.home_gyms });
-  // 資料庫還沒套用 step31（沒有收好幾間館的版本）：先存第一間
-  if (r.error?.code === "PGRST202") must(await supabase().rpc("save_my_card", { ...base, p_home_gym: c.home_gyms[0] ?? null }));
-  else must(r);
+  if (r.error?.code !== "PGRST202") {
+    must(r);
+    return c.home_gyms;
+  }
+  // 資料庫還沒套用 step31（沒有收好幾間館的版本）：只能存一間（編輯畫面這時是單選）
+  must(await supabase().rpc("save_my_card", { ...base, p_home_gym: c.home_gyms[0] ?? null }));
+  return c.home_gyms.slice(0, 1);
 }
 export async function clearCardBio(userId: string, gym: string) {
   must(await supabase().rpc("clear_card_bio", { p_user: userId, p_gym: gym }));
