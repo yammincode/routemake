@@ -23,7 +23,19 @@ export function TextArea({ className = "", ...rest }: ComponentProps<"textarea">
 }
 
 // 開關（原型 .sw2），可帶標題與說明
-export function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode; hint?: ReactNode }) {
+export function Toggle({
+  checked,
+  onChange,
+  label,
+  hint,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: ReactNode;
+  hint?: ReactNode;
+  disabled?: boolean;
+}) {
   return (
     <div className="flex items-center justify-between gap-3 py-3">
       <span>
@@ -34,8 +46,9 @@ export function Toggle({ checked, onChange, label, hint }: { checked: boolean; o
         role="switch"
         aria-checked={checked}
         aria-label={typeof label === "string" ? label : undefined}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
-        className="relative h-7 w-12 flex-none rounded-[14px] bg-line transition-colors duration-150 after:absolute after:top-[3px] after:left-[3px] after:size-[22px] after:rounded-full after:bg-white after:shadow-[0_1px_3px_rgba(0,0,0,.3)] after:transition-transform after:duration-150 aria-checked:bg-accent aria-checked:after:translate-x-5"
+        className="relative h-7 w-12 flex-none rounded-[14px] bg-line transition-colors duration-150 disabled:opacity-50 after:absolute after:top-[3px] after:left-[3px] after:size-[22px] after:rounded-full after:bg-white after:shadow-[0_1px_3px_rgba(0,0,0,.3)] after:transition-transform after:duration-150 aria-checked:bg-accent aria-checked:after:translate-x-5"
       />
     </div>
   );

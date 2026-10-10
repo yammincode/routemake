@@ -289,6 +289,7 @@ const clock1 = (s: number) => {
 
 // 剪輯長度（分享影片前）：上面預覽（拉哪一條就跳到那個位置；▶ 播放選的這段），中間時間軸畫出選的範圍，
 // 下面「開始」「結束」兩條拉桿（－／＋ 每次 0.5 秒）；最多 max 秒、最少 1 秒，拉一條超過上限時另一條跟著移
+// 結束不會超過影片長度（拉到最右邊就是到最後）；disabled：處理中不能再改（改了也不會用到）
 export function VideoTrim({
   src,
   duration,
@@ -296,6 +297,7 @@ export function VideoTrim({
   end,
   max,
   onChange,
+  disabled = false,
 }: {
   src?: string; // 沒有網址時顯示黑色預留框（展示頁用）
   duration: number;
@@ -303,6 +305,7 @@ export function VideoTrim({
   end: number;
   max: number;
   onChange: (start: number, end: number) => void;
+  disabled?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -315,12 +318,14 @@ export function VideoTrim({
     setPlaying(false);
     v.currentTime = t;
   };
+  // 四捨五入後不超過影片長度；離最後不到 0.1 秒就是到最後
+  const endAt = (t: number) => (t >= duration - 0.1 ? duration : Math.min(duration, r1(t)));
   const set = (which: "start" | "end", t: number) => {
     let s = which === "start" ? r1(Math.min(Math.max(0, t), duration - MIN)) : start;
-    let e = which === "end" ? r1(Math.min(Math.max(MIN, t), duration)) : end;
+    let e = which === "end" ? endAt(Math.max(MIN, t)) : end;
     if (which === "start") {
-      if (e - s > max) e = r1(s + max);
-      if (e - s < MIN) e = r1(Math.min(duration, s + MIN));
+      if (e - s > max) e = endAt(s + max);
+      if (e - s < MIN) e = endAt(s + MIN);
     } else {
       if (e - s > max) s = r1(e - max);
       if (e - s < MIN) s = r1(Math.max(0, e - MIN));
@@ -342,8 +347,9 @@ export function VideoTrim({
       </label>
       <button
         aria-label={`${label}往前 0.5 秒`}
+        disabled={disabled}
         onClick={() => set(which, value - 0.5)}
-        className="grid size-9 flex-none place-items-center rounded-full border border-line text-[18px]"
+        className="grid size-9 flex-none place-items-center rounded-full border border-line text-[18px] disabled:opacity-40"
       >
         −
       </button>
@@ -354,13 +360,15 @@ export function VideoTrim({
         max={duration}
         step={0.1}
         value={value}
+        disabled={disabled}
         onChange={(e) => set(which, +e.target.value)}
         className="min-w-0 flex-1 accent-[var(--accent)]"
       />
       <button
         aria-label={`${label}往後 0.5 秒`}
+        disabled={disabled}
         onClick={() => set(which, value + 0.5)}
-        className="grid size-9 flex-none place-items-center rounded-full border border-line text-[18px]"
+        className="grid size-9 flex-none place-items-center rounded-full border border-line text-[18px] disabled:opacity-40"
       >
         ＋
       </button>
@@ -379,8 +387,10 @@ export function VideoTrim({
           aria-label="剪輯預覽"
           onLoadedMetadata={(e) => (e.currentTarget.currentTime = start)}
           onTimeUpdate={(e) => {
-            if (playing && e.currentTarget.currentTime >= end) seek(end);
+            if (playing && e.currentTarget.currentTime >= Math.min(end, duration) - 0.02) seek(end);
           }}
+          onEnded={() => setPlaying(false)}
+          onPause={() => setPlaying(false)}
           className="aspect-video w-full rounded-cell bg-black object-contain"
         />
       ) : (

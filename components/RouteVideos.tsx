@@ -65,6 +65,7 @@ export default function RouteVideos({
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [squeeze, setSqueeze] = useState<number | null>(null); // 壓縮（剪輯）進度 0–1
+  const [editing, setEditing] = useState(false); // 正在處理的是剪輯（按鈕寫「剪輯中」）還是只有壓縮
   // 剪輯：手機能重新錄影（compressType）而且讀得到長度才能剪；trim null＝不剪；超過上限一定要剪
   const [dur, setDur] = useState<number | null>(null);
   const [trim, setTrim] = useState<[number, number] | null>(null);
@@ -132,7 +133,7 @@ export default function RouteVideos({
   };
 
   // 有剪（選的不是整支）或靜音才要剪輯
-  const trimmed = !!trim && dur != null && (trim[0] > 0.05 || trim[1] < dur - 0.05);
+  const trimmed = !!trim && dur != null && (trim[0] > 0.05 || trim[1] < dur - 0.1);
   const edit: VideoEdit | undefined = editable && (trimmed || mute) ? { start: trimmed ? trim![0] : 0, end: trimmed ? trim![1] : dur!, mute } : undefined;
   const upload = async () => {
     if (!session || !file || !consent) return;
@@ -142,6 +143,7 @@ export default function RouteVideos({
       // 要在點擊當下直接開始，iPhone 才允許播放
       const willSqueeze = !!edit || (file.size >= compressMinBytes() && !!compressType());
       if (willSqueeze) setSqueeze(0);
+      setEditing(!!edit);
       const small = willSqueeze ? await compressVideo(file, setSqueeze, edit) : null;
       setSqueeze(null);
       if (edit && !small) throw new Error(trimmed ? "剪輯沒有成功，請再試一次，或先在手機相簿剪短再分享" : "靜音沒有成功，請再試一次");
@@ -256,7 +258,7 @@ export default function RouteVideos({
                   {trim ? (
                     <>
                       {dur! > max + 0.5 && <p className="mt-2 mb-0 text-note text-warn">影片 {Math.round(dur!)} 秒，最長 {max} 秒：拉下面的開始、結束選要分享的那一段</p>}
-                      <VideoTrim src={preview} duration={dur!} start={trim[0]} end={trim[1]} max={max} onChange={(a, b) => setTrim([a, b])} />
+                      <VideoTrim src={preview} duration={dur!} start={trim[0]} end={trim[1]} max={max} onChange={(a, b) => setTrim([a, b])} disabled={busy} />
                       {dur! <= max + 0.5 && !busy && <LinkButton onClick={() => setTrim(null)}>不剪了，分享整支</LinkButton>}
                     </>
                   ) : (
@@ -264,7 +266,7 @@ export default function RouteVideos({
                       ✂ 剪輯長度
                     </Button>
                   )}
-                  <Toggle checked={mute} onChange={setMute} label="靜音" hint="不放影片的聲音（例如館內音樂、旁邊的人聊天）" />
+                  <Toggle checked={mute} onChange={setMute} label="靜音" hint="不放影片的聲音（例如館內音樂、旁邊的人聊天）" disabled={busy} />
                 </>
               )}
               <Label htmlFor="vcap">一句說明（選填）</Label>
@@ -295,7 +297,7 @@ export default function RouteVideos({
                 </Link>
               </Check>
               <Button variant="primary" className="mt-3.5" disabled={!consent || busy} onClick={upload}>
-                {squeeze != null ? `${edit ? "剪輯中" : "壓縮中"} ${Math.round(squeeze * 100)}%，請不要關閉畫面…` : busy ? "上傳中，請不要關閉畫面…" : "分享影片"}
+                {squeeze != null ? `${editing ? "剪輯中" : "壓縮中"} ${Math.round(squeeze * 100)}%，請不要關閉畫面…` : busy ? "上傳中，請不要關閉畫面…" : "分享影片"}
               </Button>
               {!busy && <LinkButton onClick={reset}>取消</LinkButton>}
             </>

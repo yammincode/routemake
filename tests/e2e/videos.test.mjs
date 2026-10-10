@@ -213,7 +213,7 @@ test("影片上傳前先壓縮成 720p（顯示進度），檔案變小、記錄
   await c.waitForFunction(() => /壓縮中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
   assert.match(await c.textContent("[role=dialog]"), /壓縮中 \d+%，請不要關閉畫面/, "顯示壓縮進度");
   await c.waitForFunction(() => !document.body.textContent.includes("壓縮中"), null, { timeout: 20000 });
-  await c.waitForTimeout(1500);
+  await c.waitForFunction(() => document.body.textContent.includes("已分享影片"), null, { timeout: 20000 });
   assert.equal(mock.db.videos.length, 1, "上傳完成");
   const v = mock.db.videos[0];
   const sent = mock.db.vfiles[v.path].buf;
@@ -444,8 +444,11 @@ test("影片剪輯：太長的自動打開剪輯、只上傳選的那段，可�
     await dialog.locator("input[type=checkbox]").check();
     await dialog.locator('button:text-is("分享影片")').click();
     await page.waitForFunction(() => /剪輯中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
+    // 處理中：靜音、剪輯都不能再改（改了也不會用到）
+    assert.ok(await dialog.locator('button[role=switch][aria-label="靜音"]').isDisabled(), "處理中不能切靜音");
+    assert.ok(await dialog.locator('button[aria-label="開始往後 0.5 秒"]').isDisabled(), "處理中不能改剪輯");
     await page.waitForFunction(() => !document.body.textContent.includes("剪輯中"), null, { timeout: 20000 });
-    await page.waitForTimeout(1500);
+    await page.waitForFunction(() => document.body.textContent.includes("已分享影片"), null, { timeout: 20000 });
   };
 
   // 1. 上限 3 秒、影片 5 秒：自動打開剪輯，先選前 3 秒，不能「不剪」；開始往後 1 秒 → 1–3 秒；靜音

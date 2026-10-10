@@ -643,6 +643,9 @@ export default function DesignShowcase() {
         <p className="mt-3 mb-0 text-meta text-muted">剪輯長度（VideoTrim）：影片超過 60 秒自動打開；拉開始、結束，最長 60 秒；下面靜音用 Toggle</p>
         <VideoTrim duration={80} start={trimDemo[0]} end={trimDemo[1]} max={60} onChange={(a, b) => setTrimDemo([a, b])} />
         <Toggle checked={muteDemo} onChange={setMuteDemo} label="靜音" hint="不放影片的聲音（例如館內音樂、旁邊的人聊天）" />
+        <p className="mt-3 mb-0 text-meta text-muted">處理中（disabled）：剪輯拉桿、靜音都不能再改</p>
+        <VideoTrim duration={80} start={trimDemo[0]} end={trimDemo[1]} max={60} onChange={() => {}} disabled />
+        <Toggle checked={muteDemo} onChange={() => {}} label="靜音" disabled />
         <Label>你的身高（公分，選填）— OptionGrid cols 4，再按一次取消</Label>
         <OptionGrid cols={4} options={HEIGHT_BANDS} value={pickHeight} onChange={setPickHeight} />
         <Label>動作（選填）— OptionGrid cols 2，有小字說明</Label>
