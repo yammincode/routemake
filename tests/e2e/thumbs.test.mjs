@@ -24,7 +24,7 @@ test("照片縮圖：上傳自動產生、舊照片用原圖、後台補齊", as
   s.on("request", (r) => r.url().includes("/zone-photos/") && asked.push(new URL(r.url()).pathname.split("/").pop()));
   await s.goto(BASE + "/gym/mingde", { waitUntil: "networkidle" });
   await s.waitForTimeout(800);
-  const card = s.locator("main button", { hasText: "B1 區" }).locator("img");
+  const card = s.locator("main button.rounded-card", { hasText: "B1 區" }).locator("img");
   await card.scrollIntoViewIfNeeded();
   await s.waitForTimeout(800);
   assert.ok(asked.includes("B1-1.thumb.jpg"), "列表先要縮圖");

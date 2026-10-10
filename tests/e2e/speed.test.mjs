@@ -81,7 +81,7 @@ test("點區域：手機裡有上次的資料就直接畫出來，不用等網�
   await page.waitForTimeout(1500);
   assert.ok(rsc.length > 0, "館首頁先預抓區域頁");
   // 第一次進區域（存下資料）→ 回館首頁
-  await page.locator("main button", { hasText: "A1 區" }).first().click();
+  await page.locator("main button.rounded-card", { hasText: "A1 區" }).first().click();
   await page.waitForURL("**/zone?id=**");
   await page.waitForTimeout(800);
   await page.goBack();
@@ -101,7 +101,7 @@ test("點區域：手機裡有上次的資料就直接畫出來，不用等網�
     }).observe(document.body, { childList: true, subtree: true, characterData: true });
   });
   const t0 = Date.now();
-  await page.locator("main button", { hasText: "A1 區" }).first().click();
+  await page.locator("main button.rounded-card", { hasText: "A1 區" }).first().click();
   await page.locator("main ul li", { hasText: "A1-02" }).waitFor({ timeout: 2500 });
   const ms = Date.now() - t0;
   assert.ok(ms < 2000, `資料庫還沒回應就先畫出上次的路線（${ms} ms）`);
