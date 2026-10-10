@@ -192,7 +192,8 @@ export function createMock() {
   const base = (g) => (g >= 100 ? db.scoring.yds_points[g - 100] : g < 0 ? db.scoring.vb_points : db.scoring.grade_points[g]);
   const rawPoints = (r) => base(r.grade) * (100 + Math.min(db.scoring.max_style_bonus, r.style_tags.reduce((s, t) => s + (db.scoring.style_bonus[t] || 0), 0)));
   // 長耐力路線：照順序標的點數（其他路線 0）
-  const seqN = (r) => (r && !r.name && r.holds?.length >= 2 && zoneOf(r.zone_id)?.grade_system === "endurance" ? r.holds.length : 0);
+  // 長耐力路線：看路線本身（岩館路線、沒有名稱、有照順序的點），不看區域現在的規則（同 ascents_before_write）
+  const seqN = (r) => (r && (r.kind ?? "gym") === "gym" && !r.name && r.holds?.length >= 2 ? r.holds.length : 0);
   const points = (a) => {
     const r = db.routes.find((x) => x.id === a.route_id);
     if (a.status === "send") return Math.round(rawPoints(r) / 100);
@@ -639,15 +640,20 @@ export function createMock() {
           if (body.climbed_on > taipeiDay(0)) return bad("日期不能晚於今天");
           if (rt.archived_at && body.climbed_on > tpe(rt.archived_at)) return bad("日期不能晚於路線下架日");
         }
-        // 同 ascents_before_write：長耐力 Flash、完攀＝最後一點；嘗試中要小於最後一點；其他路線沒有最高點
+        // 同 ascents_before_write（upsert 改到舊紀錄時，檢查的是合併後的整筆：沒送的欄位留著舊的）：
+        // 長耐力 Flash、完攀＝最後一點；嘗試中要小於最後一點（從 Flash／完攀改回來、沒選最高點就清掉）；其他路線沒有最高點
+        const ex = mine.find((a) => a.route_id === body.route_id);
+        const row = { ...ex, ...body };
         const n = seqN(rt);
         if (n) {
-          if (body.status !== "project") body.highpoint = n;
-          else if (body.highpoint != null && body.highpoint >= n) return J(route, 400, { code: "22023", message: `爬到最後一點就是完攀，最高點要小於 ${n}` });
-        } else body.highpoint = null;
-        const ex = mine.find((a) => a.route_id === body.route_id);
-        if (ex) Object.assign(ex, body, { updated_at: now() });
-        else db.ascents.push({ id: uuid(), updated_at: now(), ...body, user_id: uid });
+          if (row.status !== "project") row.highpoint = n;
+          else if (row.highpoint != null && row.highpoint >= n) {
+            if (ex && ex.status !== "project" && row.highpoint === ex.highpoint) row.highpoint = null;
+            else return J(route, 400, { code: "22023", message: `爬到最後一點就是完攀，最高點要小於 ${n}` });
+          }
+        } else row.highpoint = null;
+        if (ex) Object.assign(ex, row, { updated_at: now() });
+        else db.ascents.push({ id: uuid(), updated_at: now(), ...row, user_id: uid });
         return empty(route, 201);
       }
       if (m === "DELETE") { const del = filt(mine, sp); db.ascents = db.ascents.filter((a) => !del.includes(a)); return empty(route); }

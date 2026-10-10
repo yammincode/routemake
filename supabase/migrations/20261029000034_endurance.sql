@@ -121,7 +121,6 @@ language plpgsql set search_path = '' as $$
 declare
   v_created  date;
   v_archived date;
-  v_sys      text;
   v_n        int;
 begin
   if tg_op = 'UPDATE' and (new.user_id is distinct from old.user_id or new.route_id is distinct from old.route_id) then
@@ -138,14 +137,20 @@ begin
   end if;
 
   -- 長耐力路線：記錄最高爬到第幾點。Flash、完攀＝爬到最後一點；嘗試中是第 1 點到倒數第 2 點（沒填也可以，算 0 分）
-  select z.grade_system, jsonb_array_length(r.holds) into v_sys, v_n
-    from public.routes r join public.zones z on z.id = r.zone_id
-   where r.id = new.route_id and r.kind = 'gym';
-  if v_sys = 'endurance' and v_n is not null then
+  -- 看路線本身（岩館路線、沒有名稱、有照順序的點），不看區域現在的規則：區域換線後改回抱石／上攀，舊紀錄照樣保留最高點
+  select case when jsonb_typeof(r.holds) = 'array' then jsonb_array_length(r.holds) end into v_n
+    from public.routes r
+   where r.id = new.route_id and r.kind = 'gym' and r.name is null;
+  if v_n >= 2 then
     if new.status in ('flash', 'send') then
       new.highpoint := v_n;
     elsif new.highpoint is not null and new.highpoint >= v_n then
-      raise exception '爬到最後一點就是完攀，最高點要小於 %', v_n using errcode = '22023';
+      -- 從 Flash／完攀改回嘗試中、沒有另外選最高點（留著原本的最後一點）：清掉，等顧客重新拉
+      if tg_op = 'UPDATE' and old.status <> 'project' and new.highpoint = old.highpoint then
+        new.highpoint := null;
+      else
+        raise exception '爬到最後一點就是完攀，最高點要小於 %', v_n using errcode = '22023';
+      end if;
     end if;
   else
     new.highpoint := null;

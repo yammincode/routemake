@@ -1178,6 +1178,13 @@ select tests.ok('長耐力：改成完攀的指令執行了', tests.rows(format(
 select tests.ok('長耐力：完攀自動記成最後一點', (select highpoint from public.ascents where route_id = (select v from ids where k = 'en1') and user_id = :A) = 5);
 select tests.ok('長耐力：完攀得分照舊（+17）',
   (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'total')::int = :en_before + 17);
+-- App 用 upsert 存紀錄：沒送的欄位留著舊的。完攀改回嘗試中、沒選最高點時，舊的「最後一點」要清掉，不能整筆存不進去
+select tests.lives('長耐力：完攀改回嘗試中（沒有一起送最高點）可以存',
+  format($q$insert into public.ascents (route_id, status) values (%L, 'project') on conflict (user_id, route_id) do update set status = excluded.status$q$, (select v from ids where k = 'en1')));
+select tests.ok('長耐力：改回嘗試中後，原本的最後一點清掉（等重新拉）',
+  (select status = 'project' and highpoint is null from public.ascents where route_id = (select v from ids where k = 'en1') and user_id = :A));
+select tests.ok('長耐力：重新拉到第 4 點', tests.rows(format('update public.ascents set highpoint = 4 where route_id = %L', (select v from ids where k = 'en1'))) = 1);
+select tests.throws('長耐力：本來就是嘗試中，最高點還是不能填最後一點', format('update public.ascents set highpoint = 5 where route_id = %L', (select v from ids where k = 'en1')));
 reset role;
 set role authenticated; select tests.login(:B);
 select tests.ok('長耐力：一般路線填最高點的指令執行了', tests.rows('update public.ascents set highpoint = 3') >= 1);
@@ -1190,6 +1197,17 @@ select tests.ok('長耐力：沒人記錄過的路線可以改點', tests.rows(f
 select tests.ok('長耐力：改點後起步點跟著第 1 點', (select pin_x = 5 and jsonb_array_length(holds) = 3 from public.routes where id = (select v from ids where k = 'en2')));
 select tests.throws('長耐力：還有路線時不能改回抱石', $q$update public.zones set grade_system = 'v' where gym_id = 'g2' and code = 'TR'$q$);
 select tests.throws('長耐力：抱石區還是不能有點', format($q$insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, holds) values (%L, 3, '紅', 1, 1, '[{"x":1,"y":1},{"x":2,"y":2}]')$q$, (select v from ids where k = 'zoneG2')));
+-- 整區換線後改回上攀：舊路線的紀錄照樣保留最高點和比例分數（看路線本身，不看區域現在的規則）
+select tests.ok('長耐力：整區換線', public.archive_zone((select v from ids where k = 'zoneEN')) = 2);
+select tests.lives('長耐力：沒有路線了可以改回上攀', $q$update public.zones set grade_system = 'yds' where gym_id = 'g2' and code = 'TR'$q$);
+reset role;
+set role authenticated; select tests.login(:A);
+select (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'total')::int as en_after \gset
+select tests.ok('長耐力：區域改回上攀後，改舊紀錄的心得的指令執行了',
+  tests.rows(format('update public.ascents set private_note = ''手很酸'' where route_id = %L', (select v from ids where k = 'en1'))) = 1);
+select tests.ok('長耐力：區域改回上攀後，舊紀錄的最高點還在', (select highpoint from public.ascents where route_id = (select v from ids where k = 'en1') and user_id = :A) = 4);
+select tests.ok('長耐力：區域改回上攀後，舊紀錄的比例分數還在',
+  (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'total')::int = :en_after);
 reset role;
 
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),

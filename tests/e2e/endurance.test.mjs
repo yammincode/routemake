@@ -54,9 +54,23 @@ test("長耐力：店長切換規則、照順序點岩點新增（不選顏色�
   assert.ok((await sheet.textContent()).includes("已標 1 點"), "剛剛點的就是第 1 點");
   const photo = sheet.locator(`img[alt="訓練區照片"]`);
   for (let i = 1; i <= 5; i++) await tap(photo, 0.1 + i * 0.13, 0.65 - i * 0.05);
-  assert.ok((await sheet.textContent()).includes("已標 6 點"));
-  await sheet.locator('button:text-is("復原上一點")').click();
-  assert.ok((await sheet.textContent()).includes("已標 5 點"), "復原上一點");
+  const marked = async () => +(await sheet.textContent()).match(/已標 (\d+) 點/)[1];
+  const spots = () => sheet.locator('button[aria-label$="（點一下刪除）"]').evaluateAll((bs) => bs.map((b) => `${b.style.left},${b.style.top}`));
+  assert.equal(await marked(), 6);
+  const six = await spots();
+  // 點圈圈刪掉第 3 點，按「復原」放回原位
+  await sheet.locator('button[aria-label="第 3 點（點一下刪除）"]').click();
+  assert.equal(await marked(), 5, "點圈圈刪掉那一點");
+  await sheet.locator('button:has-text("復原")').click();
+  assert.deepEqual(await spots(), six, "復原：刪掉的第 3 點回到原本的順序");
+  // 點在號碼上＝點在照片上：加下一點，不會刪掉那一點
+  const badge = await sheet.locator('button[aria-label="第 5 點（點一下刪除）"] span').boundingBox();
+  await m.mouse.click(badge.x + badge.width / 2, badge.y + badge.height / 2);
+  assert.equal(await marked(), 7, "點號碼加下一點");
+  assert.deepEqual((await spots()).slice(0, 6), six, "前面的點都還在");
+  await sheet.locator('button:has-text("復原")').click();
+  await sheet.locator('button:has-text("復原")').click();
+  assert.equal(await marked(), 5, "復原上一步（加的點拿掉）");
   await sheet.locator('button:text-is("5.11a")').click();
   await sheet.locator('button:has-text("新增路線（5 點）")').click();
   await m.waitForTimeout(800);
@@ -75,7 +89,7 @@ test("長耐力：店長切換規則、照順序點岩點新增（不選顏色�
   await sheet.waitFor();
   await m.waitForTimeout(500);
   assert.ok((await sheet.textContent()).includes("已經有人記錄過，點不能改"));
-  assert.equal(await sheet.locator('button:text-is("復原上一點")').count(), 0);
+  assert.equal(await sheet.locator('button:has-text("復原")').count(), 0);
   assert.deepEqual(errors, []);
 });
 
@@ -127,6 +141,62 @@ test("長耐力：顧客記錄最高爬到第幾點、照比例算分、完攀�
   assert.equal(a()?.status, "send");
   assert.equal(a()?.highpoint, 10, "完攀＝最後一點");
   assert.ok((await c.locator("[role=status]").last().textContent()).includes("完攀 +17 分"));
+
+  // 重新打開（已完攀）、按錯改回嘗試中：存得進去，原本的最後一點清掉，等重新拉
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(500);
+  await row.click();
+  await sheet.waitFor();
+  await sheet.locator('button:has-text("嘗試中")').click();
+  await c.waitForTimeout(800);
+  assert.equal(a()?.status, "project", "完攀改回嘗試中");
+  assert.equal(a()?.highpoint ?? null, null, "最高點清掉");
+  assert.ok((await c.locator("[role=status]").last().textContent()).includes("拉下面的桿子"));
+  // 拉了桿子馬上按完攀（還沒等到自動存）：完攀不會被蓋回嘗試中
+  await sheet.locator('button[aria-label="多一點"]').click();
+  await sheet.locator('button:has-text("完攀")').click();
+  await c.waitForTimeout(1500);
+  assert.equal(a()?.status, "send", "完攀不會被剛剛拉的桿子蓋掉");
+  assert.equal(a()?.highpoint, 10);
+  assert.deepEqual(errors, []);
+});
+
+test("長耐力：館首頁「最新路線」打開也有照片和點；下架後區域換了照片，我的紀錄不畫對不上的點", async () => {
+  const { mock, z } = setup();
+  const uid = mock.addUser("climber88", "password1", { nickname: "小安" });
+  const r = addEndurance(mock, z, 10);
+  const { page: c, errors } = await phone(browser, mock);
+  await login(c, "climber88", "password1", "/gym/g2");
+  await c.waitForTimeout(1000);
+  await c.locator("main button", { hasText: "訓練區" }).filter({ hasText: "設定" }).first().click();
+  const sheet = c.locator("[role=dialog]");
+  await sheet.waitFor();
+  assert.equal(await sheet.locator('img[alt$="10 個點"]').count(), 1, "最新路線打開也有照片和點");
+  await c.keyboard.press("Escape");
+
+  // 嘗試中爬到第 3 點，路線下架（整區換線）
+  mock.db.ascents.push({ id: "a-en", user_id: uid, route_id: r.id, status: "project", climbed_on: new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date()), feel: null, grade_feel: null, private_note: null, highpoint: 3, updated_at: new Date().toISOString() });
+  r.archived_at = new Date(Date.now() - 60_000).toISOString();
+  const open = async () => {
+    await c.goto(BASE + "/me", { waitUntil: "networkidle" });
+    await c.waitForTimeout(1000);
+    await c.locator("main ul li button", { hasText: r.code }).click();
+    await sheet.waitFor();
+    await c.waitForTimeout(300);
+    const n = await sheet.locator('img[alt$="10 個點"]').count();
+    await c.keyboard.press("Escape");
+    return n;
+  };
+  // 照片是下架前上傳的：點對得上，照畫
+  const before = `g2/zones/TR-${Date.now() - 3_600_000}.jpg`;
+  mock.db.files[before] = mock.db.files[z.photo_path];
+  z.photo_path = before;
+  assert.equal(await open(), 1, "照片沒換：照畫點");
+  // 下架後換了新照片：舊路線的點對不上，不畫
+  const after = `g2/zones/TR-${Date.now()}.jpg`;
+  mock.db.files[after] = mock.db.files[before];
+  z.photo_path = after;
+  assert.equal(await open(), 0, "換了新照片：不畫對不上的點");
   assert.deepEqual(errors, []);
 });
 

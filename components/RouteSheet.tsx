@@ -186,9 +186,15 @@ function RouteBody({
     },
     []
   );
+  // 改狀態、儲存、清除紀錄前：還沒送出的最高點不送了（不然 0.7 秒後會把剛記的完攀蓋回嘗試中、或把清掉的紀錄寫回來）
+  const dropHp = () => {
+    if (hpTimer.current) clearTimeout(hpTimer.current);
+    hpTimer.current = null;
+    hpPending.current = null;
+  };
   const pickHp = (v: number) => {
     setHp(v);
-    if (hpTimer.current) clearTimeout(hpTimer.current);
+    dropHp();
     // 爬得比上次高：日期改成今天（分數算在進步那天）；自己改過日期就照改的
     const better = v > (opened.hp ?? 0) && date === opened.date;
     const day = better ? (todayYmd() > maxDate ? maxDate : todayYmd()) : date;
@@ -211,6 +217,7 @@ function RouteBody({
       setDetails(true);
       return;
     }
+    dropHp();
     // 上次記「嘗試中」、這次爬完：日期改成今天（不然分數會記到第一次嘗試那天）
     // 自己改過日期就照改的；已下架的路線不超過下架那天（資料庫會擋）
     const wasProject = opened.status === "project" && s !== "project";
@@ -238,6 +245,7 @@ function RouteBody({
 
   const save = async () => {
     if (!status) return;
+    dropHp();
     await persist(current(status), "已儲存紀錄");
     setDetails(false);
   };
@@ -245,6 +253,7 @@ function RouteBody({
   // 清除紀錄要按兩次：心得會一起刪掉，不能復原
   const clear = async () => {
     if (!confirmClear) return setConfirmClear(true);
+    dropHp();
     setBusy(true);
     try {
       await clearAscent(r.id);

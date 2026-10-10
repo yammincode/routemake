@@ -74,6 +74,17 @@ function Body({
   // 長耐力的點：新增時第 1 點就是剛剛點的位置
   const startHolds = r?.holds?.map(({ x, y }) => ({ x, y })) ?? ("x" in target ? [{ x: +target.x.toFixed(2), y: +target.y.toFixed(2) }] : []);
   const [holds, setHolds] = useState(startHolds);
+  // 改點的每一步（加一點、刪一點、全部清除）都記下來，「復原」退回上一步
+  const [past, setPast] = useState<{ x: number; y: number }[][]>([]);
+  const editHolds = (next: { x: number; y: number }[]) => {
+    setPast((p) => [...p, holds]);
+    setHolds(next);
+  };
+  const undo = () => {
+    if (!past.length) return;
+    setHolds(past[past.length - 1]);
+    setPast((p) => p.slice(0, -1));
+  };
   const [locked, setLocked] = useState(false);
   const [tags, setTags] = useState<string[]>(r?.style_tags ?? []);
   const [note, setNote] = useState(r?.setter_note ?? "");
@@ -104,7 +115,7 @@ function Body({
   const addPoint = (x: number, y: number) => {
     if (locked) return toast("已經有人記錄過這條路線，點不能再改");
     if (holds.length >= MAX_POINTS) return toast(`最多 ${MAX_POINTS} 點`);
-    setHolds((hs) => [...hs, { x: +x.toFixed(2), y: +y.toFixed(2) }]);
+    editHolds([...holds, { x: +x.toFixed(2), y: +y.toFixed(2) }]);
   };
 
   const save = async () => {
@@ -163,7 +174,7 @@ function Body({
           <Label>照順序點岩點（最多 {MAX_POINTS} 點）</Label>
           {photo ? (
             <WallPhoto src={photo} alt={`${zone.name}照片`} setter={!locked} onPick={addPoint}>
-              <NumberMarks holds={holds} onTap={locked ? undefined : (i) => setHolds((hs) => hs.filter((_, j) => j !== i))} />
+              <NumberMarks holds={holds} onTap={locked ? undefined : (i) => editHolds(holds.filter((_, j) => j !== i))} />
             </WallPhoto>
           ) : (
             <p className="mt-0 text-meta text-muted">這區還沒有照片，請先上傳照片再標點。</p>
@@ -175,10 +186,10 @@ function Body({
             </span>
             {!locked && (
               <span className="flex flex-none gap-1">
-                <button disabled={!holds.length} onClick={() => setHolds((hs) => hs.slice(0, -1))} className="px-1 py-1 font-bold text-accent disabled:opacity-40">
-                  復原上一點
+                <button disabled={!past.length} onClick={undo} className="px-1 py-1 font-bold text-accent disabled:opacity-40">
+                  ↶ 復原
                 </button>
-                <button disabled={!holds.length} onClick={() => setHolds([])} className="px-1 py-1 text-warn disabled:opacity-40">
+                <button disabled={!holds.length} onClick={() => editHolds([])} className="px-1 py-1 text-warn disabled:opacity-40">
                   全部清除
                 </button>
               </span>

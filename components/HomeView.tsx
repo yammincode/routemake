@@ -262,9 +262,11 @@ export default function HomeView({ gymId }: { gymId: string }) {
         <Empty>這週還沒有新路線。</Empty>
       )}
 
+      {/* 長耐力路線：卡片上放區域照片和照順序的點（顧客才知道第幾點是哪顆） */}
       <RouteSheet
         route={open}
         zoneName={open?.zone_name ?? ""}
+        photo={open && seqTotal(open) ? photoUrl(zones.find((z) => z.zone_id === open.zone_id)?.photo_path ?? null) : null}
         gymId={gymId}
         gymCommentsOn={gym?.comments_enabled ?? true}
         ascent={open ? (ascents[open.id] ?? null) : null}

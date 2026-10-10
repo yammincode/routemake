@@ -63,8 +63,10 @@ export type Ascent = {
 // 長耐力路線：照順序標的點（holds 2–50 個，第 1 點是起步點）；Spray Wall 的路線不算
 export const seqTotal = (r: Pick<Route, "holds" | "name">): number => (!r.name && r.holds && r.holds.length >= 2 ? r.holds.length : 0);
 // 資料庫還沒套用 step30（ascents 沒有 highpoint 欄位）：讀寫紀錄時自動退回原本的欄位
+// 沒有欄位時先記住一分鐘（不用每次都多問一次）；過了再試，店長中途套用 step30 不用重開 App 也會讀到最高點
 const NO_COLUMN = new Set(["42703", "PGRST204"]);
-let hasHighpoint = true;
+let noHighpointAt = 0;
+const hasHighpoint = () => Date.now() - noHighpointAt > 60_000;
 export type Comment = {
   id: string;
   route_id: string;
@@ -97,6 +99,11 @@ function must<T>(r: { data: T | null; error: { message?: string; code?: string }
 
 export const photoUrl = (path: string | null) =>
   path ? supabase().storage.from("zone-photos").getPublicUrl(path).data.publicUrl : null;
+// 長耐力路線卡片的照片：下架後區域換了新照片（檔名裡的上傳時間晚於下架），舊路線的點對不上新照片，就不畫
+export const seqPhotoUrl = (r: Pick<Route, "archived_at">, path: string | null) => {
+  const uploaded = Number(path?.match(/-(\d{13})\.jpg$/i)?.[1] ?? 0);
+  return r.archived_at && uploaded > Date.parse(r.archived_at) ? null : photoUrl(path);
+};
 // 小縮圖（約 720 寬、幾十 KB）：跟原圖放在一起，檔名多 .thumb；舊照片還沒有縮圖時畫面會自動改用原圖
 export const THUMB_WIDTH = 720;
 export const thumbPath = (path: string) => path.replace(/\.jpg$/i, ".thumb.jpg");
@@ -224,9 +231,10 @@ export async function setUsageViewer(userId: string, gym: string, on: boolean) {
 export async function getMyAscents(routeIds: string[]): Promise<Record<string, Ascent>> {
   if (!routeIds.length) return {};
   const cols: string = "id,route_id,status,climbed_on,feel,grade_feel,private_note";
-  let r = await supabase().from("ascents").select(hasHighpoint ? `${cols},highpoint` : cols).in("route_id", routeIds);
-  if (hasHighpoint && NO_COLUMN.has(r.error?.code ?? "")) {
-    hasHighpoint = false;
+  const high = hasHighpoint();
+  let r = await supabase().from("ascents").select(high ? `${cols},highpoint` : cols).in("route_id", routeIds);
+  if (high && NO_COLUMN.has(r.error?.code ?? "")) {
+    noHighpointAt = Date.now();
     r = await supabase().from("ascents").select(cols).in("route_id", routeIds);
   }
   const rows = must(r) as unknown as Ascent[];
@@ -258,8 +266,9 @@ export async function getCommentCounts(routeIds: string[]): Promise<Record<strin
 // ---------- 顧客：紀錄與留言 ----------
 export async function saveAscent(userId: string, routeId: string, a: Omit<Ascent, "id" | "route_id">) {
   // 只有長耐力路線才送最高點（資料庫還沒套用 step30 時，送了不存在的欄位會整筆存不進去）
+  // 長耐力的嘗試中沒選最高點也要送 null：不然從完攀改回嘗試中時，資料庫會留著原本的最後一點
   const { highpoint, ...rest } = a;
-  const row = highpoint != null ? { ...rest, highpoint } : rest;
+  const row = highpoint !== undefined ? { ...rest, highpoint } : rest;
   must(
     await supabase()
       .from("ascents")
@@ -460,9 +469,10 @@ export async function getMonthAscents(year: number, month: number): Promise<Mont
       .lt("climbed_on", next)
       .order("climbed_on", { ascending: false })
       .order("updated_at", { ascending: false });
-  let res = await query(hasHighpoint);
-  if (hasHighpoint && NO_COLUMN.has(res.error?.code ?? "")) {
-    hasHighpoint = false;
+  const high = hasHighpoint();
+  let res = await query(high);
+  if (high && NO_COLUMN.has(res.error?.code ?? "")) {
+    noHighpointAt = Date.now();
     res = await query(false);
   }
   const rows = must(res) as unknown as (Ascent & { routes: Route & { zones: { name: string; gym_id: string; photo_path: string | null } } })[];

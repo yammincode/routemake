@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 // 長耐力路線照順序標的點：細圈圈＋號碼；第 1 點綠（起攀色）、最後一點紅（完攀色）、中間藍
 // 放在 WallPhoto 裡跟著照片放大縮小，但圈的線和號碼維持原本粗細大小（看得到後面的岩點）
 // reached：顧客爬到第幾點（之後的點變淡）；onTap：編輯時點圈圈刪掉那一點（後面的號碼往前補）
+// 號碼點不到（點在號碼上＝點在照片上），標很密的路線時點下一顆不會誤刪旁邊那一點
 export function NumberMarks({ holds, reached, onTap }: { holds: { x: number; y: number }[]; reached?: number | null; onTap?: (i: number) => void }) {
   return (
     <>
@@ -23,7 +24,7 @@ export function NumberMarks({ holds, reached, onTap }: { holds: { x: number; y: 
         };
         const label = (
           <span
-            className="absolute bottom-[70%] left-[70%] origin-bottom-left rounded-full px-[3px] font-num text-[9px] leading-[12px] font-bold text-white"
+            className="pointer-events-none absolute bottom-[70%] left-[70%] origin-bottom-left rounded-full px-[3px] font-num text-[9px] leading-[12px] font-bold text-white"
             style={{ background: color, transform: "scale(var(--inv, 1))" }}
           >
             {n}
