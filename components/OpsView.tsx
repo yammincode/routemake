@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { Empty, SectionTitle, Tip } from "@/components/ui/Card";
@@ -70,12 +70,16 @@ function OpsGrants() {
   const [hits, setHits] = useState<UserHit[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
+  // 每次授權、取消成功就加一：在那之前就開始讀的名單比較舊，回來時不要蓋掉畫面上剛改好的狀態
+  const gen = useRef(0);
 
   useEffect(() => {
     let alive = true;
+    const g = gen.current;
+    const fresh = () => alive && g === gen.current;
     void Promise.all([hasResets ? getResetEditors() : [], hasUsage ? getUsageViewers() : []])
       .then(([editors, viewers]) => {
-        if (!alive) return;
+        if (!fresh()) return;
         const m = new Map<string, Person>();
         for (const e of editors) m.set(e.id, { id: e.id, username: e.username, nickname: e.nickname, resets: true, gyms: [] });
         for (const v of viewers)
@@ -83,7 +87,7 @@ function OpsGrants() {
         setPeople([...m.values()]);
         setError(null);
       })
-      .catch((e) => alive && setError((e as Error).message));
+      .catch((e) => fresh() && setError((e as Error).message));
     return () => {
       alive = false;
     };
@@ -128,6 +132,7 @@ function OpsGrants() {
         toast(on ? `已授權 ${name} 看${gymName(what)}使用狀況` : `已取消 ${name} 看${gymName(what)}使用狀況`);
       }
       // 畫面馬上改成新的狀態（訊號差時名單還沒重新讀回來，馬上再點一次才會是「取消」而不是又授權一次）；之後再以資料庫為準
+      gen.current++;
       setPeople((ps) => {
         const list = ps ?? [];
         const cur = list.find((x) => x.id === p.id) ?? { ...p, resets: false, gyms: [] };
