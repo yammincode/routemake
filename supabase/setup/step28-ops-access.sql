@@ -16,6 +16,7 @@
 -- - 授權、取消只能用 set_usage_viewer（老闆），寫在那一館的操作紀錄
 -- - my_access 多回傳 usage_gyms（被授權看的館），App 用來決定要不要顯示「營運」分頁和使用狀況
 -- - 要先套用 step27（換線日），這份會一起回傳 can_edit_resets
+-- - 順便補上 step27 舊版（2026/10/10 以前產生的檔案）少的修正：一次刪好幾區時，換線公告裡的區域一起拿掉
 -- =====================================================================
 -- 用 execute 建表：Supabase SQL Editor 看到建表指令會跳出「開啟 RLS」提示並改寫整份 SQL，會把後面的函式切壞。下面已經自己開啟 RLS。
 do $do$ begin
@@ -178,6 +179,17 @@ language sql stable security definer set search_path = '' as $$
   ) end
   from public.profiles p where p.id = auth.uid()
 $$;
+
+-- step27 舊版的修正：一次刪好幾區（重新分區）時，觸發時那幾區都已經刪掉了，把公告裡所有已經不存在的區一起拿掉
+-- （新版 step27 已經是這樣；重複執行沒有影響）
+create or replace function public.zones_drop_from_resets() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  update public.reset_events
+     set zone_ids = array(select z from unnest(zone_ids) z where exists (select 1 from public.zones x where x.id = z))
+   where old.id = any (zone_ids);
+  return null;
+end $$;
 
 insert into supabase_migrations.schema_migrations (version, name) values ('20261027000032', 'ops_access');
 
