@@ -101,13 +101,13 @@ test("館首頁難度色帶：沒登入只寫條數；登入後有完成數、�
 test("上攀為主的館不顯示難度分布和篩選，區域卡片寫 YDS 難度範圍", async () => {
   const mock = createMock();
   const zone = (code) => mock.db.zones.find((z) => z.gym_id === "g3" && z.code === code);
-  [104, 108].forEach((g) => mock.addRoute(zone("A1"), g, "藍"));
+  [104, 108].forEach((g) => mock.addRoute(zone("A"), g, "藍"));
   mock.addRoute(zone("BO"), 3, "紅");
   const { page, errors } = await phone(browser, mock);
   await page.goto(BASE + "/gym/g3", { waitUntil: "networkidle" });
   await page.waitForTimeout(800);
   assert.ok(!(await page.textContent("main")).includes("全館難度分布"));
   assert.equal(await page.locator('main button[aria-pressed]:has-text("VB–V10")').count(), 0);
-  assert.ok((await page.locator("main button.rounded-card", { hasText: "A1 區" }).textContent()).includes("5.10a–5.11a"));
+  assert.ok((await page.locator("main button.rounded-card", { hasText: "A 區" }).textContent()).includes("5.10a–5.11a"));
   assert.deepEqual(errors, []);
 });

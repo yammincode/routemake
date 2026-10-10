@@ -28,6 +28,7 @@ export default function FloorPlan({
   selected?: string;
 }) {
   const floors = Array.isArray(shape) ? shape : [shape];
+  const shown = new Set(zones.map((z) => z.code));
   return (
     <div className="mb-2 rounded-plan bg-surface px-2 pt-2.5 pb-1.5 shadow-card">
       {floors.map((shape, fi) => (
@@ -67,7 +68,7 @@ export default function FloorPlan({
               const soon = z.resetDays != null && z.resetDays >= 0 && z.resetDays <= 7;
               const on = selected === z.code;
               // 名字沒改過寫簡稱（A1、Slab…），店長改過名字就寫新名字（依旁邊的空間縮小，放不下截短）
-              const label = planText(shape, z.code, z.name);
+              const label = planText(shape, z.code, z.name, 40, shown);
               const fill = admin
                 ? `color-mix(in srgb,var(--accent) ${on ? 55 : 14}%,var(--blush))`
                 : guest

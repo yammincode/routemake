@@ -61,6 +61,12 @@ export const XINDIAN_PLAN: FloorPlanShape = {
   },
 };
 
+// 中和 A1、A2 合併前的畫法：正式資料庫還沒執行 step32 時還是 A1、A2 兩區，先照舊畫（資料庫沒有的區域不會畫）
+// 正式資料庫執行 step32 之後就可以刪掉
+const ZHONGHE_A_SPLIT: Record<string, PlanZoneShape> = {
+  A1: { n: "A1 區", t: "A1", lx: 1235, ly: 715, polys: ["1302,600 1302,770 1338,770 1338,600"] },
+  A2: { n: "A2 區", t: "A2", lx: 1235, ly: 615, polys: ["1338,459 1302,492 1302,600 1338,600"] },
+};
 export const ZHONGHE_PLAN: FloorPlanShape = {
   viewBox: "58 420 1316 734",
   outline: "88,450 1344,450 1344,1124 88,1124",
@@ -68,14 +74,14 @@ export const ZHONGHE_PLAN: FloorPlanShape = {
   fixtures: [[1274, 772, 70, 180], [850, 952, 54, 172], [904, 952, 266, 172], [1170, 952, 174, 172], [88, 884, 64, 68]],
   texts: [{ x: 1040, y: 1050, t: "櫃檯" }, { x: 1257, y: 1050, t: "商品區" }, { x: 1309, y: 870, t: "大門" }],
   zones: {
-    // 2026/10 起細分：A1（下）／A2（上）、Auto-Belay AB1（上方長牆）／AB2（左側斜牆）
+    // 2026/10 起細分：Auto-Belay AB1（上方長牆）／AB2（左側斜牆）；A1（下）／A2（上）2026/10 又合併回 A 區（step32）
     D: { n: "D 區", t: "D", lx: 158, ly: 735, polys: ["92,465 92,876 148,877 223,822 224,656 164,583"] },
     C: { n: "C 區", t: "C", lx: 418, ly: 523, polys: ["95,454 170,576 392,576 562,604 562,454"] },
     B: { n: "B 區", t: "B", lx: 740, ly: 583, polys: ["570,454 575,618 569,619 580,619 662,706 662,718 841,717 909,665 838,454"] },
     AB1: { n: "Auto-Belay 1", t: "AB1", lx: 1130, ly: 545, polys: ["961,456 961,486 1297,485 1330,455"] },
     AB2: { n: "Auto-Belay 2", t: "AB2", lx: 985, ly: 640, polys: ["848,456 914,648 961,486 961,456"] },
-    A1: { n: "A1 區", t: "A1", lx: 1235, ly: 715, polys: ["1302,600 1302,770 1338,770 1338,600"] },
-    A2: { n: "A2 區", t: "A2", lx: 1235, ly: 615, polys: ["1338,459 1302,492 1302,600 1338,600"] },
+    A: { n: "A 區", t: "A", lx: 1235, ly: 665, polys: ["1338,459 1302,492 1302,770 1338,770"] },
+    ...ZHONGHE_A_SPLIT,
     SP: { n: "速度牆", t: "速度牆", lx: 533, ly: 845, polys: ["401,885 401,946 653,946 653,885"] },
     BO: { n: "抱石區", t: "抱石區", lx: 533, ly: 1010, polys: ["741,985 700,985 698,1082 568,1082 537,1040 373,1040 323,1121 741,1121"] },
   },
@@ -154,19 +160,21 @@ export function planLabel(shape: PlanZoneShape, name: string): string {
   return !shape.n || name === shape.n ? (shape.t ?? short) : short;
 }
 // 改過的名字可以佔的寬度：跟同一排最近的另一區標籤的距離減掉一點間隔（兩邊都改名也不會疊在一起），最多 3 個中文字寬
+// shown：圖上真的有畫的區域（資料庫沒有的區域不會畫，不用讓位，例如中和合併前後的 A／A1、A2）
 const textEm = (s: string) => [...s].reduce((w, c) => w + (c.charCodeAt(0) < 0x2e80 ? 0.6 : 1), 0);
-export function planRoom(shape: FloorPlanShape, code: string, base = 40, gap = 12): number {
+export function planRoom(shape: FloorPlanShape, code: string, base = 40, gap = 12, shown?: ReadonlySet<string>): number {
   const P = shape.zones[code];
   let d = Infinity;
-  for (const [c, Q] of Object.entries(shape.zones)) if (c !== code && Math.abs(Q.ly - P.ly) < base * 1.5) d = Math.min(d, Math.abs(Q.lx - P.lx));
+  for (const [c, Q] of Object.entries(shape.zones))
+    if (c !== code && (!shown || shown.has(c)) && Math.abs(Q.ly - P.ly) < base * 1.5) d = Math.min(d, Math.abs(Q.lx - P.lx));
   return Math.min(base * 3, d - gap);
 }
 // 平面圖上這一區的字和大小：名字沒改過照原本（簡稱、40）；改過的名字依可用寬度縮小（最小 14），還放不下就截短加「…」
-export function planText(shape: FloorPlanShape, code: string, name: string, base = 40): { text: string; size: number } {
+export function planText(shape: FloorPlanShape, code: string, name: string, base = 40, shown?: ReadonlySet<string>): { text: string; size: number } {
   const P = shape.zones[code];
   const label = planLabel(P, name);
   if (label === P.t) return { text: label, size: base };
-  const room = planRoom(shape, code, base);
+  const room = planRoom(shape, code, base, 12, shown);
   const MIN = 14;
   const chars = [...label];
   let text = label;

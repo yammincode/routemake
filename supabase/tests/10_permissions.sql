@@ -83,8 +83,8 @@ select tests.ok('初始資料：六間店、明德館 17 區（細分＋Spray Wa
   and (select count(*) from public.zones where gym_id = 'mingde' and plan_shape is not null) = 5);
 select tests.ok('開放館：明德、萬華、中和、南港、新店（中壢還沒）',
   (select array_agg(id order by id) from public.gyms where is_live) = '{g2,g3,g4,g5,mingde}');
-select tests.ok('各館區域數：萬華 9、中和 9、南港 11（＋Spray Wall）、新店 8',
-  (select array_agg(n order by gym_id) from (select gym_id, count(*) n from public.zones where gym_id <> 'mingde' group by gym_id) x) = '{9,9,12,8}');
+select tests.ok('各館區域數：萬華 9、中和 8（A1、A2 合併回 A）、南港 11（＋Spray Wall）、新店 8',
+  (select array_agg(n order by gym_id) from (select gym_id, count(*) n from public.zones where gym_id <> 'mingde' group by gym_id) x) = '{9,8,12,8}');
 select tests.ok('明德館區域順序：A1–A4、比賽牆 1–4、B1–B3、C1–C3、D1–D2、Spray Wall',
   (select string_agg(name, '、' order by sort) from public.zones where gym_id = 'mingde') = 'A1 區、A2 區、A3 區、A4 區、比賽牆 1、比賽牆 2、比賽牆 3、比賽牆 4、B1 區、B2 區、B3 區、C1 區、C2 區、C3 區、D1 區、D2 區、Spray Wall');
 select tests.ok('換線日：比賽牆四段都是 10/6、新店上攀 E 區 10/18',
@@ -98,7 +98,7 @@ select tests.ok('新使用者自動建立 profiles 並存帳號名稱（轉小�
 -- 未登入的人
 -- ---------------------------------------------------------------------
 set role anon; select tests.login(null);
-select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 55);
+select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 54);
 select tests.ok('未登入：可以看暱稱', (select nickname from public.profiles where id = :A) = '甲');
 select tests.throws('未登入：讀不到手機號碼', 'select phone from public.profiles');
 select tests.throws('未登入：讀不到帳號名稱', 'select username from public.profiles');
@@ -366,8 +366,9 @@ select tests.ok('明德細分：A1–A4、W1–W4、B1–B3、C1–C3、D1–D2'
   (select array_agg(code order by sort) from public.zones where gym_id = 'mingde' and kind = 'wall')
     = array['A1','A2','A3','A4','W1','W2','W3','W4','B1','B2','B3','C1','C2','C3','D1','D2']);
 select tests.ok('新店細分：A1、A2、B1、B2、C1、C2、D、E', (select array_agg(code order by sort) from public.zones where gym_id = 'g5') = array['A1','A2','B1','B2','C1','C2','D','E']);
-select tests.ok('中和細分：A1、A2、AB1、AB2，新區域沿用 YDS', (select array_agg(code order by sort) from public.zones where gym_id = 'g3') = array['A1','A2','AB1','AB2','B','C','D','SP','BO']
-  and (select bool_and(grade_system = 'yds') from public.zones where gym_id = 'g3' and code in ('A2', 'AB2')));
+select tests.ok('中和分區：A（A1、A2 合併回來）、AB1、AB2，都用 YDS', (select array_agg(code order by sort) from public.zones where gym_id = 'g3') = array['A','AB1','AB2','B','C','D','SP','BO']
+  and (select bool_and(grade_system = 'yds') from public.zones where gym_id = 'g3' and code in ('A', 'AB2'))
+  and (select name = 'A 區' from public.zones where gym_id = 'g3' and code = 'A'));
 select tests.ok('萬華細分：B1、B2、C1、C2、D1、D2，D 右段是教學區 Slab', (select array_agg(code order by sort) from public.zones where gym_id = 'g2') = array['A','B1','B2','C1','C2','D1','D2','SL','TR']
   and (select name from public.zones where gym_id = 'g2' and code = 'SL') = '教學區 Slab');
 select tests.ok('新分段沿用原本的換線日（明德 A2 是 9/30、比賽牆 4 是 10/6）',
@@ -814,11 +815,11 @@ select tests.ok('YDS：新店還是 V', (select bool_and(grade_system = 'v') fro
 select tests.ok('YDS 分數：5.10a = 10、5.12a = 35', public.route_points(104, '{}') = 10 and public.route_points(112, '{}') = 35);
 select tests.ok('V 級分數不變：V4 = 50（前面改過計分規則）', public.route_points(4, '{}') = 50, public.route_points(4, '{}')::text);
 set role authenticated; select tests.login(:OW);
-select tests.lives('YDS：上攀區可以新增 5.11a', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 108, ''紅'', 1, 1)', (select id from public.zones where gym_id = 'g3' and code = 'A1')));
-select tests.throws('YDS：上攀區不能用 V 級', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 4, ''紅'', 1, 1)', (select id from public.zones where gym_id = 'g3' and code = 'A1')));
+select tests.lives('YDS：上攀區可以新增 5.11a', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 108, ''紅'', 1, 1)', (select id from public.zones where gym_id = 'g3' and code = 'A')));
+select tests.throws('YDS：上攀區不能用 V 級', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 4, ''紅'', 1, 1)', (select id from public.zones where gym_id = 'g3' and code = 'A')));
 select tests.throws('YDS：抱石區不能用 YDS', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 108, ''紅'', 1, 1)', (select id from public.zones where gym_id = 'g3' and code = 'BO')));
-select tests.throws('YDS：超過 5.13d 被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 120, ''紅'', 1, 1)', (select id from public.zones where gym_id = 'g3' and code = 'A1')));
-select tests.throws('YDS：區域還有路線不能切換等級制', $q$update public.zones set grade_system = 'v' where gym_id = 'g3' and code = 'A1'$q$);
+select tests.throws('YDS：超過 5.13d 被擋', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 120, ''紅'', 1, 1)', (select id from public.zones where gym_id = 'g3' and code = 'A')));
+select tests.throws('YDS：區域還有路線不能切換等級制', $q$update public.zones set grade_system = 'v' where gym_id = 'g3' and code = 'A'$q$);
 select tests.ok('YDS：沒有路線的區域可以切換', tests.rows($q$update public.zones set grade_system = 'yds' where gym_id = 'g3' and code = 'BO'$q$) = 1);
 select tests.ok('YDS：切回來', tests.rows($q$update public.zones set grade_system = 'v' where gym_id = 'g3' and code = 'BO'$q$) = 1);
 reset role;
@@ -1241,6 +1242,49 @@ select tests.ok('長耐力：區域改回上攀後，舊紀錄的最高點還在
 select tests.ok('長耐力：區域改回上攀後，舊紀錄的比例分數還在',
   (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'total')::int = :en_after);
 reset role;
+
+-- ---------------------------------------------------------------------
+-- 中和 A1、A2 合併回 A 區（0036）：把 A 改回合併前的 A1、再加一個 A2（有下架的路線和紀錄、換線公告），再跑一次 0036
+-- （跟在 Supabase SQL Editor 執行一樣：沒有登入的使用者）
+-- ---------------------------------------------------------------------
+select tests.login(null);
+update public.zones set code = 'A1', name = 'A1 區' where gym_id = 'g3' and code = 'A';
+insert into public.zones (gym_id, code, name, sort, grade_system) values ('g3', 'A2', 'A2 區', 2, 'yds');
+insert into ids select 'zA1', id from public.zones where gym_id = 'g3' and code = 'A1';
+insert into ids select 'zA2', id from public.zones where gym_id = 'g3' and code = 'A2';
+insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, created_at) values ((select v from ids where k = 'zA2'), 106, '藍', 1, 1, now() - interval '3 days');
+insert into ids select 'rA2', id from public.routes where zone_id = (select v from ids where k = 'zA2');
+insert into public.ascents (user_id, route_id, status, climbed_on) values (:A, (select v from ids where k = 'rA2'), 'send', public.taipei_today() - 1);
+update public.routes set archived_at = now() where id = (select v from ids where k = 'rA2');
+insert into public.reset_events (gym_id, label, zone_ids, starts_on, ends_on)
+values ('g3', '只換 A2', array[(select v from ids where k = 'zA2')], public.taipei_today() + 3, public.taipei_today() + 4),
+       ('g3', '換 A1、A2', array[(select v from ids where k = 'zA1'), (select v from ids where k = 'zA2')], public.taipei_today() + 5, public.taipei_today() + 6);
+set role authenticated; select tests.login(:A);
+select (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'total')::int as merge_before \gset
+reset role; select tests.login(null);
+\ir ../migrations/20261031000036_zhonghe_a_merge.sql
+select tests.ok('中和合併：A1 改成 A 區（同一筆，路線照舊），A2 刪掉',
+  (select id = (select v from ids where k = 'zA1') and name = 'A 區' and sort = 1 from public.zones where gym_id = 'g3' and code = 'A')
+  and not exists (select 1 from public.zones where gym_id = 'g3' and code in ('A1', 'A2')));
+select tests.ok('中和合併：A2 的舊路線搬到 A，編號不變', (select zone_id = (select v from ids where k = 'zA1') and code = 'A2-01' from public.routes where id = (select v from ids where k = 'rA2')));
+select tests.ok('中和合併：換線公告裡的 A2 改成 A（重複的只留一個）',
+  (select array_agg(zone_ids order by starts_on) from public.reset_events where gym_id = 'g3' and label in ('只換 A2', '換 A1、A2'))
+    = array[array[(select v from ids where k = 'zA1')], array[(select v from ids where k = 'zA1')]]);
+set role authenticated; select tests.login(:A);
+select tests.ok('中和合併：A2 舊路線的紀錄和積分都還在',
+  exists (select 1 from public.ascents where route_id = (select v from ids where k = 'rA2') and user_id = :A)
+  and (public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) ->> 'total')::int = :merge_before);
+reset role; select tests.login(null);
+\ir ../migrations/20261031000036_zhonghe_a_merge.sql
+select tests.ok('中和合併：再執行一次不會改到東西', (select array_agg(code order by sort) from public.zones where gym_id = 'g3') = array['A','AB1','AB2','B','C','D','SP','BO']);
+-- A2 牆上還有路線：不能合併（整份取消）
+update public.zones set code = 'A1', name = 'A1 區' where gym_id = 'g3' and code = 'A';
+insert into public.zones (gym_id, code, name, sort, grade_system) values ('g3', 'A2', 'A2 區', 2, 'yds');
+insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values ((select id from public.zones where gym_id = 'g3' and code = 'A2'), 106, '藍', 1, 1);
+\set merge_sql `cat migrations/20261031000036_zhonghe_a_merge.sql`
+select tests.throws('中和合併：A2 牆上還有路線就擋下（請先整區換線）', :'merge_sql');
+select tests.ok('中和合併：擋下時什麼都沒改', (select count(*) = 2 from public.zones where gym_id = 'g3' and code in ('A1', 'A2'))
+  and not exists (select 1 from public.zones where gym_id = 'g3' and code = 'A'));
 
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));

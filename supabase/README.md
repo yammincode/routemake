@@ -38,6 +38,7 @@
 | `setup/step29-zone-delete-fix.sql` | migration 0033：補 step27 舊版少的修正（重新分區一次刪好幾區時，換線公告裡已刪掉的區一起拿掉；第二次執行會在最後登記那一行報錯，代表已經套用過） | 已套用 |
 | `setup/step30-endurance.sql` | migration 0034：長耐力區域（第三種等級制 endurance；路線照順序標 2–50 點、YDS、不用顏色；有人記錄過點就不能改；ascents.highpoint 最高爬到第幾點；嘗試中照比例算分：ascent_points 5 個參數版、points_summary、zone_view） | 待套用 |
 | `setup/step31-home-gyms.sql` | migration 0035：人物卡「常去的館」可以複選（profiles.home_gyms，原本的 home_gym 搬進去並保留＝第一間；save_my_card 新版收好幾間；舊版一間照常可用（存回原本第一間不會洗掉其他館，換成別間只留那一間）；profile_card 多回傳 home_gyms） | 待套用 |
+| `setup/step32-zhonghe-a-merge.sql` | migration 0036：中和 A1、A2 合併回「A 區」（沿用 A1 那一筆改成代碼 A，路線、照片、紀錄照舊；A2 的舊路線搬到 A、換線公告的 A2 改成 A，再刪掉 A2；A2 牆上還有路線時會擋下，要先整區換線；再執行一次不會改到東西，但最後登記那一行會報錯，代表已經套用過） | 待套用 |
 
 ## 規則摘要
 
