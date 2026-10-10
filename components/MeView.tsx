@@ -45,7 +45,7 @@ export default function MeView({ gymId }: { gymId: string }) {
   const rules = useScoring();
   const [list, setList] = useState<MonthAscent[]>([]);
   // 本月完攀直條圖點了哪一根（v:3＝V3、y:104＝5.10）；換月份就收起來
-  const [pick, setPick] = useState<{ ym: string; key: string } | null>(null);
+  const [pick, setPick] = useState<string | null>(null);
   const [wall, setWall] = useState<{ routes: Route[]; mine: Record<string, Ascent> } | null>(null);
   const [gym, setGym] = useState<Gym | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -125,8 +125,8 @@ export default function MeView({ gymId }: { gymId: string }) {
     );
 
   const isNow = ym.y === now.y && ym.m === now.m;
-  const prev = () => setYm(({ y, m }) => (m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 }));
-  const next = () => setYm(({ y, m }) => (m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 }));
+  const prev = () => (setPick(null), setYm(({ y, m }) => (m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 })));
+  const next = () => (setPick(null), setYm(({ y, m }) => (m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 })));
 
   const counts = stats ? Object.fromEntries(Object.entries(stats.by_day).map(([d, n]) => [+d, n])) : {};
 
@@ -134,18 +134,21 @@ export default function MeView({ gymId }: { gymId: string }) {
   const wallGrades = wall ? [...new Set(wall.routes.map((r) => r.grade))].sort((a, b) => a - b) : [];
 
   // 本月完攀直條圖：抱石 VB–V10 每級一根；上攀 5.6–5.9 每級一根、5.10 以上 a–d 合成一根（20 根手機放不下）
+  // 長條只算岩館路線的完攀（跟上面的完攀數一樣；岩友路線不算統計）；長耐力沒爬完、岩友路線點了照樣列出來
   const colKey = (g: number) => (g < 100 ? `v:${g}` : `y:${g < 104 ? g : 104 + Math.floor((g - 104) / 4) * 4}`);
   const col = (key: string, label: string, grade: number): MonthCol => {
     const mine = list.filter((a) => colKey(a.route.grade) === key);
-    const sent = mine.filter((a) => a.status !== "project");
-    return { key, label, grade, sends: sent.length, flashes: sent.filter((a) => a.status === "flash").length, items: mine.length };
+    const sent = mine.filter((a) => a.status !== "project" && a.route.kind !== "community");
+    const projects = mine.filter((a) => a.status === "project").length;
+    const community = mine.filter((a) => a.status !== "project" && a.route.kind === "community").length;
+    const more = [projects && `嘗試中 ${projects} 條`, community && `岩友路線 ${community} 條`].filter(Boolean).join("，");
+    return { key, label, grade, sends: sent.length, flashes: sent.filter((a) => a.status === "flash").length, items: mine.length, more };
   };
   const boulderCols = GRADES.map((g) => col(`v:${g}`, gradeLabel(g), g));
   const ropeCols = [100, 101, 102, 103, 104, 108, 112, 116].map((g) => col(`y:${g}`, g < 104 ? gradeLabel(g) : gradeLabel(g).slice(0, -1), g));
   const chartCols = [...boulderCols, ...ropeCols];
-  const ymKey = `${ym.y}-${ym.m}`;
-  const picked = pick?.ym === ymKey && chartCols.some((c) => c.key === pick.key && c.items) ? pick.key : null;
-  const choose = (key: string | null) => setPick(key ? { ym: ymKey, key } : null);
+  const picked = pick && chartCols.some((c) => c.key === pick && c.items) ? pick : null;
+  const choose = setPick;
   const shown = picked ? list.filter((a) => colKey(a.route.grade) === picked) : [];
   const feelEmoji = (v: number | null) => FEEL.find((o) => o.v === v)?.e ?? "";
   const gradeFeel = (v: number | null) => GRADE_FEEL.find((o) => o.v === v)?.t;

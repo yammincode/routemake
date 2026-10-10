@@ -109,7 +109,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Tabs.tsx` | `Tabs`（路線卡片的紀錄／影片／留言分頁） |
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |
 | `Video.tsx` | `VideoRow`、`VideoList`（路線卡片影片分頁：一支一列，方形縮圖＋片長、說明、誰・多久前、`VideoResult` 分享者紀錄、身高・動作）、`VideoStrip`（橫向滑動縮圖，後台用）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`、`VideoTrim`（顧客分享影片；VideoTrim 剪輯長度：預覽、▶ 播放選的這段、時間軸、開始／結束拉桿＋－／＋ 0.5 秒，最長 max 秒，結束不超過影片長度；disabled：處理中不能改） |
-| `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`MonthGradeChart`（我的紀錄本月完攀直條圖：每個難度一根、黃色那段是 Flash、難度下面膠帶色；點一根選它其他變淡；上攀用主色）、`TotalRow`、`SetBox` |
+| `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`MonthGradeChart`（我的紀錄本月完攀直條圖：每個難度一根、黃色那段是 Flash、難度下面膠帶色；點一根選它其他變淡；上攀用主色；沒有完攀只有其他紀錄的那根畫虛線、沒紀錄的變淡點不了）、`TotalRow`、`SetBox` |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
 | `Endurance.tsx` | `NumberMarks`（長耐力路線照順序的點：細圈＋號碼，第 1 點綠、最後一點紅、中間藍；放大照片時線和號碼不變粗；reached 之後的點變淡；onTap 編輯時點圈圈刪點，號碼點不到＝點在照片上）、`HighpointPicker`（最高爬到第幾點：－／拉桿／＋，最多到倒數第 2 點，下面大字「30 ／ 38 點」） |
 | `Grant.tsx` | `GrantList`、`GrantRow`（授權名單的一個人：暱稱、帳號）、`GrantGroup`（一組權限：小標＋膠囊，按下去＝有權限，再按一次取消；營運分頁老闆用） |

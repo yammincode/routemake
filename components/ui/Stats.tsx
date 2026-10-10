@@ -95,8 +95,9 @@ export function CalendarHeat({ year, month, counts, today }: { year: number; mon
 
 // 本月完攀的直條圖（跟「全館難度分布」一樣的樣子）：每個難度一根，上面寫幾條，黃色那段是 Flash
 // 抱石用膠帶顏色，難度下面再畫一小段膠帶色（整根都是 Flash 時也看得出顏色）；上攀（tone="accent"）用主色
-// 點一根選它（其他變淡）、再點一次取消；沒有紀錄的那根不能點
-export type MonthCol = { key: string; label: string; grade: number; sends: number; flashes: number; items: number };
+// 點一根選它（其他變淡）、再點一次取消；沒有紀錄的那根不能點（變淡）
+// 沒有完攀、只有其他紀錄（長耐力嘗試中、岩友路線）的那根畫一小段虛線，看得出來點得到；more 是報給讀螢幕軟體的補充
+export type MonthCol = { key: string; label: string; grade: number; sends: number; flashes: number; items: number; more?: string };
 export function MonthGradeChart({
   title,
   cols,
@@ -137,10 +138,10 @@ export function MonthGradeChart({
             <button
               key={c.key}
               aria-pressed={on}
-              aria-label={`${c.label}，完攀 ${c.sends} 條${c.flashes ? `，其中 Flash ${c.flashes} 條` : ""}`}
+              aria-label={`${c.label}，完攀 ${c.sends} 條${c.flashes ? `，其中 Flash ${c.flashes} 條` : ""}${c.more ? `，${c.more}` : ""}`}
               disabled={!c.items}
               onClick={() => onPick(on ? null : c.key)}
-              className={`grid justify-items-center gap-0.5 ${picked && !on ? "opacity-40" : ""}`}
+              className={`grid justify-items-center gap-0.5 disabled:opacity-40 ${picked && !on ? "opacity-40" : ""}`}
             >
               <span className="font-num text-meta leading-none font-semibold text-muted">{c.sends || ""}</span>
               {c.sends ? (
@@ -150,6 +151,8 @@ export function MonthGradeChart({
                 >
                   {fh > 0 && <span className="w-full flex-none bg-flash" style={{ height: `${fh}px` }} />}
                 </span>
+              ) : c.items ? (
+                <span className={`h-2.5 w-full rounded-tape border border-dashed border-muted ${on ? "outline-2 outline-offset-1 outline-ink" : ""}`} />
               ) : (
                 <span className="h-[3px] w-full rounded-tape bg-line" />
               )}
