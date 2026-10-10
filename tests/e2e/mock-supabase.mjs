@@ -65,7 +65,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false };
+  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -369,8 +369,11 @@ export function createMock() {
       const axes = [["力量"], ["指力"], ["動態", "協調"], ["耐力"], ["技巧", "腳法", "平衡"], ["柔軟"]];
       const raw = axes.map((t) => sends.filter((r) => r.style_tags.some((g) => t.includes(g))).reduce((n, r) => n + base(r.grade), 0));
       const mx = Math.max(...raw);
+      // 同 0035：常去的館照場館順序；state.noHomeGyms 模擬資料庫還沒套用 step31（只有一間 home_gym）
+      const homes = [...db.gyms].sort((x, y) => x.sort - y.sort).filter((g) => (p.home_gyms ?? []).includes(g.id)).map((g) => g.id);
       return J(route, 200, {
-        nickname: p.nickname, public: !!p.card_public, self, bio: p.bio ?? null, years: p.climbing_years ?? null, home_gym: p.home_gym ?? null,
+        nickname: p.nickname, public: !!p.card_public, self, bio: p.bio ?? null, years: p.climbing_years ?? null,
+        ...(state.noHomeGyms ? { home_gym: p.home_gym ?? null } : { home_gym: homes[0] ?? null, home_gyms: homes }),
         self_stats: p.self_stats ?? null, ability: raw.map((v) => (mx ? Math.round((100 * v) / mx) : 0)),
         ability_sends: sends.filter((r) => r.style_tags.length).length, total_sends: sends.length, month_sends: sends.length,
         top_grade: sends.some((r) => r.grade < 100) ? Math.max(...sends.filter((r) => r.grade < 100).map((r) => r.grade)) : null,
@@ -381,7 +384,17 @@ export function createMock() {
       const bio = (a.p_bio || "").trim();
       if (bio.length > 60 || /(https?:\/\/|www\.|line|instagram|\big\b|@|[0-9]{7,})/i.test(bio))
         return J(route, 400, { code: "22023", message: "自我介紹最多 60 字，而且不能放聯絡方式（網址、電話、LINE、IG 等）" });
-      Object.assign(prof(uid), { card_public: !!a.p_public, bio: bio || null, climbing_years: a.p_years || null, home_gym: a.p_home_gym || null, self_stats: a.p_self });
+      // 同 0035：新版送好幾間（p_home_gyms）；舊版送一間（p_home_gym），那間本來就在清單裡就不動清單
+      if ("p_home_gyms" in a && state.noHomeGyms) return J(route, 404, { code: "PGRST202", message: "Could not find the function public.save_my_card(p_bio, p_home_gyms, p_public, p_self, p_years) in the schema cache" });
+      const me = prof(uid);
+      let list;
+      if ("p_home_gyms" in a) {
+        const want = a.p_home_gyms ?? [];
+        if (want.some((id) => !db.gyms.some((g) => g.id === id))) return J(route, 400, { code: "22023", message: "常去的館要從清單裡選" });
+        list = want;
+      } else list = !a.p_home_gym ? [] : (me.home_gyms ?? []).includes(a.p_home_gym) ? me.home_gyms : [a.p_home_gym];
+      const homes = [...db.gyms].sort((x, y) => x.sort - y.sort).filter((g) => list.includes(g.id)).map((g) => g.id);
+      Object.assign(me, { card_public: !!a.p_public, bio: bio || null, climbing_years: a.p_years || null, home_gyms: homes, home_gym: homes[0] ?? null, self_stats: a.p_self });
       return J(route, 200, null);
     }
     if (fn === "clear_card_bio") {

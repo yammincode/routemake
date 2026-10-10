@@ -12,7 +12,7 @@ import { Label, Rating, TextArea, Toggle } from "@/components/ui/Form";
 import { HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
-import { getProfileCard, saveMyCard, type ProfileCard } from "@/lib/data";
+import { cardGyms, getProfileCard, saveMyCard, type ProfileCard } from "@/lib/data";
 import { ABILITY_AXES, CLIMBING_YEARS } from "@/lib/design";
 import { GYMS } from "@/lib/gyms";
 
@@ -25,7 +25,7 @@ export default function MyCardEditor() {
   const [pub, setPub] = useState(false);
   const [bio, setBio] = useState("");
   const [years, setYears] = useState<string | null>(null);
-  const [home, setHome] = useState<string | null>(null);
+  const [homes, setHomes] = useState<string[]>([]);
   const [self, setSelf] = useState<(number | null)[]>(ABILITY_AXES.map(() => null));
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -39,7 +39,7 @@ export default function MyCardEditor() {
         setPub(c.public);
         setBio(c.bio ?? "");
         setYears(c.years ?? null);
-        setHome(c.home_gym ?? null);
+        setHomes(cardGyms(c));
         setSelf(c.self_stats ?? ABILITY_AXES.map(() => null));
       })
       .catch(() => setCard(null));
@@ -62,8 +62,8 @@ export default function MyCardEditor() {
     if (self.some((v) => v != null) && !selfDone) return toast("自評要六項都選，或全部不選");
     setBusy(true);
     try {
-      await saveMyCard({ public: pub, bio, years, home_gym: home, self_stats: selfDone });
-      setCard({ ...card, public: pub, bio: bio.trim() || null, years, home_gym: home, self_stats: selfDone });
+      await saveMyCard({ public: pub, bio, years, home_gyms: homes, self_stats: selfDone });
+      setCard({ ...card, public: pub, bio: bio.trim() || null, years, home_gym: homes[0] ?? null, home_gyms: homes, self_stats: selfDone });
       toast(pub ? "已儲存，人物卡已公開" : "已儲存，人物卡只有你看得到");
       setEditing(false);
     } catch (e) {
@@ -72,7 +72,9 @@ export default function MyCardEditor() {
     setBusy(false);
   };
 
-  const preview: ProfileCard = { ...card, years, home_gym: home, bio: bio.trim() || null, self_stats: selfDone };
+  const preview: ProfileCard = { ...card, years, home_gym: homes[0] ?? null, home_gyms: homes, bio: bio.trim() || null, self_stats: selfDone };
+  // 常去的館可以複選：點一下選、再點一下取消，照場館順序排
+  const toggleHome = (id: string) => setHomes((hs) => GYMS.filter((g) => (g.id === id ? !hs.includes(id) : hs.includes(g.id))).map((g) => g.id));
 
   const cardView = (
     <SetBox>
@@ -119,10 +121,10 @@ export default function MyCardEditor() {
                 </Chip>
               ))}
             </ChipRow>
-            <Label>常去的館（選填）</Label>
-            <ChipRow>
+            <Label>常去的館（選填，可複選）</Label>
+            <ChipRow wrap>
               {GYMS.filter((g) => g.live).map((g) => (
-                <Chip key={g.id} pressed={home === g.id} onClick={() => setHome(home === g.id ? null : g.id)}>
+                <Chip key={g.id} pressed={homes.includes(g.id)} onClick={() => toggleHome(g.id)}>
                   {g.name}
                 </Chip>
               ))}

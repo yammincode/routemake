@@ -704,7 +704,8 @@ export type ProfileCard = {
   self: boolean;
   bio?: string | null;
   years?: string | null;
-  home_gym?: string | null;
+  home_gym?: string | null; // 常去的館第一間（資料庫還沒套用 step31 時只有這個）
+  home_gyms?: string[] | null; // 常去的館（可以好幾間，照場館順序）
   self_stats?: number[] | null;
   ability?: number[];
   ability_sends?: number;
@@ -716,16 +717,14 @@ export type ProfileCard = {
 export async function getProfileCard(userId: string): Promise<ProfileCard> {
   return must(await supabase().rpc("profile_card", { p_user: userId }));
 }
-export async function saveMyCard(c: { public: boolean; bio: string; years: string | null; home_gym: string | null; self_stats: number[] | null }) {
-  must(
-    await supabase().rpc("save_my_card", {
-      p_public: c.public,
-      p_bio: c.bio,
-      p_years: c.years,
-      p_home_gym: c.home_gym,
-      p_self: c.self_stats,
-    })
-  );
+// 常去的館：新版有 home_gyms；資料庫還沒套用 step31 時只有一間 home_gym
+export const cardGyms = (c: Pick<ProfileCard, "home_gym" | "home_gyms">): string[] => c.home_gyms ?? (c.home_gym ? [c.home_gym] : []);
+export async function saveMyCard(c: { public: boolean; bio: string; years: string | null; home_gyms: string[]; self_stats: number[] | null }) {
+  const base = { p_public: c.public, p_bio: c.bio, p_years: c.years, p_self: c.self_stats };
+  const r = await supabase().rpc("save_my_card", { ...base, p_home_gyms: c.home_gyms });
+  // 資料庫還沒套用 step31（沒有收好幾間館的版本）：先存第一間
+  if (r.error?.code === "PGRST202") must(await supabase().rpc("save_my_card", { ...base, p_home_gym: c.home_gyms[0] ?? null }));
+  else must(r);
 }
 export async function clearCardBio(userId: string, gym: string) {
   must(await supabase().rpc("clear_card_bio", { p_user: userId, p_gym: gym }));

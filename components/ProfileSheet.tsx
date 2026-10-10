@@ -7,19 +7,20 @@ import { HexChart, ProfileCardView } from "@/components/ui/Profile";
 import Sheet from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/Toast";
 import { isManagerOf } from "@/lib/auth";
-import { clearCardBio, getProfileCard, type ProfileCard } from "@/lib/data";
+import { cardGyms, clearCardBio, getProfileCard, type ProfileCard } from "@/lib/data";
 import { CLIMBING_YEARS, gradeLabel } from "@/lib/design";
-import { findGym } from "@/lib/gyms";
+import { GYMS } from "@/lib/gyms";
 
 // 最高完攀：抱石、上攀都有就一起列
 export const topGrades = (c: ProfileCard) =>
   [c.top_grade, c.top_yds].filter((g): g is number => g != null).map(gradeLabel).join("・") || "–";
 
-// 一行基本資料：年資・常去的館
+// 一行基本資料：年資・常去的館（好幾間照場館順序，例如「常去萬華館、中和館」）
 export function cardMeta(c: ProfileCard) {
+  const gyms = GYMS.filter((g) => cardGyms(c).includes(g.id)).map((g) => g.name);
   const parts = [
     CLIMBING_YEARS.find((y) => y.v === c.years)?.t && `攀岩 ${CLIMBING_YEARS.find((y) => y.v === c.years)!.t}`,
-    c.home_gym && findGym(c.home_gym) && `常去${findGym(c.home_gym)!.name}`,
+    gyms.length > 0 && `常去${gyms.join("、")}`,
   ].filter(Boolean);
   return parts.join("・");
 }

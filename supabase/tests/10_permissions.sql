@@ -773,6 +773,35 @@ select tests.ok('人物卡：清除後自我介紹是空的、有操作紀錄',
   (select bio is null from public.profiles where id = :B)
   and exists (select 1 from public.audit_log where action = 'card.clear' and detail ->> 'bio' = '喜歡動態路線'));
 
+-- 常去的館可以複選：照場館順序存、不重複；舊版 App（只送一間）存檔不會洗掉其他館
+set role anon; select tests.login(null);
+select tests.throws('常去的館：未登入不能存', $q$select public.save_my_card(true, '嗨', null, array['mingde'], null)$q$);
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.throws('常去的館：不能直接讀欄位', 'select home_gyms from public.profiles');
+select tests.throws('常去的館：不能直接改欄位', $q$update public.profiles set home_gyms = '{g2}' where id = auth.uid()$q$);
+select tests.throws('常去的館：不能選沒有的館', $q$select public.save_my_card(true, '嗨', null, array['mingde', 'nope'], null)$q$);
+select tests.throws('常去的館：不能有空的', $q$select public.save_my_card(true, '嗨', null, array['mingde', null], null)$q$);
+select tests.lives('常去的館：可以選好幾間', $q$select public.save_my_card(true, '嗨', '1-3', array['g3', 'mingde', 'g3'], null)$q$);
+select tests.ok('常去的館：照場館順序、重複的拿掉；home_gym 是第一間（給舊版 App）',
+  (select c -> 'home_gyms' = '["mingde", "g3"]'::jsonb and c ->> 'home_gym' = 'mingde' from public.profile_card(:B) c), public.profile_card(:B)::text);
+select tests.lives('常去的館：舊版 App 存同一間', $q$select public.save_my_card(true, '嗨', '1-3', 'mingde'::text, null)$q$);
+select tests.ok('常去的館：舊版 App 存檔不會洗掉其他館', (select c -> 'home_gyms' = '["mingde", "g3"]'::jsonb from public.profile_card(:B) c), public.profile_card(:B)::text);
+select tests.lives('常去的館：舊版 App 換成別間', $q$select public.save_my_card(true, '嗨', '1-3', 'g2'::text, null)$q$);
+select tests.ok('常去的館：舊版 App 換成別間就只有那一間', (select c -> 'home_gyms' = '["g2"]'::jsonb and c ->> 'home_gym' = 'g2' from public.profile_card(:B) c), public.profile_card(:B)::text);
+select tests.lives('常去的館：舊版 App 清空', $q$select public.save_my_card(true, '嗨', '1-3', null::text, null)$q$);
+select tests.ok('常去的館：清空後沒有館', (select c -> 'home_gyms' = '[]'::jsonb and c -> 'home_gym' = 'null'::jsonb from public.profile_card(:B) c), public.profile_card(:B)::text);
+select tests.lives('常去的館：新版選南港、新店', $q$select public.save_my_card(true, '嗨', '1-3', array['g4', 'g5']::text[], null)$q$);
+select tests.lives('常去的館：新版全部不選（空清單）', $q$select public.save_my_card(true, '嗨', '1-3', '{}'::text[], null)$q$);
+select tests.ok('常去的館：新版全部不選後沒有館', (select c -> 'home_gyms' = '[]'::jsonb from public.profile_card(:B) c), public.profile_card(:B)::text);
+select tests.lives('常去的館：選回萬華、中和', $q$select public.save_my_card(true, '嗨', '1-3', array['g3', 'g2'], null)$q$);
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.ok('常去的館：別人看公開的人物卡也看得到全部', (select c -> 'home_gyms' = '["g2", "g3"]'::jsonb from public.profile_card(:B) c), public.profile_card(:B)::text);
+select tests.lives('常去的館：存自己的不會動到別人的', $q$select public.save_my_card(false, null, null, array['g5'], null)$q$);
+reset role;
+select tests.ok('常去的館：別人的還是萬華、中和', (select home_gyms = '{g2,g3}' from public.profiles where id = :B));
+
 -- ---------------------------------------------------------------------
 -- YDS 等級（上攀）
 -- ---------------------------------------------------------------------
