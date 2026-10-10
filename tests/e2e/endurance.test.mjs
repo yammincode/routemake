@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { after, before, test } from "node:test";
-import { BASE, WALL, createMock, launch, login, phone } from "./helpers.mjs";
+import { BASE, WALL, createMock, launch, login, monthGrade, phone } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -127,6 +127,7 @@ test("長耐力：顧客記錄最高爬到第幾點、照比例算分、完攀�
   await c.keyboard.press("Escape");
   await c.goto(BASE + "/me", { waitUntil: "networkidle" });
   await c.waitForTimeout(1000);
+  await monthGrade(c, "5.11");
   const me = await c.textContent("main");
   assert.ok(me.includes("爬到 6／10 點") && me.includes("+10"), "我的紀錄寫進度和比例分數");
 
@@ -180,6 +181,7 @@ test("長耐力：館首頁「最新路線」打開也有照片和點；下架�
   const open = async () => {
     await c.goto(BASE + "/me", { waitUntil: "networkidle" });
     await c.waitForTimeout(1000);
+    await monthGrade(c, "5.11");
     await c.locator("main ul li button", { hasText: r.code }).click();
     await sheet.waitFor();
     await c.waitForTimeout(300);
@@ -216,6 +218,7 @@ test("資料庫還沒套用 step30：一般路線照常記錄、我的紀錄照�
   await c.keyboard.press("Escape");
   await c.goto(BASE + "/me", { waitUntil: "networkidle" });
   await c.waitForTimeout(1000);
+  await monthGrade(c, "V3");
   assert.ok((await c.textContent("main")).includes("藍色"), "我的紀錄照常");
   assert.deepEqual(errors.filter((e) => !/400/.test(e)), []);
 });

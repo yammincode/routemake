@@ -1,5 +1,6 @@
 import { gradeLabel } from "@/lib/design";
 import type { ReactNode } from "react";
+import { tapeLook } from "./Gym";
 
 // 月份切換（原型 .month）
 export function MonthSwitcher({ year, month, onPrev, onNext, nextDisabled }: { year: number; month: number; onPrev: () => void; onNext: () => void; nextDisabled?: boolean }) {
@@ -89,6 +90,76 @@ export function CalendarHeat({ year, month, counts, today }: { year: number; mon
         多
       </div>
     </>
+  );
+}
+
+// 本月完攀的直條圖（跟「全館難度分布」一樣的樣子）：每個難度一根，上面寫幾條，黃色那段是 Flash
+// 抱石用膠帶顏色，難度下面再畫一小段膠帶色（整根都是 Flash 時也看得出顏色）；上攀（tone="accent"）用主色
+// 點一根選它（其他變淡）、再點一次取消；沒有紀錄的那根不能點
+export type MonthCol = { key: string; label: string; grade: number; sends: number; flashes: number; items: number };
+export function MonthGradeChart({
+  title,
+  cols,
+  picked,
+  onPick,
+  tone = "tape",
+}: {
+  title: string;
+  cols: MonthCol[];
+  picked: string | null;
+  onPick: (key: string | null) => void;
+  tone?: "tape" | "accent";
+}) {
+  const total = cols.reduce((s, c) => s + c.sends, 0);
+  const flashes = cols.reduce((s, c) => s + c.flashes, 0);
+  const max = Math.max(1, ...cols.map((c) => c.sends));
+  const H = 64;
+  return (
+    <div className="mb-2 rounded-card bg-surface px-4 pt-3.5 pb-3 shadow-card">
+      <div className="mb-2 flex items-baseline justify-between">
+        <b className="text-note">{title}</b>
+        <span className="text-meta text-muted">
+          共 <b className="font-num text-num-chip leading-none text-ink">{total}</b> 條
+          {flashes > 0 && (
+            <>
+              ・<span className="inline-block size-2 rounded-[2px] bg-flash align-middle" /> Flash <b className="font-num text-ink">{flashes}</b>
+            </>
+          )}
+        </span>
+      </div>
+      <div className="grid items-end gap-1" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}>
+        {cols.map((c) => {
+          const t = tapeLook(c.grade);
+          const on = picked === c.key;
+          const h = c.sends ? Math.max(6, (c.sends / max) * H) : 3;
+          const fh = c.sends ? (c.flashes / c.sends) * h : 0;
+          return (
+            <button
+              key={c.key}
+              aria-pressed={on}
+              aria-label={`${c.label}，完攀 ${c.sends} 條${c.flashes ? `，其中 Flash ${c.flashes} 條` : ""}`}
+              disabled={!c.items}
+              onClick={() => onPick(on ? null : c.key)}
+              className={`grid justify-items-center gap-0.5 ${picked && !on ? "opacity-40" : ""}`}
+            >
+              <span className="font-num text-meta leading-none font-semibold text-muted">{c.sends || ""}</span>
+              {c.sends ? (
+                <span
+                  style={{ height: `${h}px`, ...(tone === "tape" ? t.style : {}) }}
+                  className={`flex w-full flex-col overflow-hidden rounded-tape ${tone === "tape" ? t.cls : "bg-accent"} ${on ? "outline-2 outline-offset-1 outline-ink" : ""}`}
+                >
+                  {fh > 0 && <span className="w-full flex-none bg-flash" style={{ height: `${fh}px` }} />}
+                </span>
+              ) : (
+                <span className="h-[3px] w-full rounded-tape bg-line" />
+              )}
+              {tone === "tape" && <span aria-hidden style={t.style} className={`h-[5px] w-3/5 rounded-tape ${t.cls}`} />}
+              <span className={`font-num text-meta leading-tight font-bold ${on ? "text-ink" : ""}`}>{c.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

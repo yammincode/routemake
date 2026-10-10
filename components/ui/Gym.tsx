@@ -17,7 +17,7 @@ export function dueText(days: number | null) {
 
 // 膠帶色塊：有顏色的用館內膠帶色（加一圈細框，深色模式下黑色膠帶也看得到）；還沒定顏色（V9、V10）和上攀用虛線框
 const TAPE_EDGE = "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--ink)_30%,transparent)]";
-function tapeLook(g: number): { style?: CSSProperties; cls: string } {
+export function tapeLook(g: number): { style?: CSSProperties; cls: string } {
   const c = gradeColor(g);
   return c ? { style: { background: c.bg, color: c.fg }, cls: TAPE_EDGE } : { cls: "border border-dashed border-muted bg-sunk text-ink" };
 }

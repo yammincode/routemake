@@ -45,7 +45,7 @@ function savedBand(): BandId | null {
   }
 }
 
-// 館內路線首頁：平面圖、快換線提醒、全館難度分布與難度篩選、各區難度色帶卡片（含換線日）、最新路線
+// 館內路線首頁：平面圖、最新路線、快換線提醒、全館難度分布與難度篩選、各區難度色帶卡片（含換線日）
 // 換線日：有換線公告就照公告（10/19–20 換線、換線中），沒有公告就用員工設的下次換線日
 export default function HomeView({ gymId }: { gymId: string }) {
   const { session, ready } = useAuth();
@@ -193,6 +193,18 @@ export default function HomeView({ gymId }: { gymId: string }) {
         />
       )}
 
+      {/* 最新路線放在平面圖下面（一打開就看得到這週新設的路線）；這週沒有新路線就不顯示 */}
+      {fresh.length > 0 && (
+        <>
+          <SectionTitle>最新路線</SectionTitle>
+          <NewRouteRow>
+            {fresh.map((r) => (
+              <NewRouteCard key={r.id} color={seqTotal(r) ? undefined : r.hold_color} grade={r.grade} zone={r.zone_name} ago={ago(r.created_at)} onClick={() => setOpen(r)} />
+            ))}
+          </NewRouteRow>
+        </>
+      )}
+
       {SPRAY_WALLS.filter((s) => s.gymId === gymId).map((s) => (
         <Button
           key={s.id}
@@ -251,16 +263,6 @@ export default function HomeView({ gymId }: { gymId: string }) {
         })}
       </ZoneList>
 
-      <SectionTitle>最新路線</SectionTitle>
-      {fresh.length ? (
-        <NewRouteRow>
-          {fresh.map((r) => (
-            <NewRouteCard key={r.id} color={seqTotal(r) ? undefined : r.hold_color} grade={r.grade} zone={r.zone_name} ago={ago(r.created_at)} onClick={() => setOpen(r)} />
-          ))}
-        </NewRouteRow>
-      ) : (
-        <Empty>這週還沒有新路線。</Empty>
-      )}
 
       {/* 長耐力路線：卡片上放區域照片和照順序的點（顧客才知道第幾點是哪顆） */}
       <RouteSheet

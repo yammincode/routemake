@@ -25,7 +25,7 @@ import { GymDot, ResetDateRow, ResetLines, ResetMonth } from "@/components/ui/Re
 import { newRoutesText, type ResetEvent } from "@/lib/resets";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
-import { CalendarHeat, DailyBars, Delta, GradeBars, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
+import { CalendarHeat, DailyBars, Delta, GradeBars, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
@@ -166,6 +166,7 @@ export default function DesignShowcase() {
   const [resetDay, setResetDay] = useState("2026-10-12");
   const [videoTag, setVideoTag] = useState<string | null>(null);
   const [trimDemo, setTrimDemo] = useState<[number, number]>([12, 53.5]);
+  const [monthPick, setMonthPick] = useState<string | null>(null);
   const [muteDemo, setMuteDemo] = useState(false);
   const [pickHeight, setPickHeight] = useState<HeightBand | null>("170s");
   const [pickMove, setPickMove] = useState<ClimbMove | null>("dynamic");
@@ -444,7 +445,28 @@ export default function DesignShowcase() {
         <Delta diff={4} />
         <SectionTitle>攀爬日</SectionTitle>
         <CalendarHeat year={2026} month={month} counts={counts} today={month === 9 ? 30 : undefined} />
-        <SectionTitle>本月難度分布</SectionTitle>
+        <SectionTitle>本月完攀（MonthGradeChart）</SectionTitle>
+        <MonthGradeChart
+          title="抱石"
+          picked={monthPick}
+          onPick={setMonthPick}
+          cols={[-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((g) => {
+            const [sends, flashes] = ({ 1: [3, 3], 2: [5, 4], 3: [2, 0], 4: [1, 0], 5: [1, 1] } as Record<number, number[]>)[g] ?? [0, 0];
+            return { key: `v:${g}`, label: g < 0 ? "VB" : `V${g}`, grade: g, sends, flashes, items: sends };
+          })}
+        />
+        <MonthGradeChart
+          title="上攀"
+          tone="accent"
+          picked={monthPick}
+          onPick={setMonthPick}
+          cols={["5.6", "5.7", "5.8", "5.9", "5.10", "5.11", "5.12", "5.13"].map((label, i) => {
+            const [sends, flashes] = ({ 3: [1, 1], 4: [2, 0] } as Record<number, number[]>)[i] ?? [0, 0];
+            return { key: `y:${i}`, label, grade: 100 + i, sends, flashes, items: sends };
+          })}
+        />
+        <p className="mt-0 mb-1.5 text-meta text-muted">點一根選它（其他變淡）、再點一次取消；沒有紀錄的那根點不了</p>
+        <SectionTitle>難度長條（GradeBars，目前牆上進度用）</SectionTitle>
         <GradeBars
           rows={[
             { grade: 2, ratio: 0.5, label: "4 條" },

@@ -5,9 +5,9 @@ import { useAuth } from "@/components/AuthProvider";
 import PointsPanel from "@/components/PointsPanel";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
-import { Empty, SectionTitle } from "@/components/ui/Card";
+import { Empty, SectionTitle, Tip } from "@/components/ui/Card";
 import { Points, RouteList, RouteRow } from "@/components/ui/Route";
-import { CalendarHeat, Delta, GradeBars, MonthSwitcher, StatGrid, StatTile, TotalRow } from "@/components/ui/Stats";
+import { CalendarHeat, Delta, GradeBars, MonthGradeChart, MonthSwitcher, StatGrid, StatTile, TotalRow, type MonthCol } from "@/components/ui/Stats";
 import {
   getGym,
   getGymActiveRoutes,
@@ -25,7 +25,7 @@ import {
   type Route,
 } from "@/lib/data";
 import { todayYmd } from "@/lib/date";
-import { FEEL, GRADE_FEEL, gradeLabel } from "@/lib/design";
+import { FEEL, GRADE_FEEL, GRADES, gradeLabel } from "@/lib/design";
 import { overlayPending, withCache } from "@/lib/offline";
 import { ascentPoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
@@ -35,7 +35,7 @@ const thisMonth = () => {
   return { y: +t.slice(0, 4), m: +t.slice(5, 7), d: +t.slice(8, 10) };
 };
 
-// 我的紀錄：月份切換、四格統計、攀爬日月曆、難度分布、本月完攀與心得、累計、牆上進度
+// 我的紀錄：月份切換、四格統計、攀爬日月曆、本月完攀直條圖（點一根才列出那個難度的路線和心得）、累計、牆上進度
 export default function MeView({ gymId }: { gymId: string }) {
   const { session, ready } = useAuth();
   const now = thisMonth();
@@ -44,6 +44,8 @@ export default function MeView({ gymId }: { gymId: string }) {
   const [points, setPoints] = useState<PointsSummary | null>(null);
   const rules = useScoring();
   const [list, setList] = useState<MonthAscent[]>([]);
+  // 本月完攀直條圖點了哪一根（v:3＝V3、y:104＝5.10）；換月份就收起來
+  const [pick, setPick] = useState<{ ym: string; key: string } | null>(null);
   const [wall, setWall] = useState<{ routes: Route[]; mine: Record<string, Ascent> } | null>(null);
   const [gym, setGym] = useState<Gym | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -126,13 +128,25 @@ export default function MeView({ gymId }: { gymId: string }) {
   const prev = () => setYm(({ y, m }) => (m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 }));
   const next = () => setYm(({ y, m }) => (m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 }));
 
-  const byGrade = stats ? Object.entries(stats.by_grade).map(([g, n]) => ({ g: +g, n })).sort((a, b) => a.g - b.g) : [];
-  const maxN = Math.max(1, ...byGrade.map((x) => x.n));
   const counts = stats ? Object.fromEntries(Object.entries(stats.by_day).map(([d, n]) => [+d, n])) : {};
 
   const done = (id: string) => ["flash", "send"].includes(wall?.mine[id]?.status ?? "");
   const wallGrades = wall ? [...new Set(wall.routes.map((r) => r.grade))].sort((a, b) => a - b) : [];
 
+  // 本月完攀直條圖：抱石 VB–V10 每級一根；上攀 5.6–5.9 每級一根、5.10 以上 a–d 合成一根（20 根手機放不下）
+  const colKey = (g: number) => (g < 100 ? `v:${g}` : `y:${g < 104 ? g : 104 + Math.floor((g - 104) / 4) * 4}`);
+  const col = (key: string, label: string, grade: number): MonthCol => {
+    const mine = list.filter((a) => colKey(a.route.grade) === key);
+    const sent = mine.filter((a) => a.status !== "project");
+    return { key, label, grade, sends: sent.length, flashes: sent.filter((a) => a.status === "flash").length, items: mine.length };
+  };
+  const boulderCols = GRADES.map((g) => col(`v:${g}`, gradeLabel(g), g));
+  const ropeCols = [100, 101, 102, 103, 104, 108, 112, 116].map((g) => col(`y:${g}`, g < 104 ? gradeLabel(g) : gradeLabel(g).slice(0, -1), g));
+  const chartCols = [...boulderCols, ...ropeCols];
+  const ymKey = `${ym.y}-${ym.m}`;
+  const picked = pick?.ym === ymKey && chartCols.some((c) => c.key === pick.key && c.items) ? pick.key : null;
+  const choose = (key: string | null) => setPick(key ? { ym: ymKey, key } : null);
+  const shown = picked ? list.filter((a) => colKey(a.route.grade) === picked) : [];
   const feelEmoji = (v: number | null) => FEEL.find((o) => o.v === v)?.e ?? "";
   const gradeFeel = (v: number | null) => GRADE_FEEL.find((o) => o.v === v)?.t;
 
@@ -155,44 +169,50 @@ export default function MeView({ gymId }: { gymId: string }) {
       <SectionTitle>攀爬日</SectionTitle>
       <CalendarHeat year={ym.y} month={ym.m} counts={counts} today={isNow ? now.d : undefined} />
 
-      <SectionTitle>本月難度分布</SectionTitle>
-      {byGrade.length ? (
-        <GradeBars rows={byGrade.map(({ g, n }) => ({ grade: g, ratio: n / maxN, label: `${n} 條` }))} />
+      <SectionTitle>本月完攀</SectionTitle>
+      {chartCols.some((c) => c.items) ? (
+        <>
+          {boulderCols.some((c) => c.items) && <MonthGradeChart title="抱石" cols={boulderCols} picked={picked} onPick={choose} />}
+          {ropeCols.some((c) => c.items) && <MonthGradeChart title="上攀" cols={ropeCols} picked={picked} onPick={choose} tone="accent" />}
+          {picked ? (
+            <>
+              <p className="mt-3 mb-2 text-note text-muted">
+                <b className="text-ink">{chartCols.find((c) => c.key === picked)?.label}</b>・{shown.length} 條，點路線看心得、改紀錄
+              </p>
+              <RouteList>
+                {shown.map((a) => {
+                  const gf = gradeFeel(a.grade_feel);
+                  // 長耐力：不分顏色，寫爬到第幾點（沒爬完的照比例有分數）
+                  const n = seqTotal(a.route);
+                  const hp = n ? (a.status === "project" ? a.highpoint : n) : null;
+                  return (
+                    <RouteRow
+                      key={a.id}
+                      color={n ? undefined : a.route.hold_color}
+                      grade={a.route.grade}
+                      title={
+                        <>
+                          {a.route.name ? `${a.route.zone_name}・${a.route.name}` : n ? `${a.route.zone_name} ${a.route.code}` : `${a.route.zone_name} ${a.route.hold_color}色`}{" "}
+                          {feelEmoji(a.feel)}
+                          {rules && a.route.kind !== "community" && <Points prefix="+" n={ascentPoints(a.route.grade, a.route.style_tags, a.status, rules, hp, n)} />}
+                        </>
+                      }
+                      meta={`${+a.climbed_on.slice(5, 7)}/${+a.climbed_on.slice(8, 10)}${hp ? `，爬到 ${hp}／${n} 點` : ""}${gf ? `，體感${gf}` : ""}${a.route.archived_at ? "，已下架" : ""}`}
+                      quote={a.private_note ?? undefined}
+                      status={a.status}
+                      statusOld={!!a.route.archived_at}
+                      onClick={() => setOpen(a)}
+                    />
+                  );
+                })}
+              </RouteList>
+            </>
+          ) : (
+            <Tip>點一根長條，看這個難度這個月爬了哪些路線和心得。黃色那段是 Flash。</Tip>
+          )}
+        </>
       ) : (
         <Empty>這個月還沒有完攀紀錄。</Empty>
-      )}
-
-      {list.length > 0 && (
-        <>
-          <SectionTitle>本月完攀與心得</SectionTitle>
-          <RouteList>
-            {list.map((a) => {
-              const gf = gradeFeel(a.grade_feel);
-              // 長耐力：不分顏色，寫爬到第幾點（沒爬完的照比例有分數）
-              const n = seqTotal(a.route);
-              const hp = n ? (a.status === "project" ? a.highpoint : n) : null;
-              return (
-                <RouteRow
-                  key={a.id}
-                  color={n ? undefined : a.route.hold_color}
-                  grade={a.route.grade}
-                  title={
-                    <>
-                      {a.route.name ? `${a.route.zone_name}・${a.route.name}` : n ? `${a.route.zone_name} ${a.route.code}` : `${a.route.zone_name} ${a.route.hold_color}色`}{" "}
-                      {feelEmoji(a.feel)}
-                      {rules && a.route.kind !== "community" && <Points prefix="+" n={ascentPoints(a.route.grade, a.route.style_tags, a.status, rules, hp, n)} />}
-                    </>
-                  }
-                  meta={`${+a.climbed_on.slice(5, 7)}/${+a.climbed_on.slice(8, 10)}${hp ? `，爬到 ${hp}／${n} 點` : ""}${gf ? `，體感${gf}` : ""}${a.route.archived_at ? "，已下架" : ""}`}
-                  quote={a.private_note ?? undefined}
-                  status={a.status}
-                  statusOld={!!a.route.archived_at}
-                  onClick={() => setOpen(a)}
-                />
-              );
-            })}
-          </RouteList>
-        </>
       )}
 
       <TotalRow label="累計完攀" value={stats?.total_sends ?? "–"} />

@@ -47,3 +47,9 @@ export async function login(page, username, password = "password1", next) {
 }
 
 export { createMock, taipeiDay };
+
+// 我的紀錄「本月完攀」直條圖：點某個難度那一根（例如 "V2"、"5.11"），下面才會列出這個難度的路線
+export async function monthGrade(page, label) {
+  await page.locator(`main button[aria-label^="${label}，"]`).click();
+  await page.waitForTimeout(300);
+}

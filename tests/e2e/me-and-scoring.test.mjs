@@ -1,7 +1,7 @@
 // 我的紀錄（月統計、積分）與計分規則；日期都用「相對今天」，不會過期
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { createMock, launch, login, phone } from "./helpers.mjs";
+import { createMock, launch, login, monthGrade, phone } from "./helpers.mjs";
 import { taipeiDay } from "./mock-supabase.mjs";
 
 let browser;
@@ -34,6 +34,7 @@ test("我的紀錄：統計、積分、成長比較、改計分規則後重算",
   assert.ok((await tiles()).includes("2連續天數"), "連續 2 天");
   assert.ok((await page.textContent("main")).includes("今天比最近 7 天平均"), "成長比較");
   assert.ok((await page.locator('main [role=group] button[aria-label$=" 60 分"]').count()) === 1, "每日積分長條圖有今天");
+  await monthGrade(page, "V4");
   assert.ok((await page.locator("main ul li").allTextContents()).some((t) => t.includes("+60分") && t.includes("今天 Flash")), "本月完攀列表含得分與心得");
 
   await page.click('button[aria-label="上個月"]');
@@ -132,6 +133,7 @@ test("已下架的路線：在我的紀錄按錯「嘗試中」再改回「完�
     await page.click('main button[aria-label="上個月"]');
     await page.waitForTimeout(800);
   }
+  await monthGrade(page, "V5");
   await page.locator("main ul li button", { hasText: "紫色" }).click();
   await page.waitForTimeout(400);
   await page.click('[role=dialog] button:has-text("嘗試中")');
