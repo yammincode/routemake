@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
-import type { FloorPlanShape } from "@/lib/floorplan";
+import { planFontSize, planLabel, type FloorPlanShape } from "@/lib/floorplan";
 import { pressKeys } from "./Gym";
 
 export type PlanZone = { code: string; name: string; done: number; total: number; resetDays: number | null };
@@ -66,6 +66,8 @@ export default function FloorPlan({
               const p = z.total ? z.done / z.total : 0;
               const soon = z.resetDays != null && z.resetDays >= 0 && z.resetDays <= 7;
               const on = selected === z.code;
+              // 名字沒改過寫簡稱（A1、Slab…），店長改過名字就寫新名字（太長自動縮小）
+              const label = planLabel(P, z.name);
               const fill = admin
                 ? `color-mix(in srgb,var(--accent) ${on ? 55 : 14}%,var(--blush))`
                 : guest
@@ -97,8 +99,8 @@ export default function FloorPlan({
                       className="group-hover:[stroke-width:4] group-hover:[stroke:var(--ink)] group-focus:[stroke-width:4] group-focus:[stroke:var(--ink)]"
                     />
                   ))}
-                  <text x={P.lx} y={P.ly} fontSize={40} textAnchor="middle" className="fill-ink font-black">
-                    {P.t ?? z.name.replace(" 區", "")}
+                  <text x={P.lx} y={P.ly} fontSize={planFontSize(P, label)} textAnchor="middle" className="fill-ink font-black">
+                    {label}
                   </text>
                   <text x={P.lx} y={P.ly + 36} fontSize={32} textAnchor="middle" className="fill-ink font-num font-bold">
                     {count ? `${z.total} 條` : `${z.done}/${z.total}`}

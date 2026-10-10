@@ -302,16 +302,7 @@ export default function AdminView() {
         <>
           <SetBox>
             <Label htmlFor="zname">區域名稱{manager ? "" : "（店長可修改）"}</Label>
-            <TextField
-              id="zname"
-              key={`name-${zone.id}-${zone.name}`}
-              defaultValue={zone.name}
-              readOnly={!manager}
-              onBlur={(e) => {
-                const v = e.target.value.trim();
-                if (manager && v && v !== zone.name) void saveZone({ name: v }, "已更新區域名稱");
-              }}
-            />
+            <ZoneNameField key={`name-${zone.id}-${zone.name}`} name={zone.name} editable={manager} onSave={(v) => saveZone({ name: v }, "已更新區域名稱")} />
             <Label>等級制{manager ? "" : "（店長可切換）"}</Label>
             <div className="flex flex-wrap items-center gap-2">
               {(["v", "yds"] as const).map((g) => (
@@ -526,6 +517,43 @@ export default function AdminView() {
           </>
         )}
       </Sheet>
+    </>
+  );
+}
+
+// 區域名稱：改了之後按「儲存名稱」、鍵盤右下角的鍵（完成），或點別的地方都會存；同一個名字只送一次，存失敗可以再按
+function ZoneNameField({ name, editable, onSave }: { name: string; editable: boolean; onSave: (v: string) => Promise<void> }) {
+  const [value, setValue] = useState(name);
+  const sent = useRef<string | null>(null);
+  const v = value.trim();
+  const dirty = editable && !!v && v !== name;
+  const save = () => {
+    if (!dirty || sent.current === v) return;
+    sent.current = v;
+    void onSave(v).finally(() => (sent.current = null));
+  };
+  return (
+    <>
+      <TextField
+        id="zname"
+        value={value}
+        readOnly={!editable}
+        maxLength={20}
+        enterKeyHint="done"
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter") return;
+          e.preventDefault();
+          save();
+          e.currentTarget.blur();
+        }}
+        onBlur={save}
+      />
+      {dirty && (
+        <Button variant="primary" className="mt-2" onClick={save}>
+          儲存名稱
+        </Button>
+      )}
     </>
   );
 }

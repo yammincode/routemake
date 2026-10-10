@@ -102,7 +102,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Wall.tsx` | `WallPhoto`（`hideable`：左上角「隱藏路線／顯示路線」按鈕，只用在顧客區域頁）、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`（難度色帶版：小縮圖、完成數、`GradeStrip`、難度範圍或篩選結果、換線倒數；guest 只寫條數）、`ZoneList`、`GradeStrip`（區域難度色帶）、`GradeChart`（全館難度分布）、`BandPicker`（全部／入門 VB–V2／進階 V3–V5／挑戰 V6+）、`GoalLine`（快換線提醒）、`NewRouteRow`、`NewRouteCard`、`GymRow`（lines：館名下面的換線小字；tag 給空字串不顯示右邊的字）、`SoonBox`、`dueText`；`ZoneCard` 的 due 是換線（7 天內 warn） |
 | `Resets.tsx` | `ResetLines`（選館頁換線小字：換線中、剛換好 NEW、○ 天後換線）、`ResetMonth`（換線行事曆：一列一週，館的顏色長條，兩天跨兩格，點日期／色塊選日子）、`ResetDateRow`（日期＋名稱一列）、`GymDot`（館的顏色色票） |
-| `FloorPlan.tsx` | `FloorPlan`（guest：每區寫條數、統一底色；7 天內換線只畫虛線框，不寫字；有好幾層的館（南港）同一張卡片由上到下畫，每層上方標 1F、2F） |
+| `FloorPlan.tsx` | `FloorPlan`（guest：每區寫條數、統一底色；7 天內換線只畫虛線框，不寫字；有好幾層的館（南港）同一張卡片由上到下畫，每層上方標 1F、2F；區域名字沒改過寫簡稱，店長改過名字就寫新名字，太長自動縮小，見 `lib/floorplan.ts` 的 `planLabel`、`planFontSize`） |
 | `Comments.tsx` | `CommentItem`（含 👍 按讚；刪除要按兩次）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
 | `Spray.tsx` | `HoldMarks`（照片上的圈圈：起攀 S 綠、路線點 藍、完攀 T 紅）、`HoldLegend`、`HoldTools`（選種類與大小）、`SprayRow`、`RouteThumb`（列表縮圖，放大到路線範圍）、`HOLD_TYPES`、`HOLD_SIZES` |
 | `Profile.tsx` | `Avatar`（暱稱第一個字）、`HexChart`（六角形能力表）、`ProfileCardView`（人物卡） |
