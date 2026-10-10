@@ -546,6 +546,8 @@ export async function getAuditLog(gym: string, opts: { before?: number; actions?
 // ---------- 顧客分享影片 ----------
 export const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 export const VIDEO_MAX_SECONDS = 60;
+// 測試用：調低長度上限（不用真的錄一支 60 秒以上的影片）
+export const videoMaxSeconds = () => (typeof window !== "undefined" && (window as Window & { __RM_VIDEO_MAX?: number }).__RM_VIDEO_MAX) || VIDEO_MAX_SECONDS;
 export const VIDEO_DAILY_LIMIT = 10;
 const VIDEO_TYPES: Record<string, string> = { mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm" };
 
@@ -584,17 +586,26 @@ export async function getVideos(routeId: string): Promise<Video[]> {
 }
 
 // 讀影片長度（秒）；讀不到回傳 null
-function videoDuration(file: File): Promise<number | null> {
+// 有些影片（例如其他 App 錄的 WebM）一開始讀到的長度是無限大：跳到最後再讀一次
+export function videoDuration(file: File): Promise<number | null> {
   return new Promise((resolve) => {
     const v = document.createElement("video");
     const url = URL.createObjectURL(file);
+    let settled = false;
     const done = (d: number | null) => {
+      if (settled) return;
+      settled = true;
       URL.revokeObjectURL(url);
       resolve(d);
     };
+    const ok = () => (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null);
     v.preload = "metadata";
     v.muted = true;
-    v.onloadedmetadata = () => done(Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null);
+    v.onloadedmetadata = () => {
+      if (ok() != null || v.duration !== Infinity) return done(ok());
+      v.onseeked = () => done(ok());
+      v.currentTime = 1e9;
+    };
     v.onerror = () => done(null);
     setTimeout(() => done(null), 8000);
     v.src = url;
@@ -608,12 +619,21 @@ function videoKind(file: File): { ext: string; type: string } {
   if (!ext) throw new Error("只能分享 MP4、MOV 或 WebM 影片");
   return { ext, type: VIDEO_TYPES[ext] };
 }
+const tooLong = (d: number | null) => d != null && d > videoMaxSeconds() + 0.5;
+const longError = (d: number) => new Error(`影片 ${Math.round(d)} 秒，最長 ${videoMaxSeconds()} 秒，請先剪短再分享`);
 export async function checkVideo(file: File): Promise<{ ext: string; type: string; duration: number | null }> {
   const { ext } = videoKind(file);
   if (file.size > VIDEO_MAX_BYTES) throw new Error(`影片 ${Math.ceil(file.size / 1048576)} MB，超過 50 MB，請先剪短再分享`);
   const duration = await videoDuration(file);
-  if (duration != null && duration > VIDEO_MAX_SECONDS + 0.5) throw new Error(`影片 ${Math.round(duration)} 秒，最長 60 秒，請先剪短再分享`);
+  if (tooLong(duration)) throw longError(duration!);
   return { ext, type: VIDEO_TYPES[ext], duration };
+}
+// 選影片時檢查：手機能在 App 裡剪輯（editable，能重新錄影）而且讀得到長度時，太長、太大的留到剪完再檢查；
+// 不能剪的手機跟原本一樣，太長、太大就請他先到相簿剪短。回傳影片長度（秒，讀不到是 null）
+export async function checkPickedVideo(file: File, editable: boolean): Promise<number | null> {
+  videoKind(file);
+  const duration = editable ? await videoDuration(file) : null;
+  return duration != null ? duration : (await checkVideo(file)).duration;
 }
 
 export async function uploadVideo(
@@ -622,9 +642,11 @@ export async function uploadVideo(
   routeId: string,
   file: File,
   info: { caption: string | null; status: Status | null; height_band?: HeightBand | null; move?: ClimbMove | null },
-  source?: File // 壓縮前的原檔：長度從原檔讀（壓縮後的檔有時讀不到長度）
+  // 長度：剪輯過的直接給（剪下來的長度）；只壓縮的從壓縮前的原檔讀（壓縮後的檔有時讀不到長度）
+  len?: { source?: File; duration?: number }
 ) {
-  const { duration } = await checkVideo(source ?? file);
+  const duration = len?.duration ?? (await videoDuration(len?.source ?? file));
+  if (tooLong(duration)) throw longError(duration!);
   const { ext, type } = videoKind(file);
   if (file.size > VIDEO_MAX_BYTES) throw new Error(`影片 ${Math.ceil(file.size / 1048576)} MB，超過 50 MB，請先剪短再分享`);
   const since = new Date(Date.now() - 86400000).toISOString();

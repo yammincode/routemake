@@ -279,6 +279,131 @@ export function VideoPickButton({ onPick, disabled, children }: { onPick: (f: Fi
   );
 }
 
+// 剪輯長度用的時間：0:12.5（整秒就不寫小數）
+const clock1 = (s: number) => {
+  const t = Math.round(s * 10) / 10;
+  const m = Math.floor(t / 60);
+  const sec = t - m * 60;
+  return `${m}:${sec < 10 ? "0" : ""}${Number.isInteger(sec) ? sec : sec.toFixed(1)}`;
+};
+
+// 剪輯長度（分享影片前）：上面預覽（拉哪一條就跳到那個位置；▶ 播放選的這段），中間時間軸畫出選的範圍，
+// 下面「開始」「結束」兩條拉桿（－／＋ 每次 0.5 秒）；最多 max 秒、最少 1 秒，拉一條超過上限時另一條跟著移
+export function VideoTrim({
+  src,
+  duration,
+  start,
+  end,
+  max,
+  onChange,
+}: {
+  src?: string; // 沒有網址時顯示黑色預留框（展示頁用）
+  duration: number;
+  start: number;
+  end: number;
+  max: number;
+  onChange: (start: number, end: number) => void;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const MIN = 1;
+  const r1 = (x: number) => Math.round(x * 10) / 10;
+  const seek = (t: number) => {
+    const v = ref.current;
+    if (!v) return;
+    v.pause();
+    setPlaying(false);
+    v.currentTime = t;
+  };
+  const set = (which: "start" | "end", t: number) => {
+    let s = which === "start" ? r1(Math.min(Math.max(0, t), duration - MIN)) : start;
+    let e = which === "end" ? r1(Math.min(Math.max(MIN, t), duration)) : end;
+    if (which === "start") {
+      if (e - s > max) e = r1(s + max);
+      if (e - s < MIN) e = r1(Math.min(duration, s + MIN));
+    } else {
+      if (e - s > max) s = r1(e - max);
+      if (e - s < MIN) s = r1(Math.max(0, e - MIN));
+    }
+    onChange(s, e);
+    seek(which === "start" ? s : e);
+  };
+  const toggle = () => {
+    const v = ref.current;
+    if (!v) return;
+    if (playing) return seek(v.currentTime);
+    if (v.currentTime < start || v.currentTime >= end - 0.05) v.currentTime = start;
+    void v.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+  };
+  const row = (which: "start" | "end", label: string, value: number) => (
+    <div className="mt-2 flex items-center gap-2">
+      <label htmlFor={`trim-${which}`} className="w-9 flex-none text-meta text-muted">
+        {label}
+      </label>
+      <button
+        aria-label={`${label}往前 0.5 秒`}
+        onClick={() => set(which, value - 0.5)}
+        className="grid size-9 flex-none place-items-center rounded-full border border-line text-[18px]"
+      >
+        −
+      </button>
+      <input
+        id={`trim-${which}`}
+        type="range"
+        min={0}
+        max={duration}
+        step={0.1}
+        value={value}
+        onChange={(e) => set(which, +e.target.value)}
+        className="min-w-0 flex-1 accent-[var(--accent)]"
+      />
+      <button
+        aria-label={`${label}往後 0.5 秒`}
+        onClick={() => set(which, value + 0.5)}
+        className="grid size-9 flex-none place-items-center rounded-full border border-line text-[18px]"
+      >
+        ＋
+      </button>
+      <span className="w-11 flex-none text-right font-num text-meta">{clock1(value)}</span>
+    </div>
+  );
+  return (
+    <div className="mt-2 rounded-tile bg-surface px-3 pt-3 pb-3.5 shadow-card">
+      {src ? (
+        <video
+          ref={ref}
+          src={src}
+          muted
+          playsInline
+          preload="auto"
+          aria-label="剪輯預覽"
+          onLoadedMetadata={(e) => (e.currentTarget.currentTime = start)}
+          onTimeUpdate={(e) => {
+            if (playing && e.currentTarget.currentTime >= end) seek(end);
+          }}
+          className="aspect-video w-full rounded-cell bg-black object-contain"
+        />
+      ) : (
+        <div className="aspect-video w-full rounded-cell bg-black" />
+      )}
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <button onClick={toggle} className="flex items-center gap-1 px-1 py-1 text-note font-bold text-accent">
+          {playing ? "❚❚ 暫停" : "▶ 播放選的這段"}
+        </button>
+        <span className="text-meta text-muted">
+          已選 <b className="font-num text-ink">{clock1(start)}–{clock1(end)}</b>（{r1(end - start)} 秒）
+        </span>
+      </div>
+      <div className="relative mt-1.5 h-2 rounded-full bg-sunk" aria-hidden>
+        <div className="absolute inset-y-0 rounded-full bg-accent" style={{ left: `${(start / duration) * 100}%`, width: `${((end - start) / duration) * 100}%` }} />
+      </div>
+      {row("start", "開始", start)}
+      {row("end", "結束", end)}
+      <p className="mt-2 mb-0 text-tiny text-muted">最長 {max} 秒；分享時只會上傳選的這一段</p>
+    </div>
+  );
+}
+
 // 已選的影片（上傳前）：檔名、大小
 export function PickedFile({ name, size, onClear }: { name: string; size: number; onClear?: () => void }) {
   return (

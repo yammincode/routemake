@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Chip, ChipRow } from "@/components/ui/Chip";
-import { Check, Label, OptionGrid, TextField } from "@/components/ui/Form";
+import { Check, Label, OptionGrid, TextField, Toggle } from "@/components/ui/Form";
 import { ClosedNotice } from "@/components/ui/Comments";
 import { useToast } from "@/components/ui/Toast";
-import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoViewer, type VideoCard } from "@/components/ui/Video";
-import { compressMinBytes, compressType, compressVideo } from "@/lib/video";
-import { checkVideo, deleteVideo, getVideos, uploadVideo, videoUrl, type Route, type Video } from "@/lib/data";
+import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
+import { compressMinBytes, compressType, compressVideo, type VideoEdit } from "@/lib/video";
+import { checkPickedVideo, deleteVideo, getVideos, uploadVideo, videoMaxSeconds, videoUrl, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { ago } from "@/lib/date";
 import { CLIMB_MOVES, HEIGHT_BANDS, videoTagText, type ClimbMove, type HeightBand, type Status } from "@/lib/design";
@@ -64,7 +64,12 @@ export default function RouteVideos({
   const [filter, setFilter] = useState<TagFilter | null>(null);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [squeeze, setSqueeze] = useState<number | null>(null); // 壓縮進度 0–1
+  const [squeeze, setSqueeze] = useState<number | null>(null); // 壓縮（剪輯）進度 0–1
+  // 剪輯：手機能重新錄影（compressType）而且讀得到長度才能剪；trim null＝不剪；超過上限一定要剪
+  const [dur, setDur] = useState<number | null>(null);
+  const [trim, setTrim] = useState<[number, number] | null>(null);
+  const [mute, setMute] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
   const [playing, setPlaying] = useState<number | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null); // 刪除要按兩次（刪了不能復原）；換到別支影片就重來
 
@@ -76,6 +81,7 @@ export default function RouteVideos({
   useEffect(() => {
     if (videos) onCount?.(videos.length);
   }, [videos, onCount]);
+  useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
   const canShare = open && !r.archived_at;
   // 篩選鈕只出現這條路線影片裡有的標籤：身高由矮到高，再來動態、靜態；選的標籤不見了（例如刪掉影片）就回到全部
@@ -98,10 +104,16 @@ export default function RouteVideos({
   }));
   if (!canShare && videos && !videos.length) return <ClosedNotice>這條路線目前不開放分享影片</ClosedNotice>;
 
+  const max = videoMaxSeconds();
+  const editable = !!compressType() && dur != null;
   const pick = async (f: File) => {
     try {
-      await checkVideo(f);
+      const d = await checkPickedVideo(f, !!compressType());
       setFile(f);
+      setDur(d);
+      setTrim(d != null && d > max + 0.5 ? [0, max] : null); // 太長：先選好前 max 秒，再自己拉
+      setMute(false);
+      setPreview(compressType() && d != null ? URL.createObjectURL(f) : null);
       if (session) setHeight(savedHeight(session.user.id)); // 帶入這個帳號上次選的身高
     } catch (e) {
       toast((e as Error).message);
@@ -113,17 +125,26 @@ export default function RouteVideos({
     setCaption("");
     setMove(null);
     setConsent(false);
+    setDur(null);
+    setTrim(null);
+    setMute(false);
+    setPreview(null);
   };
 
+  // 有剪（選的不是整支）或靜音才要剪輯
+  const trimmed = !!trim && dur != null && (trim[0] > 0.05 || trim[1] < dur - 0.05);
+  const edit: VideoEdit | undefined = editable && (trimmed || mute) ? { start: trimmed ? trim![0] : 0, end: trimmed ? trim![1] : dur!, mute } : undefined;
   const upload = async () => {
     if (!session || !file || !consent) return;
     setBusy(true);
     try {
-      // 先在手機上壓成 720p（不支援或沒變小就傳原檔）；要在點擊當下直接開始，iPhone 才允許播放
-      const willSqueeze = file.size >= compressMinBytes() && !!compressType();
+      // 先在手機上壓成 720p（不支援或沒變小就傳原檔）；剪輯、靜音一定重錄，失敗就不傳（不然長度、聲音不對）
+      // 要在點擊當下直接開始，iPhone 才允許播放
+      const willSqueeze = !!edit || (file.size >= compressMinBytes() && !!compressType());
       if (willSqueeze) setSqueeze(0);
-      const small = willSqueeze ? await compressVideo(file, setSqueeze) : null;
+      const small = willSqueeze ? await compressVideo(file, setSqueeze, edit) : null;
       setSqueeze(null);
+      if (edit && !small) throw new Error(trimmed ? "剪輯沒有成功，請再試一次，或先在手機相簿剪短再分享" : "靜音沒有成功，請再試一次");
       await uploadVideo(
         session.user.id,
         gymId,
@@ -135,7 +156,7 @@ export default function RouteVideos({
           height_band: height,
           move,
         },
-        small ? file : undefined,
+        edit ? { duration: edit.end - edit.start } : small ? { source: file } : undefined,
       );
       try {
         if (height) localStorage.setItem(heightKey(session.user.id), height);
@@ -223,11 +244,29 @@ export default function RouteVideos({
               <VideoPickButton onPick={pick} disabled={busy}>
                 分享攀爬影片
               </VideoPickButton>
-              <p className="mt-1.5 mb-0 text-tiny text-muted">最長 60 秒、50 MB 以內，手機支援時會先壓縮成 720p；這條路線換線時影片會一起刪除</p>
+              <p className="mt-1.5 mb-0 text-tiny text-muted">
+                {compressType() ? `最長 ${max} 秒，太長的選好後可以剪；會先壓縮成 720p` : `最長 ${max} 秒、50 MB 以內`}；這條路線換線時影片會一起刪除
+              </p>
             </>
           ) : (
             <>
               <PickedFile name={file.name} size={file.size} onClear={busy ? undefined : reset} />
+              {editable && preview && (
+                <>
+                  {trim ? (
+                    <>
+                      {dur! > max + 0.5 && <p className="mt-2 mb-0 text-note text-warn">影片 {Math.round(dur!)} 秒，最長 {max} 秒：拉下面的開始、結束選要分享的那一段</p>}
+                      <VideoTrim src={preview} duration={dur!} start={trim[0]} end={trim[1]} max={max} onChange={(a, b) => setTrim([a, b])} />
+                      {dur! <= max + 0.5 && !busy && <LinkButton onClick={() => setTrim(null)}>不剪了，分享整支</LinkButton>}
+                    </>
+                  ) : (
+                    <Button className="mt-2" disabled={busy} onClick={() => setTrim([0, Math.min(dur!, max)])}>
+                      ✂ 剪輯長度
+                    </Button>
+                  )}
+                  <Toggle checked={mute} onChange={setMute} label="靜音" hint="不放影片的聲音（例如館內音樂、旁邊的人聊天）" />
+                </>
+              )}
               <Label htmlFor="vcap">一句說明（選填）</Label>
               <TextField id="vcap" maxLength={40} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="例如：最後一手用左腳勾" />
               <p className="mt-1.5 mb-0 text-tiny text-muted">沒寫的話，標題會顯示「{access?.nickname ?? "你"}的攀爬」</p>
@@ -256,7 +295,7 @@ export default function RouteVideos({
                 </Link>
               </Check>
               <Button variant="primary" className="mt-3.5" disabled={!consent || busy} onClick={upload}>
-                {squeeze != null ? `壓縮中 ${Math.round(squeeze * 100)}%，請不要關閉畫面…` : busy ? "上傳中，請不要關閉畫面…" : "分享影片"}
+                {squeeze != null ? `${edit ? "剪輯中" : "壓縮中"} ${Math.round(squeeze * 100)}%，請不要關閉畫面…` : busy ? "上傳中，請不要關閉畫面…" : "分享影片"}
               </Button>
               {!busy && <LinkButton onClick={reset}>取消</LinkButton>}
             </>

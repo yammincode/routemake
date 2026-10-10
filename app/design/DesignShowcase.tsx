@@ -27,7 +27,7 @@ import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, 
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { CalendarHeat, DailyBars, Delta, GradeBars, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
-import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
+import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
 import { fakeWall } from "@/lib/demo";
 import {
@@ -165,6 +165,8 @@ export default function DesignShowcase() {
   const [bandId, setBandId] = useState<BandId | null>("mid");
   const [resetDay, setResetDay] = useState("2026-10-12");
   const [videoTag, setVideoTag] = useState<string | null>(null);
+  const [trimDemo, setTrimDemo] = useState<[number, number]>([12, 53.5]);
+  const [muteDemo, setMuteDemo] = useState(false);
   const [pickHeight, setPickHeight] = useState<HeightBand | null>("170s");
   const [pickMove, setPickMove] = useState<ClimbMove | null>("dynamic");
   const band = GRADE_BANDS.find((b) => b.id === bandId) ?? null;
@@ -638,6 +640,9 @@ export default function DesignShowcase() {
         <div className="mt-3">
           <PickedFile name="IMG_2031.MOV" size={23500000} onClear={() => toast("換一支")} />
         </div>
+        <p className="mt-3 mb-0 text-meta text-muted">剪輯長度（VideoTrim）：影片超過 60 秒自動打開；拉開始、結束，最長 60 秒；下面靜音用 Toggle</p>
+        <VideoTrim duration={80} start={trimDemo[0]} end={trimDemo[1]} max={60} onChange={(a, b) => setTrimDemo([a, b])} />
+        <Toggle checked={muteDemo} onChange={setMuteDemo} label="靜音" hint="不放影片的聲音（例如館內音樂、旁邊的人聊天）" />
         <Label>你的身高（公分，選填）— OptionGrid cols 4，再按一次取消</Label>
         <OptionGrid cols={4} options={HEIGHT_BANDS} value={pickHeight} onChange={setPickHeight} />
         <Label>動作（選填）— OptionGrid cols 2，有小字說明</Label>

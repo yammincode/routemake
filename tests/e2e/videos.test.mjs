@@ -340,3 +340,159 @@ test("影片標籤：一支一列、用身高或動作篩選；分享時選身�
   assert.equal(await dialog.locator('button[aria-pressed="true"].rounded-field').count(), 0, "別人登入時沒有預先選好的身高");
   assert.deepEqual(errors, []);
 });
+
+// 做一支有聲音的真影片（約 sec 秒，畫面一直在變、聲音是一個音）
+async function realClip(sec) {
+  const maker = await browser.newPage();
+  const b64 = await maker.evaluate(async (sec) => {
+    const c = document.createElement("canvas");
+    c.width = 640;
+    c.height = 360;
+    const g = c.getContext("2d");
+    const ac = new AudioContext();
+    const osc = ac.createOscillator();
+    const dest = ac.createMediaStreamDestination();
+    osc.connect(dest);
+    osc.start();
+    const stream = c.captureStream(30);
+    dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+    const rec = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp8,opus", videoBitsPerSecond: 4_000_000 });
+    const chunks = [];
+    rec.ondataavailable = (e) => chunks.push(e.data);
+    const stop = new Promise((r) => (rec.onstop = r));
+    rec.start(200);
+    const t0 = performance.now();
+    await new Promise((done) => {
+      const tick = () => {
+        const t = performance.now() - t0;
+        g.fillStyle = `hsl(${(t / 10) % 360},70%,50%)`;
+        g.fillRect(0, 0, 640, 360);
+        g.fillStyle = "#fff";
+        g.fillRect((t / 5) % 640, 150, 60, 60);
+        if (t < sec * 1000) requestAnimationFrame(tick);
+        else done();
+      };
+      tick();
+    });
+    rec.stop();
+    await stop;
+    const buf = await new Blob(chunks).arrayBuffer();
+    let s = "";
+    new Uint8Array(buf).forEach((x) => (s += String.fromCharCode(x)));
+    return btoa(s);
+  }, sec);
+  await maker.close();
+  return Buffer.from(b64, "base64");
+}
+// 影片真正的長度（MediaRecorder 錄的 WebM 一開始讀不到長度：跳到最後再讀）
+async function clipSeconds(buf) {
+  const p = await browser.newPage();
+  const d = await p.evaluate(async (b64) => {
+    const bin = atob(b64);
+    const u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    const v = document.createElement("video");
+    v.src = URL.createObjectURL(new Blob([u], { type: "video/webm" }));
+    const wait = (ev) => new Promise((r, no) => ((v["on" + ev] = r), (v.onerror = () => no(new Error("讀不到影片"))), setTimeout(() => no(new Error(`等不到 ${ev}`)), 8000)));
+    await wait("loadedmetadata");
+    if (!Number.isFinite(v.duration)) {
+      v.currentTime = 1e9;
+      await wait("seeked");
+    }
+    return v.duration;
+  }, buf.toString("base64"));
+  await p.close();
+  return d;
+}
+const hasAudio = (buf) => buf.includes(Buffer.from("A_OPUS"));
+// 上傳是 multipart：取出裡面的影片檔（第一行是分隔線，檔案在最後一個分隔線前）
+function uploaded(buf) {
+  const sep = buf.subarray(0, buf.indexOf("\r\n"));
+  if (!sep.toString().startsWith("--")) return buf;
+  const start = buf.indexOf(Buffer.from([0x1a, 0x45, 0xdf, 0xa3])); // WebM 開頭
+  return buf.subarray(start, buf.lastIndexOf(Buffer.concat([Buffer.from("\r\n"), sep])));
+}
+
+test("影片剪輯：太長的自動打開剪輯、只上傳選的那段，可以靜音；不太長的可以自己剪；不能重錄的手機照舊請他先剪短", async () => {
+  const mock = createMock();
+  const me = mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zone = mock.db.zones[0];
+  const r1 = mock.addRoute(zone, 4, "藍");
+  const original = await realClip(5);
+  assert.ok(hasAudio(original), "原本的影片有聲音");
+  const seconds = await clipSeconds(original);
+  assert.ok(seconds > 4.5 && seconds < 6, `原本約 5 秒（${seconds}）`);
+
+  // max：測試用的長度上限；types：手機能不能重新錄影（測試瀏覽器沒有 H.264，改用 WebM）
+  const open = async (max, canEdit) => {
+    const C = await phone(browser, mock);
+    await C.ctx.addInitScript(([max, canEdit]) => {
+      window.__RM_VIDEO_MAX = max;
+      window.__RM_VIDEO_TYPES = canEdit ? ["video/webm;codecs=vp8,opus"] : ["video/none"];
+    }, [max, canEdit]);
+    await login(C.page, "climber88", "password1", `/zone?id=${zone.id}`);
+    await C.page.waitForTimeout(600);
+    await C.page.locator("main ul li button", { hasText: "A1-01" }).click();
+    await C.page.waitForTimeout(500);
+    const dialog = C.page.locator("[role=dialog]");
+    await dialog.locator('[role=tab]:has-text("影片")').click().catch(() => {});
+    await dialog.locator("input[type=file]").setInputFiles({ name: "climb.webm", mimeType: "video/webm", buffer: original });
+    await C.page.waitForTimeout(800);
+    return { ...C, dialog };
+  };
+  const share = async ({ page, dialog }) => {
+    await dialog.locator("input[type=checkbox]").check();
+    await dialog.locator('button:text-is("分享影片")').click();
+    await page.waitForFunction(() => /剪輯中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
+    await page.waitForFunction(() => !document.body.textContent.includes("剪輯中"), null, { timeout: 20000 });
+    await page.waitForTimeout(1500);
+  };
+
+  // 1. 上限 3 秒、影片 5 秒：自動打開剪輯，先選前 3 秒，不能「不剪」；開始往後 1 秒 → 1–3 秒；靜音
+  const A = await open(3, true);
+  let t = await A.dialog.textContent();
+  assert.ok(t.includes("影片 5 秒，最長 3 秒") && t.includes("已選 0:00–0:03（3 秒）"), "太長：自動打開剪輯、先選前 3 秒");
+  assert.equal(await A.dialog.locator("text=不剪了").count(), 0, "太長的一定要剪");
+  await A.dialog.locator('button[aria-label="開始往後 0.5 秒"]').click();
+  await A.dialog.locator('button[aria-label="開始往後 0.5 秒"]').click();
+  assert.ok((await A.dialog.textContent()).includes("已選 0:01–0:03（2 秒）"), "拉開始，結束不動");
+  await A.dialog.locator('button[role=switch][aria-label="靜音"]').click();
+  await share(A);
+  assert.equal(mock.db.videos.length, 1, "上傳完成");
+  let v = mock.db.videos[0];
+  let sent = uploaded(mock.db.vfiles[v.path].buf);
+  assert.equal(v.duration_s, 2, "記錄剪下來的長度");
+  const d1 = await clipSeconds(sent);
+  assert.ok(d1 > 1.5 && d1 < 2.8, `只上傳選的那段（${d1} 秒）`);
+  assert.ok(!hasAudio(sent), "靜音：沒有聲音");
+  assert.deepEqual(A.errors, []);
+  await A.ctx.close();
+
+  // 2. 上限 10 秒、影片 5 秒：不用剪；按「剪輯長度」自己剪成 0–3 秒，不靜音 → 有聲音
+  const B = await open(10, true);
+  t = await B.dialog.textContent();
+  assert.ok(!t.includes("已選") && t.includes("✂ 剪輯長度"), "不太長：剪輯收起來");
+  await B.dialog.locator('button:has-text("剪輯長度")').click();
+  assert.ok((await B.dialog.textContent()).includes("已選 0:00–0:05"), "打開剪輯是整支");
+  for (let i = 0; i < 4; i++) await B.dialog.locator('button[aria-label="結束往前 0.5 秒"]').click();
+  assert.ok((await B.dialog.textContent()).includes("（3 秒）"), "結束往前 2 秒");
+  await share(B);
+  assert.equal(mock.db.videos.length, 2);
+  v = mock.db.videos[1];
+  sent = uploaded(mock.db.vfiles[v.path].buf);
+  assert.equal(v.duration_s, 3);
+  const d2 = await clipSeconds(sent);
+  assert.ok(d2 > 2.5 && d2 < 3.8, `只上傳選的那段（${d2} 秒）`);
+  assert.ok(hasAudio(sent), "沒靜音：有聲音");
+  assert.deepEqual(B.errors, []);
+  await B.ctx.close();
+
+  // 3. 不能重新錄影的手機：跟原本一樣，太長就請他先剪短，沒有剪輯、靜音
+  const C = await open(3, false);
+  assert.ok((await C.page.locator("[role=status]").last().textContent()).includes("影片 5 秒，最長 3 秒，請先剪短再分享"));
+  assert.equal(await C.dialog.locator('button:has-text("剪輯長度")').count(), 0);
+  assert.equal(mock.db.videos.length, 2);
+  await C.ctx.close();
+  void me;
+  void r1;
+});
