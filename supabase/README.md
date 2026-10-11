@@ -40,6 +40,7 @@
 | `setup/step31-home-gyms.sql` | migration 0035：人物卡「常去的館」可以複選（profiles.home_gyms，原本的 home_gym 搬進去並保留＝第一間；save_my_card 新版收好幾間；舊版一間照常可用（存回原本第一間不會洗掉其他館，換成別間只留那一間）；profile_card 多回傳 home_gyms） | 已套用 |
 | `setup/step32-zhonghe-a-merge.sql` | migration 0036：中和 A1、A2 合併回「A 區」（沿用 A1 那一筆改成代碼 A，路線、照片、紀錄照舊；A2 的舊路線搬到 A、換線公告的 A2 改成 A，再刪掉 A2；A2 牆上還有路線時會擋下，要先整區換線；請先更新正式版（v2.3 以後）再執行，舊版 App 的平面圖畫不出 A 區；再執行一次不會改到東西，但最後登記那一行會報錯，代表已經套用過） | 已套用 |
 | `setup/step33-hold-color-brown.sql` | migration 0037：岩點顏色新增咖啡（排在粉和黑中間）；請先執行這份再更新正式版（新版 App 選咖啡存路線要這份才存得進去，舊版不受影響） | 已套用 |
+| `setup/step34-prelaunch-hardening.sql` | migration 0038：上線前安全加強（路線第 100 條起用 3 位數、取號只能在新增路線時；影片要先有本人上傳的檔案、24 小時 10 筆、說明不能放網址、分享中的影片檔不能偷換、未登入列不出影片檔；Spray Wall 圈圈只存位置、岩友路線下架後不能恢復；暱稱不能冒充館方、留言不能放網址；刪帳號修正；區域類型、清除自介、員工名單、建立時間、頭像、註冊時間、SVG 照片的權限）；舊版 App 照常可用，可以先執行 | 未套用 |
 
 ## 規則摘要
 
@@ -47,19 +48,19 @@
 |---|---|---|---|
 | gyms | 所有人 | 店長（新增只有老闆） | 不開放 |
 | zones | 所有人 | 員工；定線長只能改照片和換線日，其他欄位只有店長 | 店長，且區域沒有任何路線 |
-| routes | 所有人 | 該館員工；Spray Wall 的岩友路線登入有暱稱就能出（每人 24 小時 5 條），本人可改；編號自動產生、不能改 | 不開放，用 `archived_at` 下架（岩友路線本人也可以） |
+| routes | 所有人 | 該館員工；Spray Wall 的岩友路線登入有暱稱就能出（每人 24 小時 5 條），本人可改（下架後不能再改、不能放回牆上；留言開關只有員工）；編號自動產生（第 100 條起 3 位數）、不能改、不能直接取號 | 不開放，用 `archived_at` 下架（岩友路線本人也可以） |
 | route_likes | 所有人 | 登入且有暱稱；路線在牆上；每人每條一個讚 | 只能收回自己的讚 |
 | ascents | 只有本人 | 只有本人 | 只有本人 |
-| comments | 所有人（未刪除） | 登入且有暱稱；路線未下架、路線與場館留言都開啟；每人每條路線一則；1 分鐘最多 5 則、24 小時最多 100 則；本人可用 `edit_comment()` 修改 | `delete_comment()`：本人或該館員工（軟刪除） |
-| profiles | 所有人只能讀 id、暱稱、頭像（帳號名稱、手機不公開）；人物卡只能透過 `profile_card()`，未公開時只回傳暱稱 | 本人只能改暱稱、頭像；人物卡用 `save_my_card()`；店長可用 `clear_card_bio()` 清除自我介紹 | 不開放 |
-| staff_roles | 本人、該館店長 | 店長只能指派定線長，店長由老闆指派（`lookup_user()` 先確認暱稱，再 `assign_staff(帳號, 館, 角色)`） | 同左（`remove_staff()`） |
+| comments | 所有人（未刪除） | 登入且有暱稱；路線未下架、路線與場館留言都開啟；每人每條路線一則；1 分鐘最多 5 則、24 小時最多 100 則；不能放網址；本人可用 `edit_comment()` 修改 | `delete_comment()`：本人或該館員工（軟刪除） |
+| profiles | 所有人只能讀 id、暱稱、頭像（帳號名稱、手機、註冊時間不公開）；人物卡只能透過 `profile_card()`，未公開時只回傳暱稱 | 本人只能改暱稱（不能用原岩、官方、店長、定線等字，員工、老闆除外；不能有看不見的字元、網址）；人物卡用 `save_my_card()`；店長可用 `clear_card_bio()` 清除公開人物卡的自我介紹 | 不開放 |
+| staff_roles | 本人、該館店長 | 只能用函式（會寫操作紀錄）：店長只能指派定線長，店長由老闆指派（`lookup_user()` 先確認暱稱，再 `assign_staff(帳號, 館, 角色)`） | 同左（`remove_staff()`） |
 | audit_log | 該館店長、老闆 | 只能由函式寫入 | 不開放 |
 | scoring_rules | 所有人 | 只有老闆 | 不開放 |
-| route_videos | 所有人 | 登入且有暱稱；路線未下架、留言開啟；路徑要是 `{館}/{路線}/{本人}/檔名`；不能修改 | `delete_video()`：本人或該館員工（員工刪除寫操作紀錄）；路線下架時自動刪除 |
+| route_videos | 所有人 | 登入且有暱稱；路線未下架、留言開啟；路徑要是 `{館}/{路線}/{本人}/檔名`，而且要先上傳好本人的檔案；24 小時 10 筆；說明不能放網址；不能修改 | `delete_video()`：本人或該館員工（員工刪除寫操作紀錄）；路線下架時自動刪除 |
 | comment_likes | 所有人 | 登入且有暱稱；留言未刪除；每人每則一個讚；不能修改 | 只能收回自己的讚 |
 | app_opens | 沒有人能直接讀寫 | 只能用 `record_open()` 記自己今天有打開 | 不開放 |
-| Storage `zone-photos` | 公開 | `{館}/zones/` 員工、`{館}/floorplan/` 店長 | 同左 |
-| Storage `route-videos` | 公開 | 同 route_videos；每支 50 MB、mp4／mov／webm；每人 24 小時 10 支 | 本人或該館員工 |
+| Storage `zone-photos` | 公開（只收 JPEG、PNG、WebP） | `{館}/zones/` 員工、`{館}/floorplan/` 店長 | 同左 |
+| Storage `route-videos` | 用網址公開播放；檔案清單只有本人、該館員工看得到 | 同 route_videos；每支 50 MB、mp4／mov／webm；每人 24 小時 10 支 | 該館員工；本人（分享中的要先用 `delete_video()` 刪資料）；岩友路線下架後出題者可清掉這條路線的影片檔 |
 
 函式：`points_summary(年, 月)`、`route_points(難度, 風格)`、`ascent_points(難度, 風格, 狀態)`、`my_access()`、`monthly_stats(年, 月)`、`zone_progress(館)`、`archive_zone(區域)`、`delete_comment(留言)`、`lookup_user(帳號)`、`assign_staff(帳號, 館, 角色)`、`remove_staff(使用者, 館)`、`delete_video(影片)`、`video_paths_for_routes(路線[])`、`video_usage(館)`、`orphan_video_paths(館)`、`reorder_zones(館, 區域[])`
 

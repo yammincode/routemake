@@ -65,7 +65,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
+  const state = { offline: false, ascentsFail: null, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -100,7 +100,7 @@ export function createMock() {
       token_type: "bearer",
       expires_in: 3600,
       expires_at: exp,
-      refresh_token: "r",
+      refresh_token: "r:" + email, // 換新登入憑證用（離線登出測試：伺服器沒收到登出，手機留著的話會自動登回去）
       user: { id: u.id, aud: "authenticated", role: "authenticated", email, app_metadata: {}, user_metadata: {}, created_at: now() },
     };
   };
@@ -144,6 +144,18 @@ export function createMock() {
   const gymOfRoute = (id) => zoneOf(db.routes.find((r) => r.id === id).zone_id).gym_id;
   // 路線下架時刪掉影片資料（資料庫觸發器）
   const dropVideos = (routeId) => (db.videos = db.videos.filter((v) => v.route_id !== routeId));
+  // 同 0038 的 link_free：網址（全形也算）
+  const hasLink = (t) => /(https?:|www\.|[a-z0-9-]\.(com|tw|net|org|io|me|cc|app|co|ly|gl|xyz|link|shop|site)\b)/i.test((t ?? "").normalize("NFKC"));
+  // 同 0038 的 can_delete_video_file：員工；分享中的不行；自己的；岩友下架了自己出的路線
+  const canDeleteVideoFile = (uid, k) => {
+    if (!uid) return false;
+    const [gym, routeId, owner] = k.split("/");
+    if (isStaff(uid, gym)) return true;
+    if (db.videos.some((v) => v.path === k)) return false;
+    if (owner === uid) return true;
+    const r = db.routes.find((x) => x.id === routeId);
+    return !!(r && r.kind === "community" && r.archived_at && r.created_by === uid);
+  };
   const canShare = (uid, routeId) => {
     const r = db.routes.find((x) => x.id === routeId);
     const g = r && db.gyms.find((x) => x.id === zoneOf(r.zone_id).gym_id);
@@ -332,7 +344,8 @@ export function createMock() {
       return J(route, 200, v.path);
     }
     if (fn === "video_paths_for_routes") {
-      return J(route, 200, db.videos.filter((v) => a.p_routes.includes(v.route_id) && isStaff(uid, gymOfRoute(v.route_id))).map((v) => v.path));
+      const mineCommunity = (id) => { const r = db.routes.find((x) => x.id === id); return r?.kind === "community" && r.created_by === uid; };
+      return J(route, 200, db.videos.filter((v) => a.p_routes.includes(v.route_id) && (isStaff(uid, gymOfRoute(v.route_id)) || mineCommunity(v.route_id))).map((v) => v.path));
     }
     if (fn === "video_usage") {
       if (!isStaff(uid, a.p_gym)) return J(route, 200, null);
@@ -356,6 +369,7 @@ export function createMock() {
     if (fn === "edit_comment") {
       const c = db.comments.find((x) => x.id === a.p_comment && !x.deleted_at);
       if (!c || c.user_id !== uid) return J(route, 403, { code: "42501", message: "只能編輯自己的留言" });
+      if (hasLink(a.p_body)) return J(route, 400, { code: "22023", message: "留言不能放網址" });
       c.body = a.p_body.trim();
       c.edited_at = now();
       return J(route, 200, null);
@@ -403,6 +417,7 @@ export function createMock() {
     if (fn === "clear_card_bio") {
       if (!isMgr(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有店長可以清除自我介紹" });
       const p = prof(a.p_user);
+      if (!p.card_public) return J(route, 400, { code: "22023", message: "這張人物卡沒有公開，不需要清除" });
       audit(uid, a.p_gym, "card.clear", p.id, { nickname: p.nickname, bio: p.bio });
       p.bio = null;
       return J(route, 200, null);
@@ -514,6 +529,10 @@ export function createMock() {
       addUser(body.email.split("@")[0], body.password);
       return J(route, 200, session(body.email, db.users[body.email]));
     }
+    if (p === "/auth/v1/token" && sp.get("grant_type") === "refresh_token") {
+      const email = (body?.refresh_token ?? "").replace(/^r:/, "");
+      return db.users[email] ? J(route, 200, session(email, db.users[email])) : J(route, 400, { error_code: "refresh_token_not_found", msg: "Invalid Refresh Token" });
+    }
     if (p === "/auth/v1/token") {
       const u = db.users[body.email];
       if (!u || u.password !== body.password) return J(route, 400, { error_code: "invalid_credentials", msg: "Invalid login credentials" });
@@ -553,7 +572,7 @@ export function createMock() {
       return J(route, 200, { Key: "route-videos/" + path });
     }
     if (p === "/storage/v1/object/route-videos" && m === "DELETE") {
-      const removed = (body?.prefixes ?? []).filter((k) => db.vfiles[k] && (k.split("/")[2] === uid || isStaff(uid, k.split("/")[0])));
+      const removed = (body?.prefixes ?? []).filter((k) => db.vfiles[k] && canDeleteVideoFile(uid, k));
       removed.forEach((k) => delete db.vfiles[k]);
       return J(route, 200, removed.map((name) => ({ name })));
     }
@@ -571,7 +590,12 @@ export function createMock() {
       if (m === "PATCH") {
         const rows = filt(db.zones, sp).filter((z) => isStaff(uid, z.gym_id));
         if (rows.length && "name" in body && !isMgr(uid, rows[0].gym_id)) return J(route, 403, { code: "42501", message: "只有店長可以修改區域名稱、代碼、排序和平面圖位置" });
-        rows.forEach((z) => Object.assign(z, body));
+        rows.forEach((z) => {
+          // 同 zones_spray_photo：換 Spray Wall 公版照片，這面牆的路線全部下架（影片資料一起刪）
+          if (z.kind === "spray" && z.photo_path && "photo_path" in body && body.photo_path !== z.photo_path)
+            db.routes.forEach((r) => { if (r.zone_id === z.id && !r.archived_at) { r.archived_at = now(); dropVideos(r.id); } });
+          Object.assign(z, body);
+        });
         return empty(route);
       }
       if (m === "POST") {
@@ -623,9 +647,15 @@ export function createMock() {
         if (body.holds && filt(db.routes, sp).some((r) => seqN(r) && db.ascents.some((x) => x.route_id === r.id)))
           return J(route, 400, { code: "22023", message: "已經有人記錄過這條路線，點的位置和順序不能再改（難度、說明可以改）" });
         if (body.holds) body.holds = body.holds.map((h, i, all) => ({ x: h.x, y: h.y, t: i === 0 ? "s" : i === all.length - 1 ? "t" : "h" }));
-        filt(db.routes, sp).filter((r) => isStaff(uid, zoneOf(r.zone_id).gym_id) || (r.kind === "community" && r.created_by === uid)).forEach((r) => {
-          if (!r.archived_at && body.archived_at && !(r.kind === "community" && r.created_by === uid)) {
-            audit(uid, zoneOf(r.zone_id).gym_id, "route.archive", r.id, { code: r.code, zone: zoneOf(r.zone_id).name, grade: r.grade, color: r.hold_color });
+        const targets = filt(db.routes, sp).filter((r) => isStaff(uid, zoneOf(r.zone_id).gym_id) || (r.kind === "community" && r.created_by === uid));
+        // 同 0038 的 routes_before_update：岩友路線下架後出題者不能再改；留言開關只有員工
+        const author = targets.find((r) => !isStaff(uid, zoneOf(r.zone_id).gym_id));
+        if (author?.archived_at) return J(route, 403, { code: "42501", message: "這條岩友路線已經下架，不能再修改" });
+        if (author && "comments_enabled" in body && body.comments_enabled !== author.comments_enabled) return J(route, 403, { code: "42501", message: "只有員工可以開關路線留言" });
+        targets.forEach((r) => {
+          if (!r.archived_at && body.archived_at) {
+            if (!(r.kind === "community" && r.created_by === uid))
+              audit(uid, zoneOf(r.zone_id).gym_id, "route.archive", r.id, { code: r.code, zone: zoneOf(r.zone_id).name, grade: r.grade, color: r.hold_color });
             dropVideos(r.id);
           }
           Object.assign(r, body, body.holds ? { pin_x: body.holds[0].x, pin_y: body.holds[0].y } : {});
@@ -646,6 +676,8 @@ export function createMock() {
         return out(rows);
       }
       if (m === "POST") {
+        // state.ascentsFail：模擬伺服器暫時出錯（例如 503 網頁）或資料庫拒絕（例如日期不合法）
+        if (state.ascentsFail) return route.fulfill({ status: state.ascentsFail.status, headers: { ...cors, "content-type": state.ascentsFail.type ?? "application/json" }, body: state.ascentsFail.body });
         if (!uid) return J(route, 403, { code: "42501", message: "沒有權限" });
         // 跟資料庫的 ascents_before_write 一樣檢查日期（upsert 會先跑 INSERT 的檢查）
         const rt = db.routes.find((y) => y.id === body.route_id);
@@ -744,6 +776,7 @@ export function createMock() {
         const g = db.gyms.find((x) => x.id === zoneOf(r.zone_id).gym_id);
         if (!uid || r.archived_at || !r.comments_enabled || !g.comments_enabled || !prof(uid).nickname) return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "comments"' });
         if (db.comments.some((c) => c.route_id === r.id && c.user_id === uid && !c.deleted_at)) return J(route, 409, { code: "23505", message: 'duplicate key value violates unique constraint "comments_one_per_user"' });
+        if (hasLink(body.body)) return J(route, 400, { code: "22023", message: "留言不能放網址" });
         db.comments.push({ id: uuid(), route_id: body.route_id, user_id: uid, body: body.body.trim(), created_at: now(), edited_at: null, deleted_at: null });
         return empty(route, 201);
       }
@@ -777,6 +810,11 @@ export function createMock() {
       if (m === "POST") {
         if (!canShare(uid, body.route_id) || !videoPathOk(uid, body.route_id, body.path))
           return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "route_videos"' });
+        // 同 0038 的 route_videos_before_insert：要先有本人上傳的檔案、24 小時 10 筆、說明不能放網址
+        if (db.vfiles[body.path]?.owner !== uid) return J(route, 400, { code: "22023", message: "找不到上傳的影片檔，請重新分享" });
+        const dayAgo = new Date(Date.now() - 86400000).toISOString();
+        if (db.videos.filter((v) => v.user_id === uid && v.created_at > dayAgo).length >= 10) return J(route, 400, { code: "54000", message: "每人 24 小時內最多分享 10 支影片，明天再來" });
+        if (hasLink(body.caption)) return J(route, 400, { code: "22023", message: "影片說明不能放網址" });
         if ((body.height_band != null && !["lt160", "160s", "170s", "ge180"].includes(body.height_band)) || (body.move != null && !["dynamic", "static"].includes(body.move)))
           return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_height_band_check"' });
         db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, height_band: null, move: null, ...body, user_id: uid, created_at: now() });
@@ -809,7 +847,16 @@ export function createMock() {
         return empty(route);
       }
     }
-    if (t === "profiles" && m === "PATCH") { Object.assign(prof(uid), { nickname: body.nickname }); return empty(route); }
+    if (t === "profiles" && m === "PATCH") {
+      // 同 0038 的 profiles_nickname_check：看不見的字元、網址；冒充館方的字（員工、老闆可以）
+      const nick = body.nickname ?? "";
+      if (/[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/.test(nick)) return J(route, 400, { code: "22023", message: "暱稱不能有看不見的字元" });
+      if (hasLink(nick)) return J(route, 400, { code: "22023", message: "暱稱不能放網址" });
+      if (/原岩|官方|管理員|管理者|店長|定線|員工|客服|老闆|admin|staff|official/i.test(nick.normalize("NFKC")) && !isOwner(uid) && !db.staff_roles.some((x) => x.user_id === uid))
+        return J(route, 400, { code: "22023", message: "暱稱不能用「原岩、官方、店長、定線、員工、管理員、客服、老闆」這類字，以免被誤會是館方" });
+      Object.assign(prof(uid), { nickname: body.nickname });
+      return empty(route);
+    }
     if (t === "staff_roles" && m === "GET") return out(filt(db.staff_roles.filter((s) => s.user_id === uid || isMgr(uid, s.gym_id)), sp).map((s) => ({ ...s, profiles: { nickname: prof(s.user_id)?.nickname } })));
     if (t === "scoring_rules") {
       if (m === "GET") return out([db.scoring]);

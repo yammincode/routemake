@@ -162,7 +162,7 @@ function RouteBody({
       if (isNetworkError(e)) {
         queueAscent({ userId: session.user.id, routeId: r.id, ascent: a });
         onSaved({ id: ascent?.id ?? "", route_id: r.id, ...a });
-        toast("目前沒有網路，連上後會自動送出");
+        toast("目前送不出去，連上網路後會自動送出");
       } else toast((e as Error).message);
     }
     setBusy(false);
@@ -252,20 +252,21 @@ function RouteBody({
 
   // 清除紀錄要按兩次：心得會一起刪掉，不能復原
   const clear = async () => {
+    if (!session) return;
     if (!confirmClear) return setConfirmClear(true);
     dropHp();
     setBusy(true);
     try {
-      await clearAscent(r.id);
+      await clearAscent(session.user.id, r.id);
       onSaved(null);
       onClose();
       toast("已清除紀錄");
     } catch (e) {
-      if (isNetworkError(e) && session) {
+      if (isNetworkError(e)) {
         queueAscent({ userId: session.user.id, routeId: r.id, ascent: null });
         onSaved(null);
         onClose();
-        toast("目前沒有網路，連上後會自動清除");
+        toast("目前送不出去，連上網路後會自動清除");
       } else toast((e as Error).message);
     }
     setBusy(false);

@@ -66,3 +66,26 @@ test("一則留言：留過後只能編輯或刪除再留；三則以上左右�
   assert.ok(mock.db.comments.some((x) => x.user_id === me));
   assert.deepEqual(C.errors, []);
 });
+
+test("留言不能放網址（避免有人冒充館方貼釣魚連結）：會說明原因，一般留言照常", async () => {
+  const mock = createMock();
+  mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zone = mock.db.zones[0];
+  mock.addRoute(zone, 4, "藍");
+  const { page, errors } = await phone(browser, mock);
+  await login(page, "climber88", "password1", `/zone?id=${zone.id}`);
+  await page.waitForTimeout(500);
+  await page.locator("main ul li button", { hasText: "A1-01" }).click();
+  await page.waitForTimeout(500);
+  await page.click('[role=dialog] [role=tab]:has-text("留言")');
+  await page.fill('[role=dialog] textarea[placeholder^="公開留言"]', "官方活動 https://evil.example 填資料抽年票");
+  await page.click('[role=dialog] button:text-is("送出")');
+  await page.waitForTimeout(500);
+  assert.equal(mock.db.comments.length, 0, "沒有存進去");
+  assert.ok((await page.locator("[role=status]").allTextContents()).some((t) => t.includes("留言不能放網址")), "告訴使用者原因");
+  await page.fill('[role=dialog] textarea[placeholder^="公開留言"]', "起步右手很遠");
+  await page.click('[role=dialog] button:text-is("送出")');
+  await page.waitForTimeout(500);
+  assert.equal(mock.db.comments.length, 1, "一般留言照常");
+  assert.deepEqual(errors.filter((e) => !/400/.test(e)), []);
+});

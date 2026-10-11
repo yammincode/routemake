@@ -1,4 +1,5 @@
 // 帳號名稱＋密碼登入：帳號轉成 {帳號}@users.routemake.local 給 Supabase Auth（不寄信、不發簡訊）
+import { NETWORK_RE } from "./net";
 
 export const USERNAME_RULE = "4–20 個字，英文字母、數字或底線";
 export const PASSWORD_MIN = 8;
@@ -58,6 +59,6 @@ export function authErrorMessage(err: unknown): string {
     return `註冊暫時無法完成：請管理員到 Supabase 關閉「Confirm email」${tag}`;
   if (code === "over_request_rate_limit" || e?.status === 429) return `嘗試太多次，請過幾分鐘再試${tag}`;
   if (code === "email_provider_disabled" || code === "signup_disabled") return `目前暫停註冊，請洽櫃檯${tag}`;
-  if (e?.name === "AuthRetryableFetchError" || msg.includes("fetch") || msg.includes("network")) return "連不上網路，請確認網路後再試";
+  if (e?.name === "AuthRetryableFetchError" || NETWORK_RE.test(msg)) return "連不上網路，請確認網路後再試";
   return `發生錯誤，請稍後再試${tag}`;
 }

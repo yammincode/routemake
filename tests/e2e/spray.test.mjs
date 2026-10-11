@@ -157,3 +157,59 @@ test("Spray Wall：路線多時在框內滑動，滑到底自動載入下一批"
   assert.deepEqual(C.errors, []);
   await C.ctx.close();
 });
+
+test("Spray Wall 影片檔：岩友刪掉自己的路線、員工換公版照片時，大家分享在那些路線的影片檔一起刪掉", async () => {
+  const mock = createMock();
+  const me = mock.addUser("climber88", "password1", { nickname: "小安" });
+  const other = mock.addUser("climber99", "password1", { nickname: "小明" });
+  const setter = mock.addUser("setterx", "password1", { nickname: "阿定" });
+  mock.db.staff_roles.push({ user_id: setter, gym_id: "mingde", role: "setter" });
+  const sw = mock.db.zones.find((z) => z.gym_id === "mingde" && z.kind === "spray");
+  sw.photo_path = "mingde/zones/S-1.jpg";
+  mock.db.files[sw.photo_path] = fs.readFileSync(WALL);
+  const at = new Date().toISOString();
+  const route = (name, kind, by) => {
+    const r = { id: crypto.randomUUID(), zone_id: sw.id, code: `S-${mock.db.routes.length + 1}`, grade: 3, hold_color: "白", style_tags: [], setter_note: null, pin_x: 20, pin_y: 80, comments_enabled: true, created_at: at, archived_at: null, kind, name, description: null, holds: [{ x: 20, y: 80, t: "s" }, { x: 50, y: 20, t: "t" }], created_by: by };
+    mock.db.routes.push(r);
+    return r;
+  };
+  // 別人（小明）分享在這條路線的影片：資料和檔案
+  const video = (r) => {
+    const path = `mingde/${r.id}/${other}/${crypto.randomUUID()}.mp4`;
+    mock.db.vfiles[path] = { buf: Buffer.alloc(10), owner: other, created_at: at };
+    mock.db.videos.push({ id: crypto.randomUUID(), route_id: r.id, user_id: other, path, caption: null, status: "send", duration_s: 5, size_bytes: 10, created_at: at });
+    return path;
+  };
+  const mine = route("小安的路線", "community", me);
+  const onMine = video(mine);
+  const gymRoute = route("教練的路線", "gym", setter);
+  const onGym = video(gymRoute);
+
+  // 岩友刪掉自己出的路線：別人分享在上面的影片檔一起刪
+  const C = await phone(browser, mock);
+  await login(C.page, "climber88", "password1", "/spray/mingde-sw");
+  await C.page.waitForTimeout(600);
+  await C.page.click('main [role=tab]:has-text("岩友路線")');
+  await C.page.waitForTimeout(500);
+  await C.page.locator("main ul li button", { hasText: "小安的路線" }).click();
+  await C.page.waitForTimeout(500);
+  await C.page.locator('[role=dialog] button:text-is("刪除")').click();
+  await C.page.locator('[role=dialog] button:text-is("刪除")').click();
+  await C.page.waitForTimeout(800);
+  assert.ok(mine.archived_at, "岩友刪掉自己的路線");
+  assert.ok(!mock.db.vfiles[onMine], "別人分享在上面的影片檔也刪掉（不會留在公開空間）");
+
+  // 員工換公版照片：整面牆的路線下架，影片檔一起刪
+  const S = await phone(browser, mock);
+  await login(S.page, "setterx", "password1", "/admin");
+  await S.page.waitForTimeout(800);
+  await S.page.click('main button:text-is("明德 SPRAY WALL")');
+  await S.page.waitForTimeout(800);
+  const [chooser] = await Promise.all([S.page.waitForEvent("filechooser"), S.page.click('main button:has-text("更換公版照片")')]);
+  await chooser.setFiles(WALL);
+  await S.page.click('[role=dialog] button:has-text("確認更換並下架舊路線")');
+  await S.page.waitForTimeout(1500);
+  assert.ok(gymRoute.archived_at, "換照片後路線下架");
+  assert.ok(!mock.db.vfiles[onGym], "影片檔一起刪掉");
+  assert.deepEqual([...C.errors, ...S.errors], []);
+});

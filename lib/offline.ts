@@ -5,6 +5,7 @@
 // 2. 沒網路時儲存的紀錄先排隊，連上網路後自動送出
 
 import { useSyncExternalStore } from "react";
+import { NETWORK_RE } from "./net";
 
 const PREFIX = "routemake-cache:";
 const QUEUE_KEY = "routemake-pending";
@@ -26,9 +27,13 @@ function write(key: string, v: unknown) {
   } catch {}
 }
 
-// 網路錯誤（而不是權限或資料錯誤）
+// 送不出去、之後可以再送一次的錯誤：沒網路、伺服器暫時出錯、登入憑證過期（不是權限或資料錯誤）
+// lib/data.ts 的錯誤帶 retry；其他（例如登入）看訊息
 export const isNetworkError = (e: unknown) =>
-  (typeof navigator !== "undefined" && !navigator.onLine) || /連不上網路|fetch|network|load failed/i.test((e as Error)?.message ?? "");
+  (typeof navigator !== "undefined" && !navigator.onLine) ||
+  (e as { retry?: boolean })?.retry === true ||
+  /連不上網路/.test((e as Error)?.message ?? "") ||
+  NETWORK_RE.test((e as Error)?.message ?? "");
 
 // 先抓最新資料並存起來；抓不到（離線）就用上次存的
 // 有 onCached 時，手機裡有上次的資料就先交給畫面顯示（不用等網路），抓到最新的再更新
@@ -62,12 +67,14 @@ export function hasCache(key: string): boolean {
 }
 
 // 登出時清掉個人資料快取（含記住的身高）
-export function clearCache() {
+// keepQueue：登入自己失效（不是按登出）時，還沒送出的紀錄留著，同一個人再登入後照樣送出
+export function clearCache(keepQueue = false) {
   try {
     Object.keys(localStorage)
-      .filter((k) => k.startsWith(PREFIX) || k === QUEUE_KEY || k.startsWith(HEIGHT_KEY_PREFIX))
+      .filter((k) => k.startsWith(PREFIX) || (k === QUEUE_KEY && !keepQueue) || k.startsWith(HEIGHT_KEY_PREFIX))
       .forEach((k) => localStorage.removeItem(k));
   } catch {}
+  emit();
 }
 
 // ---------- 待送出的紀錄 ----------
@@ -79,6 +86,8 @@ export type PendingAscent = {
 };
 
 export const getPending = () => read<PendingAscent[]>(QUEUE_KEY) ?? [];
+// 這個人還沒送出的筆數（換別人登入時，前一個人排隊的不算、也不會送出）
+export const pendingCountFor = (userId: string | undefined) => (userId ? getPending().filter((p) => p.userId === userId).length : 0);
 
 export function queueAscent(p: PendingAscent) {
   // 同一條路線只留最後一次
@@ -87,28 +96,36 @@ export function queueAscent(p: PendingAscent) {
 }
 
 let flushing = false;
-// 依序送出；送不出去的留著下次再送。回傳送出幾筆
-export async function flushPending(send: (p: PendingAscent) => Promise<void>): Promise<number> {
-  if (flushing || (typeof navigator !== "undefined" && !navigator.onLine)) return 0;
+export type FlushResult = { sent: number; dropped: number; reason: string | null; stuck: boolean };
+// 依序送出目前登入的人排隊的紀錄
+// - 沒網路、伺服器暫時出錯、登入憑證過期：留著，下次再送（stuck＝還有沒送出的）
+// - 資料庫明確說存不進去（例如日期不合法、路線已下架）：再送也一樣，丟掉並告訴畫面（dropped、reason）
+export async function flushPending(userId: string | undefined, send: (p: PendingAscent) => Promise<void>): Promise<FlushResult> {
+  const result: FlushResult = { sent: 0, dropped: 0, reason: null, stuck: false };
+  if (!userId || flushing || (typeof navigator !== "undefined" && !navigator.onLine)) return result;
   flushing = true;
-  let sent = 0;
+  const done = (p: PendingAscent) => write(QUEUE_KEY, getPending().filter((x) => !(x.userId === p.userId && x.routeId === p.routeId)));
   try {
-    for (const p of getPending()) {
+    for (const p of getPending().filter((x) => x.userId === userId)) {
       try {
         await send(p);
-        write(QUEUE_KEY, getPending().filter((x) => !(x.userId === p.userId && x.routeId === p.routeId)));
-        sent++;
+        done(p);
+        result.sent++;
       } catch (e) {
-        if (isNetworkError(e)) break;
-        // 資料錯誤（例如日期不合法）就丟掉，避免永遠卡住
-        write(QUEUE_KEY, getPending().filter((x) => !(x.userId === p.userId && x.routeId === p.routeId)));
+        if (isNetworkError(e)) {
+          result.stuck = true;
+          break;
+        }
+        done(p);
+        result.dropped++;
+        result.reason ??= (e as Error)?.message ?? null;
       }
     }
   } finally {
     flushing = false;
     emit();
   }
-  return sent;
+  return result;
 }
 
 // ---------- 讓畫面知道連線狀態、待送筆數 ----------
@@ -125,7 +142,7 @@ function subscribe(l: () => void) {
   };
 }
 export const useOnline = () => useSyncExternalStore(subscribe, () => navigator.onLine, () => true);
-export const usePendingCount = () => useSyncExternalStore(subscribe, () => getPending().length, () => 0);
+export const usePendingCount = (userId: string | undefined) => useSyncExternalStore(subscribe, () => pendingCountFor(userId), () => 0);
 
 // 把還沒送出的紀錄疊到畫面上，讓離線記的紀錄馬上看得到
 export function overlayPending<A extends { route_id: string }>(map: Record<string, A>, uid: string | undefined): Record<string, A> {

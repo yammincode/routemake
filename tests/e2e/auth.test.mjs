@@ -29,8 +29,8 @@ test("註冊流程與錯誤提示", async () => {
   await page.click("button[type=submit]");
   assert.match(await page.textContent("p[role=alert]"), /4–20 個字/);
 
-  await page.fill("#username", "Ter 0123456");
-  assert.equal(await page.inputValue("#username"), "ter0123456", "自動轉小寫、去空白");
+  await page.fill("#username", "Rock 2468135");
+  assert.equal(await page.inputValue("#username"), "rock2468135", "自動轉小寫、去空白");
   assert.match(await page.textContent("[data-hint=username]"), /✓/);
   await page.fill("#password", "short");
   await page.click("button[type=submit]");
@@ -50,7 +50,7 @@ test("註冊流程與錯誤提示", async () => {
   await page.waitForURL("**/welcome**");
   await page.waitForTimeout(400);
   assert.equal(await page.inputValue("#nickname"), "", "暱稱不帶入登入帳號（暱稱會公開）");
-  await page.fill("#nickname", "TER0123456");
+  await page.fill("#nickname", "ROCK2468135");
   await page.click("button[type=submit]");
   await page.waitForTimeout(300);
   assert.match(await page.textContent("p[role=alert]"), /不要用登入帳號/, "暱稱不能跟登入帳號一樣");
@@ -60,7 +60,7 @@ test("註冊流程與錯誤提示", async () => {
   await page.waitForURL("**/me");
   await page.waitForTimeout(500);
   const main = await page.textContent("main");
-  assert.ok(main.includes("小安") && main.includes("帳號 ter0123456"));
+  assert.ok(main.includes("小安") && main.includes("帳號 rock2468135"));
   assert.equal(await page.locator("[data-app-version]").count(), 0, "一般會員看不到版本號");
 
   await page.reload({ waitUntil: "networkidle" });
@@ -72,14 +72,14 @@ test("註冊流程與錯誤提示", async () => {
   assert.ok(await page.isVisible("text=註冊帳號"), "登出後顯示登入／註冊");
 
   await page.goto(BASE + "/login?mode=signup", { waitUntil: "networkidle" });
-  await page.fill("#username", "ter0123456");
+  await page.fill("#username", "rock2468135");
   await page.fill("#password", "password9");
   await page.click("button[type=submit]");
   await page.waitForSelector("p[role=alert]");
   assert.match(await page.textContent("p[role=alert]"), /已經有人使用/);
 
   await page.click('main button:text-is("登入")');
-  await page.fill("#username", "ter0123456");
+  await page.fill("#username", "rock2468135");
   await page.fill("#password", "wrongpass");
   await page.click("button[type=submit]");
   await page.waitForTimeout(400);
@@ -87,15 +87,36 @@ test("註冊流程與錯誤提示", async () => {
   assert.deepEqual(errors, []);
 });
 
+// 整理路徑後才變成 //evil.example 的寫法（/.//、/%2e//、/x/..//）也要擋
+const EVIL_NEXT = ["//evil.example", "/\\evil.example", "https://evil.example", "/.//evil.example/login", "/%2e//evil.example", "/x/..//evil.example"];
+
 test("登入後只會跳到站內頁面（擋掉外部網址）", async () => {
   const mock = createMock();
   mock.addUser("climber88", "password1", { nickname: "小安" });
-  for (const evil of ["//evil.example", "/\\evil.example", "https://evil.example"]) {
+  for (const evil of EVIL_NEXT) {
     const { page, ctx } = await phone(browser, mock);
     await login(page, "climber88", "password1", evil);
     assert.equal(new URL(page.url()).origin, BASE, `next=${evil} 不能離開網站`);
     await ctx.close();
   }
+});
+
+test("已經登入的人點到帶外部網址的登入連結、改暱稱連結：留在站內", async () => {
+  const mock = createMock();
+  mock.addUser("climber88", "password1", { nickname: "小安" });
+  const { page, errors } = await phone(browser, mock);
+  await login(page, "climber88", "password1", "/me");
+  for (const evil of EVIL_NEXT) {
+    await page.goto(`${BASE}/login?next=${encodeURIComponent(evil)}`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(500);
+    assert.equal(new URL(page.url()).origin, BASE, `已登入打開 /login?next=${evil} 不能離開網站`);
+  }
+  await page.goto(`${BASE}/welcome?next=${encodeURIComponent("/.//evil.example")}`, { waitUntil: "networkidle" });
+  await page.fill("#nickname", "小安安");
+  await page.click("button[type=submit]");
+  await page.waitForTimeout(800);
+  assert.equal(new URL(page.url()).origin, BASE, "改完暱稱不能跳到外部網站");
+  assert.deepEqual(errors, []);
 });
 
 test("管理後台：未登入、沒權限、員工", async () => {
@@ -211,4 +232,29 @@ test("暱稱跟登入帳號一樣的舊帳號：登入後請他換一個", async
   await page.waitForTimeout(500);
   assert.equal(mock.db.profiles.find((p) => p.username === "amy_climb").nickname, "艾咪");
   assert.deepEqual(errors, []);
+});
+
+test("暱稱不能冒充館方：顧客取「原岩官方」會說明原因；員工可以用「定線」", async () => {
+  const mock = createMock();
+  mock.addUser("climber88", "password1", { nickname: "小安" });
+  const setter = mock.addUser("setter1", "password1", { nickname: "阿定" });
+  mock.db.staff_roles.push({ user_id: setter, gym_id: "mingde", role: "setter" });
+  const { page, ctx, errors } = await phone(browser, mock);
+  await login(page, "climber88", "password1", "/me");
+  await page.goto(`${BASE}/welcome?next=/me`, { waitUntil: "networkidle" });
+  await page.fill("#nickname", "原岩官方");
+  await page.click("button[type=submit]");
+  await page.waitForTimeout(500);
+  assert.match(await page.textContent("p[role=alert]"), /不能用「原岩、官方、店長/, "說明不能用的原因");
+  assert.equal(mock.db.profiles.find((p) => p.username === "climber88").nickname, "小安", "暱稱沒有改");
+  await ctx.close();
+
+  const S = await phone(browser, mock);
+  await login(S.page, "setter1", "password1", "/me");
+  await S.page.goto(`${BASE}/welcome?next=/me`, { waitUntil: "networkidle" });
+  await S.page.fill("#nickname", "定線長阿定");
+  await S.page.click("button[type=submit]");
+  await S.page.waitForURL((u) => u.pathname === "/me");
+  assert.equal(mock.db.profiles.find((p) => p.username === "setter1").nickname, "定線長阿定", "員工可以用");
+  assert.deepEqual([...errors, ...S.errors].filter((e) => !/400/.test(e)), []);
 });

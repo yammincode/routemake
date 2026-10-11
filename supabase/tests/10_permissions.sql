@@ -623,6 +623,7 @@ select tests.login(null);
 insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y)
 values ((select v from ids where k = 'zoneB'), 'B-72', 3, '藍', 1, 1);
 set role authenticated; select tests.login(:A);
+select tests.lives('影片：顧客上傳第二支的檔案', format('insert into storage.objects (bucket_id, name) select ''route-videos'', format(''mingde/%%s/%%s/z.mp4'', id, %L) from public.routes where code = ''B-72''', :A));
 select tests.lives('影片：顧客分享第二支', format('insert into public.route_videos (route_id, path) select id, format(''mingde/%%s/%%s/z.mp4'', id, %L) from public.routes where code = ''B-72''', :A));
 select tests.ok('影片：顧客可以刪自己的影片', public.delete_video((select id from public.route_videos where path like '%/z.mp4')) like '%/z.mp4');
 reset role;
@@ -769,6 +770,8 @@ reset role;
 set role authenticated; select tests.login(:ST);
 select tests.throws('人物卡：定線員不能清除自我介紹', format('select public.clear_card_bio(%L, ''mingde'')', :B));
 reset role;
+select tests.login(null);
+update public.profiles set card_public = true where id = :B;  -- 公開的才需要清（0038）
 set role authenticated; select tests.login(:MG);
 select tests.lives('人物卡：店長可以清除自我介紹', format('select public.clear_card_bio(%L, ''mingde'')', :B));
 reset role;
@@ -1287,6 +1290,159 @@ insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values ((se
 select tests.throws('中和合併：A2 牆上還有路線就擋下（請先整區換線）', :'merge_sql');
 select tests.ok('中和合併：擋下時什麼都沒改', (select count(*) = 2 from public.zones where gym_id = 'g3' and code in ('A1', 'A2'))
   and not exists (select 1 from public.zones where gym_id = 'g3' and code = 'A'));
+
+-- ---------------------------------------------------------------------
+-- 上線前安全加強（0038）
+-- ---------------------------------------------------------------------
+select tests.login(null);
+update public.profiles set nickname = '洗版' where id = :NN;
+delete from storage.objects where bucket_id = 'route-videos';
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y)
+select (select v from ids where k = 'zoneB'), 'B1-10', 2, '藍', 1, 1
+ where not exists (select 1 from public.routes where zone_id = (select v from ids where k = 'zoneB') and code = 'B1-10');
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y) values ((select v from ids where k = 'zoneB'), 'B-H1', 3, '藍', 1, 1);
+insert into ids select 'h1', id from public.routes where zone_id = (select v from ids where k = 'zoneB') and code = 'B-H1';
+-- 1. 路線編號：第 100 條起用 3 位數
+update public.zones set route_seq = 98 where id = (select v from ids where k = 'zoneB');
+set role authenticated; select tests.login(:ST);
+select tests.lives('編號：同一區第 99–101 條都新增得了', format('insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) select %L, 3, ''紅'', 1, 1 from generate_series(1, 3)', (select v from ids where k = 'zoneB')));
+select tests.throws('編號：員工也不能直接取號', format('select public.next_route_code(%L)', (select v from ids where k = 'zoneB')));
+reset role; select tests.login(null);
+select tests.ok('編號：第 100 條是 B1-100（不會截成 B1-10 跟舊路線撞號）',
+  (select array_agg(code order by code) from public.routes where zone_id = (select v from ids where k = 'zoneB') and code in ('B1-99', 'B1-100', 'B1-101')) = array['B1-100', 'B1-101', 'B1-99']);
+set role authenticated; select tests.login(:NN);
+select tests.throws('編號：顧客不能直接在 Spray Wall 取號（會把編號用掉）', format('select public.next_route_code(%L)', (select v from ids where k = 'sw')));
+reset role;
+select tests.ok('編號：Spray Wall 的流水號沒有被推高', (select route_seq from public.zones where id = (select v from ids where k = 'sw')) < 20);
+
+-- 2. 影片
+create temp table hp (k text primary key, v text);
+grant all on hp to anon, authenticated;
+insert into hp select 'a', format('mingde/%s/%s/h1.mp4', (select v from ids where k = 'h1'), :A);
+insert into hp select 'fake', format('mingde/%s/%s/fake.mp4', (select v from ids where k = 'h1'), :A);
+set role authenticated; select tests.login(:A);
+select tests.throws('影片：沒有上傳檔案不能新增影片資料（不能洗假影片）', format('insert into public.route_videos (route_id, path) values (%L, %L)', (select v from ids where k = 'h1'), (select v from hp where k = 'fake')));
+select tests.lives('影片：上傳檔案', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from hp where k = 'a')));
+select tests.throws('影片：說明不能放網址', format('insert into public.route_videos (route_id, path, caption) values (%L, %L, ''看 www.evil.com'')', (select v from ids where k = 'h1'), (select v from hp where k = 'a')));
+select tests.lives('影片：有檔案就能分享', format('insert into public.route_videos (route_id, path) values (%L, %L)', (select v from ids where k = 'h1'), (select v from hp where k = 'a')));
+select tests.ok('影片：分享中的影片檔本人不能直接刪（不能偷換內容，0 筆）', tests.rows(format('delete from storage.objects where name = %L', (select v from hp where k = 'a'))) = 0);
+reset role;
+set role anon; select tests.login(null);
+select tests.ok('影片：未登入列不出影片檔', (select count(*) from storage.objects where bucket_id = 'route-videos') = 0);
+reset role;
+set role authenticated; select tests.login(:NN);
+select tests.ok('影片：顧客列不出別人的影片檔', (select count(*) from storage.objects where bucket_id = 'route-videos') = 0);
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.ok('影片：自己的影片檔列得出來', (select count(*) from storage.objects where bucket_id = 'route-videos') = 1);
+select tests.ok('影片：用 delete_video 刪資料後可以刪檔', public.delete_video((select id from public.route_videos where path = (select v from hp where k = 'a'))) = (select v from hp where k = 'a')
+  and tests.rows(format('delete from storage.objects where name = %L', (select v from hp where k = 'a'))) = 1);
+reset role;
+-- 24 小時最多 10 筆影片資料（跟檔案分開算，刪檔也不會空出名額）
+select tests.login(null);
+insert into public.route_videos (route_id, user_id, path)
+select (select v from ids where k = 'h1'), :NN, format('mingde/%s/%s/x%s.mp4', (select v from ids where k = 'h1'), :NN, i) from generate_series(1, 10) i;
+set role authenticated; select tests.login(:NN);
+select tests.lives('影片：上傳第 11 支的檔案', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/%s/%s/x11.mp4'')', (select v from ids where k = 'h1'), :NN));
+select tests.throws('影片：24 小時內第 11 筆影片資料被擋', format('insert into public.route_videos (route_id, path) values (%L, ''mingde/%s/%s/x11.mp4'')', (select v from ids where k = 'h1'), (select v from ids where k = 'h1'), :NN));
+reset role; select tests.login(null);
+delete from public.route_videos where user_id = :NN;
+delete from storage.objects where bucket_id = 'route-videos';
+
+-- 3、4. Spray Wall 岩友路線
+set role authenticated; select tests.login(:NN);
+select tests.lives('Spray：圈圈多塞的資料會被拿掉、定線說明不存', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, setter_note, holds)
+  values (%L, 'community', '洗版一號', 3, '白', 0, 0, '加我賴 abc123', '[{"x":10.123,"y":80,"t":"s","r":2,"junk":"xxxxxxxx"},{"x":50,"y":10,"t":"t"}]')$q$, (select v from ids where k = 'sw')));
+select tests.throws('Spray：風格標籤不能重複', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, style_tags, holds)
+  values (%L, 'community', '洗版二號', 3, '白', 0, 0, '{力量,力量}', %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'ok')));
+reset role; select tests.login(null);
+insert into ids select 'cr2', id from public.routes where name = '洗版一號';
+select tests.ok('Spray：只存 x、y（小數兩位）、t、r，沒有定線說明',
+  (select holds = '[{"x":10.12,"y":80,"t":"s","r":2},{"x":50,"y":10,"t":"t"}]'::jsonb and setter_note is null from public.routes where id = (select v from ids where k = 'cr2')),
+  (select holds::text from public.routes where id = (select v from ids where k = 'cr2')));
+set role authenticated; select tests.login(:NN);
+select tests.throws('Spray：出題者不能自己開關留言', format('update public.routes set comments_enabled = false where id = %L', (select v from ids where k = 'cr2')));
+reset role;
+-- 別人分享在岩友路線的影片：出題者下架路線時拿得到路徑、也刪得掉檔案
+select tests.login(null);
+insert into hp select 'c', format('mingde/%s/%s/c.mp4', (select v from ids where k = 'cr2'), :A);
+set role authenticated; select tests.login(:A);
+select tests.lives('影片：在岩友路線上傳檔案', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from hp where k = 'c')));
+select tests.lives('影片：在岩友路線分享影片', format('insert into public.route_videos (route_id, path) values (%L, %L)', (select v from ids where k = 'cr2'), (select v from hp where k = 'c')));
+reset role;
+set role authenticated; select tests.login(:NN);
+select tests.ok('影片：出題者拿得到自己路線上的影片路徑', public.video_paths_for_routes(array[(select v from ids where k = 'cr2')]) = array[(select v from hp where k = 'c')]);
+select tests.ok('影片：路線還在時，出題者刪不了別人的影片檔（0 筆）', tests.rows(format('delete from storage.objects where name = %L', (select v from hp where k = 'c'))) = 0);
+select tests.lives('Spray：出題者下架自己的路線', format('update public.routes set archived_at = now() where id = %L', (select v from ids where k = 'cr2')));
+select tests.ok('影片：下架後出題者可以清掉別人的影片檔', tests.rows(format('delete from storage.objects where name = %L', (select v from hp where k = 'c'))) = 1);
+select tests.throws('Spray：已下架的岩友路線不能放回牆上', format('update public.routes set archived_at = null where id = %L', (select v from ids where k = 'cr2')));
+select tests.throws('Spray：已下架的岩友路線不能再修改', format('update public.routes set name = ''又改'' where id = %L', (select v from ids where k = 'cr2')));
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.lives('Spray：員工可以把岩友路線放回牆上', format('update public.routes set archived_at = null where id = %L', (select v from ids where k = 'cr2')));
+reset role;
+
+-- 5. 暱稱、留言、聯絡方式
+set role authenticated; select tests.login(:A);
+select tests.throws('暱稱：不能叫「原岩官方」', $q$update public.profiles set nickname = '原岩官方' where id = auth.uid()$q$);
+select tests.throws('暱稱：不能叫「店長阿甲」', $q$update public.profiles set nickname = '店長阿甲' where id = auth.uid()$q$);
+select tests.throws('暱稱：全形 ＡＤＭＩＮ 也擋', $q$update public.profiles set nickname = 'ＡＤＭＩＮ' where id = auth.uid()$q$);
+select tests.throws('暱稱：不能夾看不見的字元', $q$update public.profiles set nickname = E'阿​甲' where id = auth.uid()$q$);
+select tests.throws('暱稱：不能放網址', $q$update public.profiles set nickname = 'www.abc.com' where id = auth.uid()$q$);
+select tests.ok('暱稱：一般的暱稱可以', tests.rows($q$update public.profiles set nickname = '阿甲' where id = auth.uid()$q$) = 1);
+select tests.throws('留言：不能放網址', format('insert into public.comments (route_id, body) values (%L, ''原岩官方活動 https://evil.example 抽年票'')', (select v from ids where k = 'h1')));
+select tests.throws('留言：全形網址也擋', format('insert into public.comments (route_id, body) values (%L, ''ｗｗｗ．ｅｖｉｌ．ｃｏｍ'')', (select v from ids where k = 'h1')));
+select tests.lives('留言：一般留言可以（編輯時間不能自己填）', format('insert into public.comments (route_id, body, edited_at) values (%L, ''起步右手很遠'', now())', (select v from ids where k = 'h1')));
+select tests.ok('留言：新增時編輯時間是空的', (select edited_at is null from public.comments where route_id = (select v from ids where k = 'h1') and user_id = :A));
+select tests.throws('留言：編輯也不能放網址', format('select public.edit_comment(%L, ''看 bit.ly/abc'')', (select id from public.comments where route_id = (select v from ids where k = 'h1') and user_id = :A)));
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.ok('暱稱：員工可以用「定線」', tests.rows($q$update public.profiles set nickname = '定線員小明' where id = auth.uid()$q$) = 1);
+reset role; select tests.login(null);
+select tests.ok('聯絡方式：全形的 ＬＩＮＥ、網址也擋', not public.bio_ok('加ＬＩＮＥ：ａｂｃ') and not public.contact_free('ｗｗｗ．ａｂｃ．ｃｏｍ') and public.contact_free('起步右手很遠'));
+
+-- 6. 刪除帳號：區域從長耐力改回抱石後，建過長耐力路線的人也刪得掉
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000000000d', 'gone_staff@users.routemake.local');
+insert into public.zones (gym_id, code, name, sort, grade_system) values ('mingde', 'ZZ', 'ZZ 區', 98, 'endurance');
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y, holds, created_by)
+values ((select id from public.zones where gym_id = 'mingde' and code = 'ZZ'), 'ZZ-01', 108, '白', 1, 1, '[{"x":1,"y":1},{"x":2,"y":2}]', '00000000-0000-0000-0000-00000000000d');
+update public.routes set archived_at = now() where code = 'ZZ-01';
+update public.zones set grade_system = 'v' where gym_id = 'mingde' and code = 'ZZ';
+select tests.lives('刪除帳號：建過長耐力路線（區域已改回抱石）的帳號刪得掉', $q$delete from auth.users where id = '00000000-0000-0000-0000-00000000000d'$q$);
+select tests.ok('刪除帳號：路線還在，只是沒有建立者', (select created_by is null from public.routes where code = 'ZZ-01'));
+
+-- 7. 其他
+set role authenticated; select tests.login(:ST);
+select tests.throws('區域類型：定線員不能把一般區域改成 Spray Wall', format('update public.zones set kind = ''spray'' where id = %L', (select v from ids where k = 'zoneB')));
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.throws('區域類型：還有路線不能改', format('update public.zones set kind = ''spray'' where id = %L', (select v from ids where k = 'zoneB')));
+select tests.throws('員工名單：店長不能直接新增（要用指派，才有操作紀錄）', format('insert into public.staff_roles (user_id, gym_id, role) values (%L, ''mingde'', ''setter'')', :NN));
+select tests.throws('員工名單：店長不能直接刪除', format('delete from public.staff_roles where user_id = %L', :ST));
+reset role;
+select tests.login(null);
+update public.profiles set card_public = false, bio = '其實很怕高' where id = :A;
+set role authenticated; select tests.login(:MG);
+select tests.throws('人物卡：沒公開的自我介紹不能清（也讀不到）', format('select public.clear_card_bio(%L, ''mingde'')', :A));
+reset role; select tests.login(null);
+select tests.ok('人物卡：沒公開的自我介紹還在、沒寫進操作紀錄', (select bio = '其實很怕高' from public.profiles where id = :A)
+  and not exists (select 1 from public.audit_log where action = 'card.clear' and detail ->> 'bio' = '其實很怕高'));
+update public.profiles set card_public = true where id = :A;
+set role authenticated; select tests.login(:MG);
+select tests.lives('人物卡：公開的自我介紹可以清', format('select public.clear_card_bio(%L, ''mingde'')', :A));
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.ok('紀錄：建立時間改不了（營運數字不能灌）',
+  tests.rows(format($q$update public.ascents set created_at = '2099-01-01' where user_id = auth.uid() and route_id = %L$q$, (select v from ids where k = 'r1'))) = 1
+  and not exists (select 1 from public.ascents where user_id = auth.uid() and created_at > now() + interval '1 day'));
+select tests.throws('頭像：不能自己改（App 沒有用到）', $q$update public.profiles set avatar_url = repeat('x', 1000) where id = auth.uid()$q$);
+select tests.throws('不能 TRUNCATE 清空資料表', 'truncate public.ascents');
+reset role;
+set role anon; select tests.login(null);
+select tests.throws('未登入：讀不到註冊時間', 'select created_at from public.profiles');
+select tests.ok('未登入：暱稱照樣讀得到', (select nickname from public.profiles where id = :A) = '阿甲');
+reset role; select tests.login(null);
+select tests.ok('區域照片不收 SVG', (select not ('image/svg+xml' = any (allowed_mime_types)) from storage.buckets where id = 'zone-photos'));
 
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));

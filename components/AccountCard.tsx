@@ -2,18 +2,23 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { roleLabel } from "@/lib/auth";
 import { GYMS } from "@/lib/gyms";
+import { usePendingCount } from "@/lib/offline";
 
 // 「我的紀錄」頁的帳號區塊：未登入顯示登入／註冊，已登入顯示暱稱、帳號、員工身分與登出
 export default function AccountCard() {
   const { ready, session, access, signOut } = useAuth();
   const router = useRouter();
   const toast = useToast();
+  // 還有離線時記的紀錄沒送出：登出會刪掉，先提醒、再按一次才登出
+  const pending = usePendingCount(session?.user.id);
+  const [confirmOut, setConfirmOut] = useState(false);
 
   if (!ready) return null;
   const installLink = (
@@ -68,12 +73,15 @@ export default function AccountCard() {
         </p>
       )}
       <LinkButton
+        className={confirmOut && pending > 0 ? "font-bold text-warn" : ""}
         onClick={async () => {
+          if (pending > 0 && !confirmOut) return setConfirmOut(true);
+          setConfirmOut(false);
           await signOut();
           toast("已登出");
         }}
       >
-        登出
+        {confirmOut && pending > 0 ? `還有 ${pending} 筆紀錄沒送出，登出會刪掉，再按一次` : "登出"}
       </LinkButton>
       {installLink}
     </SetBox>

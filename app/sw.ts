@@ -12,18 +12,24 @@ declare const self: ServiceWorkerGlobalScope;
 
 // 頁面一律「有網路先抓最新，沒網路才用快取」（defaultCache 的 NetworkFirst，存在 others 快取）
 // 安裝時先把分頁放進快取，第一次打開後就算離線也看得到
-const OFFLINE_PAGES = ["/", "/gyms", "/gym/mingde", "/gym/g2", "/gym/g3", "/gym/g4", "/gym/g5", "/card", "/me", "/admin", "/ops"];
+// 每個頁面都要列：新版安裝時一起換新，不然網路慢時會拿到舊版的頁面（舊版的程式檔已經不在，畫面會按不動）
+const OFFLINE_PAGES = [
+  "/", "/gyms", "/gym/mingde", "/gym/g2", "/gym/g3", "/gym/g4", "/gym/g5", "/card", "/me", "/admin", "/ops",
+  "/spray/mingde-sw", "/spray/nangang-sw", "/resets", "/ops/usage", "/ops/resets",
+  "/feedback", "/rules", "/privacy", "/welcome", "/login",
+];
 // 區域頁 /zone?id=… 不管哪一區都是同一份頁面，快取時忽略網址參數
 const ZONE_CACHE = "zone-shell";
 // 網路幾秒沒回應就先用手機裡存的頁面（館內訊號差時不用乾等；頁面只是空殼，資料另外抓）
 const PAGE_TIMEOUT = 1;
 
+// 一頁一頁存：其中一頁抓不到，其他頁照樣存好
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    Promise.all([
-      caches.open("others").then((cache) => cache.addAll(OFFLINE_PAGES)),
+    Promise.allSettled([
+      caches.open("others").then((cache) => Promise.allSettled(OFFLINE_PAGES.map((p) => cache.add(p)))),
       caches.open(ZONE_CACHE).then((cache) => cache.add("/zone")),
-    ]).catch(() => undefined)
+    ])
   );
 });
 

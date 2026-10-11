@@ -1,6 +1,7 @@
 // 讀寫 Supabase 的資料函式；權限一律由資料庫 RLS 擋，這裡只負責呼叫
 import type { ClimbMove, GradeSystem, HeightBand, HoldColor, Status } from "@/lib/design";
 import type { ResetEvent } from "@/lib/resets";
+import { NETWORK_RE } from "@/lib/net";
 import type { ScoringRules } from "@/lib/scoring";
 import { supabase } from "@/lib/supabase";
 
@@ -91,11 +92,26 @@ export function dbError(e: { message?: string; code?: string } | null | undefine
   if (e?.code === "23505") return "已經有相同的資料";
   // 新的岩點顏色（咖啡）：資料庫還沒套用 step33 時存不進去
   if (e?.code === "23514" && m.includes("hold_color")) return "資料庫還沒套用新的岩點顏色（step33），請先請老闆在 Supabase 執行 step33";
-  if (m.toLowerCase().includes("fetch")) return "連不上網路，請確認網路後再試";
+  // 沒網路：各家瀏覽器的訊息不一樣（Chrome「Failed to fetch」、iPhone「Load failed」…）
+  if (NETWORK_RE.test(m)) return "連不上網路，請確認網路後再試";
   return "發生錯誤，請稍後再試";
 }
+// 之後可以再送一次的錯誤：沒網路、伺服器暫時出錯（沒有錯誤代碼、連不上資料庫、逾時）、登入憑證過期（等換新）
+// 其他有錯誤代碼的（日期不合法、沒有權限…）再送也一樣，不用重送
+const RETRY_CODE = /^(PGRST[03]|08|40|53|57)/;
+const retryable = (e: { message?: string; code?: string }) => NETWORK_RE.test(e.message ?? "") || !e.code || RETRY_CODE.test(e.code);
+// 資料庫錯誤：訊息是給人看的中文；code 是原本的錯誤代碼；retry＝之後可以再送一次
+export class DbError extends Error {
+  code?: string;
+  retry: boolean;
+  constructor(e: { message?: string; code?: string }) {
+    super(dbError(e));
+    this.code = e.code || undefined;
+    this.retry = retryable(e);
+  }
+}
 function must<T>(r: { data: T | null; error: { message?: string; code?: string } | null }): T {
-  if (r.error) throw new Error(dbError(r.error));
+  if (r.error) throw new DbError(r.error);
   return r.data as T;
 }
 
@@ -255,8 +271,15 @@ export async function setUsageViewer(userId: string, gym: string, on: boolean) {
 }
 
 // 自己在這些路線上的紀錄（RLS 只回傳自己的）
+// 路線 id 放在網址裡：一次最多 80 條（全館幾百條一起查，網址太長會被伺服器拒絕）
+const IDS_PER_QUERY = 80;
 export async function getMyAscents(routeIds: string[]): Promise<Record<string, Ascent>> {
-  if (!routeIds.length) return {};
+  const chunks: string[][] = [];
+  for (let i = 0; i < routeIds.length; i += IDS_PER_QUERY) chunks.push(routeIds.slice(i, i + IDS_PER_QUERY));
+  const parts = await Promise.all(chunks.map(myAscentsIn));
+  return Object.fromEntries(parts.flat().map((a) => [a.route_id, a]));
+}
+async function myAscentsIn(routeIds: string[]): Promise<Ascent[]> {
   const cols: string = "id,route_id,status,climbed_on,feel,grade_feel,private_note";
   const high = hasHighpoint();
   let r = await supabase().from("ascents").select(high ? `${cols},highpoint` : cols).in("route_id", routeIds);
@@ -264,8 +287,7 @@ export async function getMyAscents(routeIds: string[]): Promise<Record<string, A
     noHighpointAt = Date.now();
     r = await supabase().from("ascents").select(cols).in("route_id", routeIds);
   }
-  const rows = must(r) as unknown as Ascent[];
-  return Object.fromEntries(rows.map((a) => [a.route_id, a]));
+  return must(r) as unknown as Ascent[];
 }
 export async function getComments(routeId: string): Promise<Comment[]> {
   const rows = must(
@@ -302,8 +324,9 @@ export async function saveAscent(userId: string, routeId: string, a: Omit<Ascent
       .upsert({ user_id: userId, route_id: routeId, ...row }, { onConflict: "user_id,route_id" })
   );
 }
-export async function clearAscent(routeId: string) {
-  must(await supabase().from("ascents").delete().eq("route_id", routeId));
+// 只刪自己的（資料庫也只讓本人刪；離線排隊的「清除」送出時如果換了人登入，不會刪到別人的）
+export async function clearAscent(userId: string, routeId: string) {
+  must(await supabase().from("ascents").delete().eq("user_id", userId).eq("route_id", routeId));
 }
 // 每人每條路線只能留一則（資料庫擋），重複時提示改用編輯
 export async function postComment(routeId: string, body: string) {
@@ -390,15 +413,14 @@ export async function routeHasAscents(id: string): Promise<boolean> {
   if (r.error?.code === "PGRST202") return false;
   return !!must(r);
 }
-// 下架時資料庫會刪掉影片資料，App 再刪 Storage 的檔案（先取得路徑）
+// 下架時資料庫會刪掉影片資料，App 再刪 Storage 的檔案（先取得路徑；員工，或岩友下架自己出的路線）
 export async function archiveRoute(id: string) {
   const paths = await videoPathsFor([id]);
   must(await supabase().from("routes").update({ archived_at: new Date().toISOString() }).eq("id", id));
   await removeVideoFiles(paths);
 }
 export async function archiveZone(zoneId: string): Promise<number> {
-  const ids = (must(await supabase().from("routes").select("id").eq("zone_id", zoneId).is("archived_at", null)) as { id: string }[]).map((r) => r.id);
-  const paths = await videoPathsFor(ids);
+  const paths = await videoPathsFor(await activeRouteIds(zoneId));
   const n = must(await supabase().rpc("archive_zone", { p_zone: zoneId })) as number;
   await removeVideoFiles(paths);
   return n;
@@ -424,8 +446,14 @@ export async function uploadZonePhoto(zone: Zone, file: File) {
   const up = await supabase().storage.from("zone-photos").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000" });
   if (up.error) throw new Error(up.error.message.includes("row-level") ? "沒有權限上傳照片" : "照片上傳失敗，請再試一次");
   await uploadThumb(path, blob).catch(() => undefined); // 縮圖失敗不影響，畫面會改用原圖
+  // 換 Spray Wall 公版照片：資料庫會把整面牆的路線下架、刪掉影片資料，App 先拿到影片檔路徑，換好再刪檔
+  const videoPaths = zone.kind === "spray" && zone.photo_path ? await videoPathsFor(await activeRouteIds(zone.id)) : [];
   await updateZone(zone.id, { photo_path: path, photo_width: width, photo_height: height });
+  await removeVideoFiles(videoPaths);
   return path;
+}
+async function activeRouteIds(zoneId: string): Promise<string[]> {
+  return (must(await supabase().from("routes").select("id").eq("zone_id", zoneId).is("archived_at", null)) as { id: string }[]).map((r) => r.id);
 }
 async function uploadThumb(path: string, image: Blob) {
   const { blob } = await shrinkImage(image, THUMB_WIDTH);
@@ -605,9 +633,11 @@ async function selectVideos<T>(q: (cols: string) => PromiseLike<{ data: T | null
 
 export const videoUrl = (path: string) => supabase().storage.from("route-videos").getPublicUrl(path).data.publicUrl;
 
+// 一條路線最多列最新的 50 支
+export const VIDEOS_PER_ROUTE = 50;
 export async function getVideos(routeId: string): Promise<Video[]> {
   const rows = (await selectVideos((cols) =>
-    supabase().from("route_videos").select(cols).eq("route_id", routeId).order("created_at", { ascending: false })
+    supabase().from("route_videos").select(cols).eq("route_id", routeId).order("created_at", { ascending: false }).limit(VIDEOS_PER_ROUTE)
   )) as unknown as VideoRow[];
   return rows.map(toVideo);
 }
@@ -680,7 +710,8 @@ export async function uploadVideo(
   const recent = await supabase().from("route_videos").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", since);
   if ((recent.count ?? 0) >= VIDEO_DAILY_LIMIT) throw new Error(`每人 24 小時內最多分享 ${VIDEO_DAILY_LIMIT} 支影片，明天再來`);
   const path = `${gymId}/${routeId}/${userId}/${newId()}.${ext}`;
-  const up = await supabase().storage.from("route-videos").upload(path, file, { contentType: type, cacheControl: "31536000" });
+  // 快取 1 小時：影片刪掉後，看過的手機、CDN 不會留著太久
+  const up = await supabase().storage.from("route-videos").upload(path, file, { contentType: type, cacheControl: "3600" });
   if (up.error) {
     const m = up.error.message ?? "";
     if (m.includes("row-level") || m.includes("Unauthorized")) throw new Error("沒辦法分享：這條路線可能已下架或關閉留言，或今天已分享太多支");

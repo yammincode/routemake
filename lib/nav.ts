@@ -33,13 +33,15 @@ export function herePath(): string {
 }
 
 // 只允許站內路徑（擋掉 //evil.com、/\evil.com、https://… 這類會跳到別的網站的網址）
+// 整理過的路徑也要再檢查一次：/.//evil.com、/%2e//evil.com、/x/..//evil.com 整理完會變成 //evil.com（瀏覽器當成別的網站）
 export function safeInternalPath(n: string | null | undefined, fallback: string): string {
   if (!n || !n.startsWith("/") || n.includes("\\")) return fallback;
   try {
     const base = "https://routemake.invalid";
     const u = new URL(n, base);
     if (u.origin !== base) return fallback;
-    return u.pathname + u.search + u.hash;
+    const p = u.pathname + u.search + u.hash;
+    return p.startsWith("//") || p.startsWith("/\\") ? fallback : p;
   } catch {
     return fallback;
   }

@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { authErrorMessage, usernameToEmail, type Access } from "@/lib/auth";
 import { herePath } from "@/lib/nav";
 import { clearCache } from "@/lib/offline";
-import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { AUTH_STORAGE_KEY, supabase, supabaseConfigured } from "@/lib/supabase";
 import { markOpen } from "@/lib/usage";
 
 // 要先去取暱稱：還沒填，或暱稱跟登入帳號一樣（暱稱會公開，帳號不該公開）
@@ -25,6 +25,7 @@ type AuthState = {
 };
 
 const NOT_READY = "登入功能尚未設定完成，請稍後再試";
+const SIGN_OUT_WAIT_MS = 3000;
 
 const Ctx = createContext<AuthState | null>(null);
 
@@ -85,6 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const { data: sub } = sb.auth.onAuthStateChange((event, s) => {
       setSession(s);
+      // 登入自己失效（例如老闆重設密碼）：清掉手機裡的個人資料；還沒送出的紀錄留著，同一個人再登入後照樣送出
+      if (event === "SIGNED_OUT") clearCache(true);
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") void loadAccess(s);
       if (event === "SIGNED_IN") void markOpen(null);
     });
@@ -120,8 +123,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   }, []);
 
+  // 只登出這支手機（其他手機不受影響）
+  // 沒網路又剛好登入過期時，Supabase 會一直重試換新登入（最久 30 秒）、最後回錯誤也沒清掉手機裡的登入：
+  // 最多等 3 秒，沒成功就自己清掉，下一個人打開不會又登入成前一個人
   const signOut = useCallback(async () => {
-    await supabase().auth.signOut();
+    const wait = new Promise<{ error: unknown }>((done) => setTimeout(() => done({ error: "timeout" }), SIGN_OUT_WAIT_MS));
+    const { error } = await Promise.race([
+      supabase()
+        .auth.signOut({ scope: "local" })
+        .catch((e: unknown) => ({ error: e })),
+      wait,
+    ]);
+    if (error) {
+      try {
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith(AUTH_STORAGE_KEY))
+          .forEach((k) => localStorage.removeItem(k));
+      } catch {}
+    }
     clearCache();
     setSession(null);
     setAccess(null);
@@ -132,7 +151,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (nickname: string) => {
       if (!session) return "請先登入";
       const { error } = await supabase().from("profiles").update({ nickname }).eq("id", session.user.id);
-      if (error) return error.message.includes("check") ? "暱稱要 1–16 個字" : authErrorMessage(error);
+      // 資料庫的中文訊息直接顯示（例如不能用「店長」這類字）
+      if (error) return /[一-鿿]/.test(error.message) ? error.message : error.message.includes("check") ? "暱稱要 1–16 個字" : authErrorMessage(error);
       await loadAccess(session);
       return null;
     },

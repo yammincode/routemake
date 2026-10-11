@@ -145,3 +145,25 @@ test("已下架的路線：在我的紀錄按錯「嘗試中」再改回「完�
   assert.equal(a.climbed_on, day, "日期不變");
   assert.deepEqual(errors, []);
 });
+
+test("我的紀錄：館裡路線很多（170 條）時，目前牆上進度照樣讀得出來（分批查，網址不會太長）", async () => {
+  const mock = createMock();
+  const me = mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zA = mock.db.zones[0];
+  const created = new Date(Date.now() - 10 * 86400000).toISOString();
+  const rs = Array.from({ length: 170 }, (_, i) => mock.addRoute(zA, 3, "藍", [], 10 + (i % 80), 20, created));
+  mock.addAscent(me, rs[4], "send", taipeiDay(-1));
+  mock.addAscent(me, rs[149], "flash", taipeiDay(0));
+
+  const { page, errors } = await phone(browser, mock);
+  const sizes = [];
+  page.on("request", (req) => {
+    const u = new URL(req.url());
+    if (u.pathname === "/rest/v1/ascents" && u.searchParams.get("route_id")?.startsWith("in.")) sizes.push(u.searchParams.get("route_id").split(",").length);
+  });
+  await login(page, "climber88", "password1", "/me");
+  await page.waitForTimeout(1500);
+  assert.ok(sizes.length >= 3 && Math.max(...sizes) <= 80, `每次最多查 80 條（實際：${sizes.join("、")}）`);
+  assert.ok((await page.textContent("main")).includes("2/170"), "第 5 條和第 150 條的紀錄都算到（2/170）");
+  assert.deepEqual(errors, []);
+});

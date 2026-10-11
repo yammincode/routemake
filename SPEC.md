@@ -169,11 +169,11 @@ audit_log (
 | --- | --- | --- | --- |
 | gyms | 所有人 | 只有 manager | 不開放 |
 | zones | 所有人 | 該館 setter、manager | 只有 manager |
-| routes | 所有人 | 該館 setter、manager | 不開放，用 `archived_at` 下架 |
+| routes | 所有人 | 該館 setter、manager（編號在新增時由資料庫產生：A-01…A-99、第 100 條起 A-100，不能直接取號） | 不開放，用 `archived_at` 下架 |
 | ascents | 只有本人 | 只有本人 | 只有本人 |
-| comments | 所有人（`deleted_at` 為 null） | 登入者可新增，且該路線與場館留言皆開啟 | 本人，或該館 setter、manager（軟刪除） |
-| profiles | 所有人只能讀暱稱和頭像 | 只有本人 | 不開放 |
-| staff_roles | 本人、manager | 只有 manager | 只有 manager |
+| comments | 所有人（`deleted_at` 為 null） | 登入者可新增，且該路線與場館留言皆開啟；不能放網址 | 本人，或該館 setter、manager（軟刪除） |
+| profiles | 所有人只能讀暱稱和頭像 | 只有本人（暱稱不能用「原岩、官方、店長、定線、員工、管理員、客服、老闆」這類字，員工、老闆除外；不能有看不見的字元、網址） | 不開放 |
+| staff_roles | 本人、manager | 只有 manager，而且只能用指派／移除功能（會寫操作紀錄） | 只有 manager |
 | Storage `zone-photos` | 公開讀 | 該館 setter、manager | 該館 setter、manager |
 
 **特別注意：**
@@ -181,7 +181,11 @@ audit_log (
 - `private_note` 在 ascents 表內，其他人（包含員工）都讀不到
 - 留言開關要在資料庫檢查：路線 `comments_enabled` 和場館 `comments_enabled` 任一為 false，就拒絕新增
 - 已下架路線不能新增留言，但顧客仍可修改自己的紀錄和心得
-- `profiles.phone`、`profiles.username` 其他人讀不到
+- `profiles.phone`、`profiles.username`、註冊時間其他人讀不到
+- 影片：要先上傳本人的檔案才能新增影片資料，24 小時最多 10 筆，說明不能放網址；分享中的影片檔不能直接刪（不能偷換內容）；影片檔清單只有本人和該館員工看得到（看影片用公開網址）
+- Spray Wall 岩友路線被員工下架後，出題者不能放回牆上；留言開關只有員工能動
+- 離線時記的紀錄：沒網路、伺服器暫時出錯都會留著再送；資料庫拒絕（例如日期不合法）才丟掉並告訴使用者；登出時還有沒送出的要再按一次確認；只會用原本那個人的帳號送出
+- 登出只登出這支手機；沒網路時也一定清掉手機裡的登入
 
 ## 頁面與功能
 
@@ -249,7 +253,8 @@ audit_log (
 - [ ] iPhone（Safari）和 Android（Chrome）都測過加到主畫面
 - [ ] 從 LINE 點連結能正確跳到外部瀏覽器
 - [ ] 隱私權政策與留言規範頁面上線
-- [ ] 設定 Supabase 每日備份
+- [ ] 設定 Supabase 每日備份（免費方案沒有可以自己還原的備份：升級 Pro，或上線前和每次執行 stepN 前手動匯出）
+- [ ] 執行 `supabase/setup/step34-prelaunch-hardening.sql`（上線前安全加強）
 - [ ] 定線長試用一週、常客試用兩週後再正式開放
 
 ## 待確認
