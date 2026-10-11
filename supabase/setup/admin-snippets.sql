@@ -28,10 +28,9 @@ delete from auth.sessions where user_id = (select id from auth.users where email
 
 -- 5. 停權（不能再登入；紀錄、留言都保留）；兩行一起執行，已經登入的最多 1 小時內失效
 --    是員工的話，先到管理後台把員工身分移除
-update auth.users set banned_until = 'infinity' where email = '帳號名稱@users.routemake.local';
+--    （停權 100 年；不要寫 'infinity'，Supabase 的登入系統讀不了這個值）
+update auth.users set banned_until = now() + interval '100 years' where email = '帳號名稱@users.routemake.local';
 delete from auth.sessions where user_id = (select id from auth.users where email = '帳號名稱@users.routemake.local');
---    解除停權
-update auth.users set banned_until = null where email = '帳號名稱@users.routemake.local';
 
 -- 6. 刪除帳號（本人要求刪除時；先用第 2 段的方法確認是本人）
 --    ① 是員工的話，先到管理後台把員工身分移除
@@ -42,3 +41,6 @@ update auth.users set banned_until = null where email = '帳號名稱@users.rout
 select count(*) as 影片檔數 from storage.objects
  where bucket_id = 'route-videos'
    and (storage.foldername(name))[3] = (select id::text from public.profiles where username = '帳號名稱');
+
+-- 7. 解除停權（只在要恢復帳號時執行）
+update auth.users set banned_until = null where email = '帳號名稱@users.routemake.local';

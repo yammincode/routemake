@@ -5,12 +5,14 @@
 -- 2. 影片：新增影片資料要先有本人上傳的檔案、24 小時最多 10 筆、說明不能放網址；
 --    還在分享中的影片檔本人不能直接刪（先用 delete_video 刪資料，避免分享後偷換內容）；
 --    岩友下架自己出的路線時，可以清掉別人分享在那條路線的影片檔；影片空間不開放未登入的人列出檔案
--- 3. Spray Wall：圈圈只留 x、y、t、r（不能塞其他資料灌大）；風格標籤不能重複；
+-- 3. Spray Wall：圈圈只留 x、y、t、r（不能塞其他資料灌大）；風格標籤重複的自動合併；
 --    岩友路線不用定線說明（不能拿來放聯絡方式）
 -- 4. 岩友路線被員工下架（或換公版照片自動下架）後，出題者不能再修改、放回牆上；留言開關只有員工能動
--- 5. 暱稱：不能用「原岩、官方、店長、定線、員工、管理員、客服、老闆」這類字（員工、老闆可以），不能有看不見的字元、不能放網址；
---    聯絡方式檢查先把全形英數轉成半形；留言不能放網址
--- 6. 刪除帳號：路線只改建立者時不重新檢查路線規則（區域改回抱石後，建過長耐力路線的員工帳號原本刪不掉）
+-- 5. 暱稱：不能用「原岩、官方、店長、定線、員工、管理員、客服、老闆」這類字（含簡體、館長、櫃檯；員工、老闆可以），
+--    不能有看不見的字元（表情符號照常可以用）、不能只有空白、不能放網址；
+--    聯絡方式檢查先把全形英數轉成半形（舊的自我介紹不受影響，下次修改人物卡時才檢查）；留言不能放網址（含 lin.ee 這類短網址）
+-- 6. 刪除帳號：路線只改建立者時不重新檢查路線規則（區域改回抱石後，建過長耐力路線的員工帳號原本刪不掉）；
+--    新增路線時 id 已經存在就直接擋（重送不會多取一個號，也不能用 upsert 一直推高流水號）
 -- 7. 其他：區域類型只有店長能改（而且要先整區換線）；清除自我介紹只限公開的人物卡；
 --    員工名單只能用指派／移除函式改（會寫操作紀錄）；不開放 TRUNCATE；紀錄的建立時間、留言的編輯時間不能自己改；
 --    頭像欄位不開放修改；其他人讀不到註冊時間；區域照片不收 SVG
@@ -20,9 +22,11 @@
 -- ---------------------------------------------------------------------
 -- 共用：文字不能有網址；聯絡方式檢查先轉半形（ＬＩＮＥ、０９１２… 也擋得到）
 -- ---------------------------------------------------------------------
+-- 先把全形轉半形，再把「。」「｡」「[.]」「(.)」「 . 」「dot」都當成點；網域後面接斜線（lin.ee/xx、forms.gle/xx）一律算網址
 create or replace function public.link_free(p text) returns boolean
 language sql immutable set search_path = '' as $$
-  select p is null or normalize(p, NFKC) !~* '(https?:|www\.|[a-z0-9-]\.(com|tw|net|org|io|me|cc|app|co|ly|gl|xyz|link|shop|site)\y)'
+  select p is null or regexp_replace(normalize(p, NFKC), '\s*(\.|。|｡|\[\.\]|\(\.\)|\[dot\]|\(dot\))\s*', '.', 'gi')
+    !~* '(https?:|www\.|[a-z0-9-]+\.[a-z]{2,}/|[a-z0-9-]\.(com|tw|net|org|io|me|cc|app|co|ly|gl|gle|ee|is|be|gg|am|to|ws|ai|jp|hk|info|biz|top|vip|club|online|xyz|link|shop|site)\y)'
 $$;
 
 create or replace function public.contact_free(p text) returns boolean
@@ -34,6 +38,14 @@ create or replace function public.bio_ok(p text) returns boolean
 language sql immutable set search_path = '' as $$
   select p is null or (char_length(p) <= 60 and public.contact_free(p))
 $$;
+-- 自我介紹只能用 save_my_card() 改（它會用 bio_ok 檢查），資料表的約束只留長度：
+-- 原本約束也用 bio_ok，新規則（全形）會讓舊的自我介紹不合格，這個人之後改暱稱等任何欄位都會失敗
+create or replace function public.bio_len_ok(p text) returns boolean
+language sql immutable set search_path = '' as $$
+  select p is null or char_length(p) <= 60
+$$;
+alter table public.profiles drop constraint profiles_bio_ok;
+alter table public.profiles add constraint profiles_bio_ok check (public.bio_len_ok(bio));
 
 -- ---------------------------------------------------------------------
 -- 1. 路線編號
@@ -61,6 +73,25 @@ begin
   end if;
   -- 至少 2 位數（A-07）；第 100 條起照實寫（A-100），不能截掉
   return v_code || '-' || lpad(v_seq::text, greatest(2, length(v_seq::text)), '0');
+end $$;
+
+-- 新增路線：id 已經存在就直接擋（在取號之前），
+-- 不然 insert ... on conflict（upsert）每送一次就先取一個號，流水號會被一直推高
+create or replace function public.routes_before_insert() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if exists (select 1 from public.routes where id = new.id) then
+    raise exception '已經有相同的資料' using errcode = '23505';
+  end if;
+  if not public.is_db_admin() then
+    new.created_by  := auth.uid();
+    new.created_at  := now();
+    new.archived_at := null;
+  end if;
+  if new.code is null or not public.is_db_admin() then
+    new.code := public.next_route_code(new.zone_id);
+  end if;
+  return new;
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -129,15 +160,32 @@ language sql stable security definer set search_path = '' as $$
      and (public.is_staff(public.route_gym(v.route_id)) or (r.kind = 'community' and r.created_by = auth.uid()))
 $$;
 
+-- 整區在牆上路線的影片檔路徑（員工；整區換線、換 Spray Wall 公版照片前用）
+-- 回傳一個陣列：不受 API 一次最多 1000 筆的限制
+create or replace function public.video_paths_for_zone(p_zone uuid) returns text[]
+language sql stable security definer set search_path = '' as $$
+  select case when not public.is_staff(public.zone_gym(p_zone)) then '{}'::text[] else coalesce(array_agg(v.path), '{}') end
+    from public.route_videos v
+    join public.routes r on r.id = v.route_id
+   where r.zone_id = p_zone and r.archived_at is null
+$$;
+revoke execute on function public.video_paths_for_zone(uuid) from public, anon;
+grant execute on function public.video_paths_for_zone(uuid) to authenticated;
+
 -- ---------------------------------------------------------------------
 -- 3、4、6. 路線規則
 -- ---------------------------------------------------------------------
--- 風格標籤不能重複（最多就是 9 種）
-create or replace function public.no_dup(p text[]) returns boolean
-language sql immutable set search_path = '' as $$
-  select coalesce(cardinality(p), 0) = (select count(distinct x) from unnest(p) x)
-$$;
-alter table public.routes add constraint routes_style_tags_unique check (public.no_dup(style_tags)) not valid;
+-- 風格標籤重複的自動合併（照第一次出現的順序；最多就是 9 種）
+-- 用觸發器不用約束：約束會讓已經有重複標籤的舊路線之後下架、換線都失敗
+create or replace function public.routes_dedupe_tags() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  new.style_tags := coalesce(array(
+    select t from unnest(new.style_tags) with ordinality as u(t, i) group by t order by min(i)), '{}');
+  return new;
+end $$;
+create trigger routes_dedupe_tags before insert or update of style_tags on public.routes
+  for each row execute function public.routes_dedupe_tags();
 
 create or replace function public.routes_spray_check() returns trigger
 language plpgsql set search_path = '' as $$
@@ -147,7 +195,9 @@ declare
   v_first jsonb;
 begin
   -- 只改建立者（刪除帳號）、下架、留言開關：不用重新檢查路線規則（區域換過等級制的舊路線也改得動）
+  -- 放回牆上（archived_at 從有值變成空的）照樣要檢查：區域規則可能已經換了
   if tg_op = 'UPDATE'
+     and not (old.archived_at is not null and new.archived_at is null)
      and (to_jsonb(new) - array['created_by', 'archived_at', 'comments_enabled'])
        = (to_jsonb(old) - array['created_by', 'archived_at', 'comments_enabled']) then
     return new;
@@ -237,24 +287,43 @@ end $$;
 -- ---------------------------------------------------------------------
 -- 5. 暱稱、留言
 -- ---------------------------------------------------------------------
+-- 看不見的字元：零寬、方向控制、Tag、空白填充等（\u、\U 寫法，貼進 SQL Editor 不會少字）
+-- 表情符號常用的 U+FE0F（❤️）和 U+200D（🧗‍♀️）接在符號後面可以，接在文字後面或放在開頭就擋
+create or replace function public.nickname_hidden(p text) returns boolean
+language sql immutable set search_path = '' as $$
+  select p ~ '[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u206F\u3164\uFEFF\uFFA0\uFFF0-\uFFFB\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E007F\U000E0100-\U000E01EF]'
+      or p ~ '(^|[0-9A-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u3040-\u30FF\u3100-\u312F\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF10-\uFF5A])[\uFE00-\uFE0F\u200D]'
+$$;
+-- 比對冒充字之前先拿掉所有空白、看不見的字元（「店 長」「店󠀠長」都算「店長」）
+create or replace function public.nickname_bare(p text) returns text
+language sql immutable set search_path = '' as $$
+  select regexp_replace(normalize(p, NFKC), '[\s\u00A0\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u2000-\u200F\u2028-\u202F\u205F-\u206F\u2800\u3000\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFB\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E007F\U000E0100-\U000E01EF]', '', 'g')
+$$;
 create or replace function public.profiles_nickname_check() returns trigger
 language plpgsql security definer set search_path = '' as $$
+declare
+  v_bare text;
 begin
   if public.is_db_admin() or new.nickname is null
      or (tg_op = 'UPDATE' and new.nickname is not distinct from old.nickname) then
     return new;
   end if;
-  -- 零寬字元、方向控制字元、空白填充字元：看起來跟別人的暱稱一樣
-  if new.nickname ~ '[­͏؜ᅟᅠ឴឵᠋-᠏​-‏‪-‮⁠-⁯ㅤ︀-️﻿ﾠ]' then
-    raise exception '暱稱不能有看不見的字元' using errcode = '22023';
+  if public.nickname_hidden(new.nickname) then
+    raise exception '暱稱不能有看不見的字元（表情符號可以用）' using errcode = '22023';
+  end if;
+  v_bare := public.nickname_bare(new.nickname);
+  if v_bare = '' then
+    raise exception '暱稱不能只有空白' using errcode = '22023';
   end if;
   if not public.link_free(new.nickname) then
     raise exception '暱稱不能放網址' using errcode = '22023';
   end if;
-  if normalize(new.nickname, NFKC) ~* '(原岩|官方|管理員|管理者|店長|定線|員工|客服|老闆|admin|staff|official)'
+  -- 英文字只在整個字時才算（Stafford、Gustaff 可以；admin、staff1 不行）
+  if (v_bare ~ '(原岩|官方|管理員|管理者|管理员|店長|店长|館長|馆长|館方|馆方|定線|定线|員工|员工|客服|老闆|老板|櫃檯|櫃台|柜台)'
+      or v_bare ~* '(^|[^a-z])(admin|staff|official)([^a-z]|$)')
      and not public.is_owner()
      and not exists (select 1 from public.staff_roles s where s.user_id = auth.uid()) then
-    raise exception '暱稱不能用「原岩、官方、店長、定線、員工、管理員、客服、老闆」這類字，以免被誤會是館方' using errcode = '22023';
+    raise exception '暱稱不能用「原岩、官方、店長、館長、定線、員工、管理員、客服、老闆、櫃檯」這類字，以免被誤會是館方' using errcode = '22023';
   end if;
   return new;
 end $$;

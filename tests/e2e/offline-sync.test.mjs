@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import fs from "node:fs";
-import { BASE, WALL, createMock, launch, login, phone } from "./helpers.mjs";
+import { BASE, WALL, createMock, launch, login, phone, taipeiDay } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -142,20 +142,77 @@ test("沒網路、登入又剛好過期時按登出：手機裡的登入一定�
   assert.ok(await page.isVisible("text=註冊帳號"), "連上網路、重新打開：還是登出狀態");
 });
 
-test("換別人登入：前一個人排隊的紀錄不會用新帳號送出、也不會算在新帳號", async () => {
+test("換別人登入：前一個人排隊的紀錄（含私人心得）不會用新帳號送出，也不會留在手機", async () => {
   const mock = createMock();
   mock.addUser("climber88", "password1", { nickname: "小安" });
   mock.addUser("climber99", "password1", { nickname: "小明" });
   const zA = seed(mock);
   const { page } = await phone(browser, mock);
-  await login(page, "climber99", "password1", "/zone?id=" + zA.id);
-  // 手機裡留著別人（小安）還沒送出的紀錄（例如他的登入自己失效了）
+  // 手機裡留著小安還沒送出的紀錄（例如他的登入自己失效了），日期合法：如果用小明的帳號送出，資料庫會存進小明那邊
   const other = mock.db.profiles.find((p) => p.username === "climber88").id;
-  await page.evaluate(([uid, routeId]) => {
-    localStorage.setItem("routemake-pending", JSON.stringify([{ userId: uid, routeId, ascent: { status: "send", climbed_on: "2026-01-01", feel: null, grade_feel: null, private_note: "小安的心得" } }]));
-    window.dispatchEvent(new Event("online"));
-  }, [other, mock.db.routes[0].id]);
+  await page.goto(BASE + "/gyms", { waitUntil: "networkidle" });
+  await page.evaluate(([uid, routeId, day]) => {
+    localStorage.setItem("routemake-pending", JSON.stringify([{ userId: uid, routeId, ascent: { status: "send", climbed_on: day, feel: null, grade_feel: null, private_note: "小安的心得" } }]));
+  }, [other, mock.db.routes[0].id, taipeiDay(0)]);
+  await login(page, "climber99", "password1", "/zone?id=" + zA.id);
   await page.waitForTimeout(1500);
   assert.equal(mock.db.ascents.length, 0, "不會用小明的帳號送出小安的紀錄");
-  assert.doesNotMatch(await status(page), /正在送出/, "小明的畫面不顯示別人的待送筆數");
+  assert.doesNotMatch(await status(page), /正在送出|存不進去/);
+  assert.equal(await page.evaluate(() => localStorage.getItem("routemake-pending")?.includes("小安的心得") ?? false), false, "小安的心得不留在手機");
+});
+
+test("登入過期、收訊差換新失敗：排隊的紀錄不會被當成沒登入送出而丟掉，換新成功後照樣送出", async () => {
+  const mock = createMock();
+  mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zA = seed(mock);
+  const { page, ctx } = await phone(browser, mock);
+  await login(page, "climber88", "password1", "/zone?id=" + zA.id);
+  await page.waitForTimeout(800);
+  mock.state.offline = true;
+  await ctx.setOffline(true);
+  await flash(page);
+  assert.match(await status(page), /1 筆紀錄會在連上網路後送出/);
+
+  // 登入憑證過期，換新又一直失敗（Supabase 會改用沒登入的身分送，資料庫回「沒有權限」）
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem("routemake-auth"));
+    s.expires_at = Math.floor(Date.now() / 1000) - 60;
+    localStorage.setItem("routemake-auth", JSON.stringify(s));
+  });
+  mock.state.refreshFail = true;
+  mock.state.offline = false;
+  await ctx.setOffline(false);
+  await page.waitForTimeout(30000); // Supabase 換新會重試大約 25 秒
+  assert.equal(mock.db.ascents.length, 0);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("routemake-pending") ?? "[]").length), 1, "紀錄留著，沒有被丟掉");
+  assert.doesNotMatch(await status(page), /存不進去/);
+
+  mock.state.refreshFail = false;
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(2500);
+  assert.equal(mock.db.ascents.length, 1, "換新成功後自動送出");
+});
+
+test("排隊中的舊紀錄不會蓋掉後來直接存成功的新紀錄", async () => {
+  const mock = createMock();
+  mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zA = seed(mock);
+  const { page } = await phone(browser, mock);
+  await login(page, "climber88", "password1", "/zone?id=" + zA.id);
+  await page.waitForTimeout(800);
+  mock.state.ascentsFail = { status: 503, type: "text/html", body: "<html>503</html>" };
+  await page.click('main button[aria-label^="V4"]');
+  await page.click('[role=dialog] button:has-text("嘗試中")');
+  await page.waitForTimeout(1200);
+  assert.match(await status(page), /正在送出 1 筆紀錄/, "伺服器出錯：嘗試中排隊");
+
+  mock.state.ascentsFail = null;
+  await page.click('[role=dialog] button:has-text("Flash")');
+  await page.waitForTimeout(800);
+  assert.equal(mock.db.ascents[0]?.status, "flash", "Flash 直接存成功");
+  await retryNow(page);
+  await page.waitForTimeout(1500);
+  assert.equal(mock.db.ascents.length, 1);
+  assert.equal(mock.db.ascents[0].status, "flash", "排隊的「嘗試中」不會再送出蓋掉 Flash");
+  assert.doesNotMatch(await status(page), /正在送出/);
 });

@@ -65,7 +65,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
+  const state = { offline: false, ascentsFail: null, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -144,8 +144,16 @@ export function createMock() {
   const gymOfRoute = (id) => zoneOf(db.routes.find((r) => r.id === id).zone_id).gym_id;
   // 路線下架時刪掉影片資料（資料庫觸發器）
   const dropVideos = (routeId) => (db.videos = db.videos.filter((v) => v.route_id !== routeId));
-  // 同 0038 的 link_free：網址（全形也算）
-  const hasLink = (t) => /(https?:|www\.|[a-z0-9-]\.(com|tw|net|org|io|me|cc|app|co|ly|gl|xyz|link|shop|site)\b)/i.test((t ?? "").normalize("NFKC"));
+  // 同 0038 的 link_free：網址（全形、「。」、短網址也算）
+  const hasLink = (t) =>
+    /(https?:|www\.|[a-z0-9-]+\.[a-z]{2,}\/|[a-z0-9-]\.(com|tw|net|org|io|me|cc|app|co|ly|gl|gle|ee|is|be|gg|am|to|ws|ai|jp|hk|info|biz|top|vip|club|online|xyz|link|shop|site)\b)/i.test(
+      (t ?? "").normalize("NFKC").replace(/\s*(\.|。|｡|\[\.\]|\(\.\)|\[dot\]|\(dot\))\s*/gi, ".")
+    );
+  // 同 0038 的 nickname_hidden、nickname_bare、profiles_nickname_check
+  const HIDDEN = /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u206F\u3164\uFEFF\uFFA0\uFFF0-\uFFFB\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]|(^|[0-9A-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u3040-\u30FF\u3100-\u312F\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF10-\uFF5A])[\uFE00-\uFE0F\u200D]/u;
+  const bare = (t) => t.normalize("NFKC").replace(/[\s\u00A0\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u2000-\u200F\u2028-\u202F\u205F-\u206F\u2800\u3000\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFB\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu, "");
+  const IMPERSONATE = /(原岩|官方|管理員|管理者|管理员|店長|店长|館長|馆长|館方|馆方|定線|定线|員工|员工|客服|老闆|老板|櫃檯|櫃台|柜台)/;
+  const IMPERSONATE_EN = /(^|[^a-z])(admin|staff|official)([^a-z]|$)/i;
   // 同 0038 的 can_delete_video_file：員工；分享中的不行；自己的；岩友下架了自己出的路線
   const canDeleteVideoFile = (uid, k) => {
     if (!uid) return false;
@@ -347,6 +355,12 @@ export function createMock() {
       const mineCommunity = (id) => { const r = db.routes.find((x) => x.id === id); return r?.kind === "community" && r.created_by === uid; };
       return J(route, 200, db.videos.filter((v) => a.p_routes.includes(v.route_id) && (isStaff(uid, gymOfRoute(v.route_id)) || mineCommunity(v.route_id))).map((v) => v.path));
     }
+    if (fn === "video_paths_for_zone") {
+      const z = zoneOf(a.p_zone);
+      if (!z || !isStaff(uid, z.gym_id)) return J(route, 200, []);
+      const ids = db.routes.filter((r) => r.zone_id === z.id && !r.archived_at).map((r) => r.id);
+      return J(route, 200, db.videos.filter((v) => ids.includes(v.route_id)).map((v) => v.path));
+    }
     if (fn === "video_usage") {
       if (!isStaff(uid, a.p_gym)) return J(route, 200, null);
       const fs = Object.entries(db.vfiles).filter(([k]) => k.startsWith(a.p_gym + "/"));
@@ -530,6 +544,8 @@ export function createMock() {
       return J(route, 200, session(body.email, db.users[body.email]));
     }
     if (p === "/auth/v1/token" && sp.get("grant_type") === "refresh_token") {
+      // state.refreshFail：模擬收訊差、換新登入失敗（跟沒網路一樣）
+      if (state.refreshFail) return route.abort("connectionreset");
       const email = (body?.refresh_token ?? "").replace(/^r:/, "");
       return db.users[email] ? J(route, 200, session(email, db.users[email])) : J(route, 400, { error_code: "refresh_token_not_found", msg: "Invalid Refresh Token" });
     }
@@ -850,10 +866,11 @@ export function createMock() {
     if (t === "profiles" && m === "PATCH") {
       // 同 0038 的 profiles_nickname_check：看不見的字元、網址；冒充館方的字（員工、老闆可以）
       const nick = body.nickname ?? "";
-      if (/[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/.test(nick)) return J(route, 400, { code: "22023", message: "暱稱不能有看不見的字元" });
+      if (HIDDEN.test(nick)) return J(route, 400, { code: "22023", message: "暱稱不能有看不見的字元（表情符號可以用）" });
+      if (!bare(nick)) return J(route, 400, { code: "22023", message: "暱稱不能只有空白" });
       if (hasLink(nick)) return J(route, 400, { code: "22023", message: "暱稱不能放網址" });
-      if (/原岩|官方|管理員|管理者|店長|定線|員工|客服|老闆|admin|staff|official/i.test(nick.normalize("NFKC")) && !isOwner(uid) && !db.staff_roles.some((x) => x.user_id === uid))
-        return J(route, 400, { code: "22023", message: "暱稱不能用「原岩、官方、店長、定線、員工、管理員、客服、老闆」這類字，以免被誤會是館方" });
+      if ((IMPERSONATE.test(bare(nick)) || IMPERSONATE_EN.test(bare(nick))) && !isOwner(uid) && !db.staff_roles.some((x) => x.user_id === uid))
+        return J(route, 400, { code: "22023", message: "暱稱不能用「原岩、官方、店長、館長、定線、員工、管理員、客服、老闆、櫃檯」這類字，以免被誤會是館方" });
       Object.assign(prof(uid), { nickname: body.nickname });
       return empty(route);
     }

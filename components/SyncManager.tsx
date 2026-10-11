@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/ui/Toast";
-import { clearAscent, saveAscent } from "@/lib/data";
-import { flushPending, useOnline, usePendingCount } from "@/lib/offline";
+import { clearAscent, saveAscent, signedInAs } from "@/lib/data";
+import { dropPendingExcept, flushPending, useOnline, usePendingCount } from "@/lib/offline";
 import type { Status } from "@/lib/design";
 
 // 送不出去時隔多久再試一次（收訊時好時壞，手機一直顯示「有網路」）
 const RETRY_MS = 30_000;
 
-// 連上網路時自動送出離線時記的紀錄（只送目前登入的人自己的）；沒網路時在頁面上方提示
+// 連上網路時自動送出離線時記的紀錄（只送目前登入的人自己的，送出前確認登入有效）；沒網路時在頁面上方提示
 export default function SyncManager() {
   const toast = useToast();
   const online = useOnline();
@@ -21,12 +21,21 @@ export default function SyncManager() {
   const [retry, setRetry] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  // 換別人登入：前一個人還沒送出的紀錄（含私人心得）不留在這支手機
+  useEffect(() => {
+    if (uid) dropPendingExcept(uid);
+  }, [uid]);
+
   useEffect(() => {
     if (!online || !pending || !uid) return;
-    void flushPending(uid, async (p) => {
-      if (p.ascent) await saveAscent(p.userId, p.routeId, { ...p.ascent, status: p.ascent.status as Status });
-      else await clearAscent(p.userId, p.routeId);
-    }).then((r) => {
+    void flushPending(
+      uid,
+      async (p) => {
+        if (p.ascent) await saveAscent(p.userId, p.routeId, { ...p.ascent, status: p.ascent.status as Status });
+        else await clearAscent(p.userId, p.routeId);
+      },
+      signedInAs
+    ).then((r) => {
       if (r.sent > 0) toast(`已送出 ${r.sent} 筆離線時的紀錄`);
       if (r.dropped > 0) toast(`有 ${r.dropped} 筆離線時的紀錄存不進去${r.reason ? `：${r.reason}` : ""}`);
       if (r.sent > 0 || r.dropped > 0) window.dispatchEvent(new Event("routemake:synced"));

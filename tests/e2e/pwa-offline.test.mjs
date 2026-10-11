@@ -88,6 +88,10 @@ test("岩牆照片存進手機：第二次不用重抓、離線也看得到；Su
   // 區域頁只存一份（鍵固定是 /zone）
   const zoneKeys = await page.evaluate(async () => (await (await caches.open("zone-shell")).keys()).map((r) => new URL(r.url).pathname + new URL(r.url).search));
   assert.deepEqual(zoneKeys, ["/zone"], `區域頁快取只有一份（實際：${zoneKeys.join(", ")}）`);
+  // 每一頁都在安裝時存進手機（新版安裝時一起換新，網路慢時不會拿到舊版畫面）
+  const pages = await page.evaluate(async () => (await (await caches.open("others")).keys()).map((r) => new URL(r.url).pathname));
+  for (const p of ["/resets", "/spray/mingde-sw", "/spray/nangang-sw", "/feedback", "/gym/g6", "/ops/usage", "/welcome"])
+    assert.ok(pages.includes(p), `${p} 有存進手機（實際：${pages.join(", ")}）`);
 
   // 離線：照片照樣看得到
   mock.state.offline = true;

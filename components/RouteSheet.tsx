@@ -26,6 +26,7 @@ import {
   postComment,
   saveAscent,
   seqTotal,
+  signedInAs,
   unlikeComment,
   type Ascent,
   type Comment,
@@ -34,7 +35,7 @@ import {
 import { ago, md, todayYmd, ymd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, STATUS_LABEL, type Status } from "@/lib/design";
 import { herePath } from "@/lib/nav";
-import { isNetworkError, queueAscent } from "@/lib/offline";
+import { isRetryable, queueAscent, unqueue } from "@/lib/offline";
 import { ascentPoints, routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
@@ -156,10 +157,12 @@ function RouteBody({
     setBusy(true);
     try {
       await saveAscent(session.user.id, r.id, a);
+      unqueue(session.user.id, r.id); // 之前排隊的舊版本不用再送（不然會蓋掉這次存的）
       onSaved({ id: ascent?.id ?? "", route_id: r.id, ...a });
       toast(msg);
     } catch (e) {
-      if (isNetworkError(e)) {
+      // 送不出去，或登入剛好過期（資料庫回「沒有權限」）：先排隊，之後自動送出
+      if (isRetryable(e) || !(await signedInAs(session.user.id))) {
         queueAscent({ userId: session.user.id, routeId: r.id, ascent: a });
         onSaved({ id: ascent?.id ?? "", route_id: r.id, ...a });
         toast("目前送不出去，連上網路後會自動送出");
@@ -258,11 +261,12 @@ function RouteBody({
     setBusy(true);
     try {
       await clearAscent(session.user.id, r.id);
+      unqueue(session.user.id, r.id);
       onSaved(null);
       onClose();
       toast("已清除紀錄");
     } catch (e) {
-      if (isNetworkError(e)) {
+      if (isRetryable(e) || !(await signedInAs(session.user.id))) {
         queueAscent({ userId: session.user.id, routeId: r.id, ascent: null });
         onSaved(null);
         onClose();

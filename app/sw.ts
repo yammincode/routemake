@@ -1,6 +1,7 @@
 import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
 import { CacheFirst, ExpirationPlugin, NetworkFirst, NetworkOnly, Serwist } from "serwist";
+import { GYMS, SPRAY_WALLS, sprayPath } from "../lib/gyms";
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -13,9 +14,10 @@ declare const self: ServiceWorkerGlobalScope;
 // 頁面一律「有網路先抓最新，沒網路才用快取」（defaultCache 的 NetworkFirst，存在 others 快取）
 // 安裝時先把分頁放進快取，第一次打開後就算離線也看得到
 // 每個頁面都要列：新版安裝時一起換新，不然網路慢時會拿到舊版的頁面（舊版的程式檔已經不在，畫面會按不動）
+// 各館、Spray Wall 的頁面從 lib/gyms 產生，之後新增館不會漏
 const OFFLINE_PAGES = [
-  "/", "/gyms", "/gym/mingde", "/gym/g2", "/gym/g3", "/gym/g4", "/gym/g5", "/card", "/me", "/admin", "/ops",
-  "/spray/mingde-sw", "/spray/nangang-sw", "/resets", "/ops/usage", "/ops/resets",
+  "/", "/gyms", ...GYMS.map((g) => `/gym/${g.id}`), ...SPRAY_WALLS.map((w) => sprayPath(w.id)),
+  "/card", "/me", "/admin", "/ops", "/resets", "/ops/usage", "/ops/resets",
   "/feedback", "/rules", "/privacy", "/welcome", "/login",
 ];
 // 區域頁 /zone?id=… 不管哪一區都是同一份頁面，快取時忽略網址參數
@@ -23,11 +25,11 @@ const ZONE_CACHE = "zone-shell";
 // 網路幾秒沒回應就先用手機裡存的頁面（館內訊號差時不用乾等；頁面只是空殼，資料另外抓）
 const PAGE_TIMEOUT = 1;
 
-// 一頁一頁存：其中一頁抓不到，其他頁照樣存好
+// 一頁一頁存：其中一頁抓不到，其他頁照樣存好；抓不到的那頁把舊版刪掉（之後直接等網路，不會拿到舊版）
 self.addEventListener("install", (event) => {
   event.waitUntil(
     Promise.allSettled([
-      caches.open("others").then((cache) => Promise.allSettled(OFFLINE_PAGES.map((p) => cache.add(p)))),
+      caches.open("others").then((cache) => Promise.allSettled(OFFLINE_PAGES.map((p) => cache.add(p).catch(() => cache.delete(p))))),
       caches.open(ZONE_CACHE).then((cache) => cache.add("/zone")),
     ])
   );

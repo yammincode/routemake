@@ -324,6 +324,13 @@ export async function saveAscent(userId: string, routeId: string, a: Omit<Ascent
       .upsert({ user_id: userId, route_id: routeId, ...row }, { onConflict: "user_id,route_id" })
   );
 }
+// 手機現在登入的是不是這個人、而且登入有效（過期會先試著換新；換新失敗就是 false）
+// 離線排隊的紀錄送出前用：登入過期時 Supabase 會改用未登入的身分送，資料庫會回「沒有權限」，紀錄就被丟掉
+export async function signedInAs(userId: string): Promise<boolean> {
+  const { data } = await supabase().auth.getSession();
+  const s = data.session;
+  return !!s && s.user.id === userId && (s.expires_at ?? 0) * 1000 > Date.now();
+}
 // 只刪自己的（資料庫也只讓本人刪；離線排隊的「清除」送出時如果換了人登入，不會刪到別人的）
 export async function clearAscent(userId: string, routeId: string) {
   must(await supabase().from("ascents").delete().eq("user_id", userId).eq("route_id", routeId));
@@ -420,7 +427,7 @@ export async function archiveRoute(id: string) {
   await removeVideoFiles(paths);
 }
 export async function archiveZone(zoneId: string): Promise<number> {
-  const paths = await videoPathsFor(await activeRouteIds(zoneId));
+  const paths = await videoPathsForZone(zoneId);
   const n = must(await supabase().rpc("archive_zone", { p_zone: zoneId })) as number;
   await removeVideoFiles(paths);
   return n;
@@ -447,13 +454,18 @@ export async function uploadZonePhoto(zone: Zone, file: File) {
   if (up.error) throw new Error(up.error.message.includes("row-level") ? "沒有權限上傳照片" : "照片上傳失敗，請再試一次");
   await uploadThumb(path, blob).catch(() => undefined); // 縮圖失敗不影響，畫面會改用原圖
   // 換 Spray Wall 公版照片：資料庫會把整面牆的路線下架、刪掉影片資料，App 先拿到影片檔路徑，換好再刪檔
-  const videoPaths = zone.kind === "spray" && zone.photo_path ? await videoPathsFor(await activeRouteIds(zone.id)) : [];
+  const videoPaths = zone.kind === "spray" ? await videoPathsForZone(zone.id) : [];
   await updateZone(zone.id, { photo_path: path, photo_width: width, photo_height: height });
   await removeVideoFiles(videoPaths);
   return path;
 }
-async function activeRouteIds(zoneId: string): Promise<string[]> {
-  return (must(await supabase().from("routes").select("id").eq("zone_id", zoneId).is("archived_at", null)) as { id: string }[]).map((r) => r.id);
+// 整區在牆上路線的影片檔路徑（資料庫一次回傳整個清單，不受一次最多 1000 筆的限制）
+// 資料庫還沒執行 step34（沒有這個函式）時，改用路線清單查
+async function videoPathsForZone(zoneId: string): Promise<string[]> {
+  const r = await supabase().rpc("video_paths_for_zone", { p_zone: zoneId });
+  if (r.error?.code !== "PGRST202") return must(r) as string[];
+  const ids = (must(await supabase().from("routes").select("id").eq("zone_id", zoneId).is("archived_at", null)) as { id: string }[]).map((x) => x.id);
+  return videoPathsFor(ids);
 }
 async function uploadThumb(path: string, image: Blob) {
   const { blob } = await shrinkImage(image, THUMB_WIDTH);
@@ -633,11 +645,9 @@ async function selectVideos<T>(q: (cols: string) => PromiseLike<{ data: T | null
 
 export const videoUrl = (path: string) => supabase().storage.from("route-videos").getPublicUrl(path).data.publicUrl;
 
-// 一條路線最多列最新的 50 支
-export const VIDEOS_PER_ROUTE = 50;
 export async function getVideos(routeId: string): Promise<Video[]> {
   const rows = (await selectVideos((cols) =>
-    supabase().from("route_videos").select(cols).eq("route_id", routeId).order("created_at", { ascending: false }).limit(VIDEOS_PER_ROUTE)
+    supabase().from("route_videos").select(cols).eq("route_id", routeId).order("created_at", { ascending: false })
   )) as unknown as VideoRow[];
   return rows.map(toVideo);
 }

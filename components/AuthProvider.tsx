@@ -26,6 +26,14 @@ type AuthState = {
 
 const NOT_READY = "登入功能尚未設定完成，請稍後再試";
 const SIGN_OUT_WAIT_MS = 3000;
+// 手機裡存的登入什麼時候過期（秒；讀不到是 0）
+const storedExpiresAt = (): number => {
+  try {
+    return (JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) ?? "null") as { expires_at?: number } | null)?.expires_at ?? 0;
+  } catch {
+    return 0;
+  }
+};
 
 const Ctx = createContext<AuthState | null>(null);
 
@@ -127,6 +135,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 沒網路又剛好登入過期時，Supabase 會一直重試換新登入（最久 30 秒）、最後回錯誤也沒清掉手機裡的登入：
   // 最多等 3 秒，沒成功就自己清掉，下一個人打開不會又登入成前一個人
   const signOut = useCallback(async () => {
+    const clearStored = () => {
+      try {
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith(AUTH_STORAGE_KEY))
+          .forEach((k) => localStorage.removeItem(k));
+      } catch {}
+    };
+    // 沒網路、或登入已經（快要）過期：先自己清掉，Supabase 就不會去換新登入、重試很久
+    // （不然 3 秒後它還在背景重試，之後有人登入時會把那個人登出）
+    if (!navigator.onLine || storedExpiresAt() * 1000 - Date.now() < 90_000) clearStored();
     const wait = new Promise<{ error: unknown }>((done) => setTimeout(() => done({ error: "timeout" }), SIGN_OUT_WAIT_MS));
     const { error } = await Promise.race([
       supabase()
@@ -134,13 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .catch((e: unknown) => ({ error: e })),
       wait,
     ]);
-    if (error) {
-      try {
-        Object.keys(localStorage)
-          .filter((k) => k.startsWith(AUTH_STORAGE_KEY))
-          .forEach((k) => localStorage.removeItem(k));
-      } catch {}
-    }
+    if (error) clearStored();
     clearCache();
     setSession(null);
     setAccess(null);
