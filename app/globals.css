@@ -24,6 +24,8 @@
   --hold-mid: #2f7de1;
   --hold-top: #e5484d;
   --shadow: 0 1px 2px rgba(20, 32, 27, 0.06), 0 4px 14px rgba(20, 32, 27, 0.06);
+  /* 立體平面圖的側面：頂面顏色混這個色（淺色模式混黑變暗；深色模式混灰，完成度低的深色方塊側面也看得到） */
+  --plan-shade: #000000;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -39,6 +41,7 @@
     --blush: #2a1c1f;
     --warn: #f08a5d;
     --shadow: none;
+    --plan-shade: #66726c;
   }
 }
 
@@ -54,6 +57,7 @@
   --blush: #2a1c1f;
   --warn: #f08a5d;
   --shadow: none;
+  --plan-shade: #66726c;
 }
 
 @theme inline {

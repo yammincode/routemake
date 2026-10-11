@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { after, before, test } from "node:test";
-import { BASE, createMock, launch, login, phone } from "./helpers.mjs";
+import { BASE, createMock, launch, login, phone, planMode } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -22,7 +22,7 @@ test("後台點平面圖切換區域；圖上沒有的區域用按鈕", async ()
   assert.equal(await b.inputValue("#zname"), "A1 區", "預設第一區");
   assert.equal(await b.getAttribute('svg[role=img] g[aria-label^="A1 區"]', "aria-pressed"), "true");
   assert.ok((await b.getAttribute('svg[role=img] g[aria-label^="B1 區"]', "aria-label")).includes("牆上 1 條"), "平面圖顯示路線數");
-  await b.locator('svg[role=img] g[aria-label^="B1 區"] text').first().click();
+  await b.locator('svg[role=img] g[role=button][aria-label^="B1 區"]').first().dispatchEvent("click");
   await b.waitForTimeout(500);
   assert.equal(await b.inputValue("#zname"), "B1 區", "點平面圖切換區域");
   assert.equal(await b.locator("main ul li").count(), 1, "顯示 B1 區的路線");
@@ -35,7 +35,8 @@ test("後台點平面圖切換區域；圖上沒有的區域用按鈕", async ()
 
 test("南港平面圖：1F 左側牆 B1（上）／B2（中）／B3（左下斜牆左半），斜牆右下角和最下面短牆是 C1，中間長牆左半 C2、右半 C3；2F D1／D2", async () => {
   const mock = createMock();
-  const { page, errors } = await phone(browser, mock);
+  const { page, ctx, errors } = await phone(browser, mock);
+  await planMode(ctx, "flat"); // 用平面圖的座標找區域
   await page.goto(BASE + "/gym/g4", { waitUntil: "networkidle" });
   await page.waitForTimeout(800);
   assert.deepEqual(
@@ -71,7 +72,7 @@ test("南港平面圖：1F 左側牆 B1（上）／B2（中）／B3（左下斜�
   assert.equal(await zoneAt("2F", 300, 60), null, "樓梯間不屬於任何區");
 
   // 點 C1 的字樣可以進 C1 區
-  await page.locator('svg[role=img] g[aria-label^="C1 區"] text').first().click();
+  await page.locator('svg[role=img] g[role=button][aria-label^="C1 區"]').first().dispatchEvent("click");
   await page.waitForURL(/\/zone\?id=/);
   await page.waitForTimeout(600);
   assert.equal(await page.textContent("h1"), "C1 區");
@@ -80,7 +81,7 @@ test("南港平面圖：1F 左側牆 B1（上）／B2（中）／B3（左下斜�
   await page.goBack();
   await page.waitForURL("**/gym/g4");
   await page.waitForTimeout(600);
-  await page.locator('svg[role=img] g[aria-label^="D2 區"] text').first().click();
+  await page.locator('svg[role=img] g[role=button][aria-label^="D2 區"]').first().dispatchEvent("click");
   await page.waitForURL(/\/zone\?id=/);
   await page.waitForTimeout(600);
   assert.equal(await page.textContent("h1"), "D2 區");

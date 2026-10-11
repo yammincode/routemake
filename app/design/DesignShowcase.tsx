@@ -264,6 +264,7 @@ export default function DesignShowcase() {
       </Block>
 
       <Block title="平面圖與區域">
+        <p className="mt-0 mb-1.5 text-meta text-muted">右上角「立體／平面」：立體（2.5D，預設）方塊越高路線越多；三張一起換，記在這支手機</p>
         <FloorPlan shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={ZONES} onSelect={(c) => toast(`點了 ${c} 區`)} />
         <p className="mt-3 mb-1.5 text-meta text-muted">管理後台（admin）：顯示路線數，粗框是目前編輯的區域</p>
         <FloorPlan admin selected="B" shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={ZONES} onSelect={(c) => toast(`切換到 ${c} 區`)} />

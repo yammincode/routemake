@@ -53,3 +53,6 @@ export async function monthGrade(page, label) {
   await page.locator(`main button[aria-label^="${label}，"]`).click();
   await page.waitForTimeout(300);
 }
+
+// 平面圖畫法（立體是預設）：要測平面圖的形狀、字級時，先指定用平面
+export const planMode = (ctx, mode) => ctx.addInitScript((m) => localStorage.setItem("routemake-plan-mode", m), mode);

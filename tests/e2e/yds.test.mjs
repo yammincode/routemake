@@ -42,7 +42,7 @@ test("YDS：上攀區顯示 5.11a、記錄後我的紀錄顯示最高難度；�
   await b.waitForTimeout(800);
   await b.click('main button:text-is("中和館")');
   await b.waitForTimeout(800);
-  await b.locator('svg[role=img] g[aria-label^="A 區"] text').first().click();
+  await b.locator('svg[role=img] g[role=button][aria-label^="A 區"]').first().dispatchEvent("click");
   await b.waitForTimeout(500);
   assert.equal(await b.getAttribute('main button:text-is("上攀 YDS")', "aria-pressed"), "true", "等級制是上攀 YDS");
   assert.ok(await b.locator('main button:text-is("抱石 V 級")').isDisabled(), "有路線時不能切換");

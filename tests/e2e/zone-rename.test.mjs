@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
-import { BASE, createMock, launch, login, phone } from "./helpers.mjs";
+import { BASE, createMock, launch, login, phone, planMode } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -22,7 +22,9 @@ function planEntries() {
   }
   return out;
 }
-const planTexts = (page) => page.locator("main svg g[role=button] text:first-of-type").allTextContents();
+// 平面圖上每一區的名字：平面圖在區域裡（g[role=button]），立體圖另外放在 [data-zone]
+const NAME_SEL = "main svg g[role=button] text:first-of-type, main svg [data-zone] text:first-of-type";
+const planTexts = (page) => page.locator(NAME_SEL).allTextContents();
 
 test("平面圖：每一區記的原本名字跟資料庫一樣，沒改名時各館平面圖都寫簡稱", async () => {
   const mock = createMock();
@@ -51,6 +53,7 @@ test("區域改名：按鍵盤完成鍵或「儲存名稱」都會存、只送�
   const zone = (code) => mock.db.zones.find((z) => z.gym_id === "g2" && z.code === code);
 
   const M = await phone(browser, mock);
+  await planMode(M.ctx, "flat"); // 檢查平面圖的字級
   const m = M.page;
   const patches = [];
   m.on("request", (r) => r.method() === "PATCH" && r.url().includes("/rest/v1/zones") && patches.push(r.url()));
@@ -94,6 +97,7 @@ test("區域改名：按鍵盤完成鍵或「儲存名稱」都會存、只送�
 
   // 顧客看到的平面圖、區域卡片也是新名字
   const C = await phone(browser, mock);
+  await planMode(C.ctx, "flat");
   await C.page.goto(BASE + "/gym/g2", { waitUntil: "networkidle" });
   await C.page.waitForTimeout(800);
   const cl = await planTexts(C.page);
@@ -109,19 +113,22 @@ test("區域改名：按鍵盤完成鍵或「儲存名稱」都會存、只送�
   assert.deepEqual([...M.errors, ...C.errors, ...S.errors], []);
 });
 
-test("平面圖：每一區都改成新名字時，各館平面圖上的字都不會疊在一起（太長的會縮小或截短）", async () => {
-  for (const name of ["測試牆", "非常非常長的區域名字"]) {
+test("平面圖：每一區都改成新名字時，各館平面圖上的字都不會疊在一起（太長的會縮小或截短；立體、平面都是）", async () => {
+  const cases = [["flat", "測試牆", 390], ["flat", "非常非常長的區域名字", 390], ["3d", "測試牆", 390], ["3d", "非常非常長的區域名字", 390], ["3d", "測試牆", 360], ["3d", "攀岩洞穴入口", 360]];
+  for (const [mode, name, width] of cases) {
     const mock = createMock();
     for (const z of mock.db.zones) z.name = name;
-    const { page, ctx, errors } = await phone(browser, mock);
+    const { page, ctx, errors } = await phone(browser, mock, { viewport: { width, height: 844 } });
+    await planMode(ctx, mode);
     for (const gym of ["mingde", "g2", "g3", "g4", "g5"]) {
       await page.goto(`${BASE}/gym/${gym}`, { waitUntil: "networkidle" });
       await page.waitForTimeout(600);
       // 每張平面圖（南港有 1F、2F 兩張）各自檢查：區域標籤的框兩兩不重疊
-      const overlaps = await page.locator("main svg").evaluateAll((svgs) =>
+      const overlaps = await page.locator('main svg[role=img][aria-label$="平面圖"]').evaluateAll((svgs) =>
         svgs.flatMap((svg) => {
-          const boxes = [...svg.querySelectorAll("g[role=button] text:first-of-type")].map((t) => ({ t: t.textContent, b: t.getBBox() }));
           const hit = [];
+          const boxes = [...svg.querySelectorAll("g[role=button] text:first-of-type, [data-zone] text:first-of-type")].map((t) => ({ t: t.textContent, b: t.getBBox() }));
+          if (!boxes.length) hit.push("沒有找到區名");
           for (let i = 0; i < boxes.length; i++)
             for (let j = i + 1; j < boxes.length; j++) {
               const a = boxes[i].b, c = boxes[j].b;
@@ -130,7 +137,7 @@ test("平面圖：每一區都改成新名字時，各館平面圖上的字都�
           return hit;
         })
       );
-      assert.deepEqual(overlaps, [], `${gym}「${name}」標籤不重疊`);
+      assert.deepEqual(overlaps, [], `${mode} ${width} 寬 ${gym}「${name}」標籤不重疊`);
     }
     assert.deepEqual(errors, []);
     await ctx.close();

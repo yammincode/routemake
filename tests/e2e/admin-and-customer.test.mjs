@@ -98,7 +98,7 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
   await c.waitForTimeout(500);
   assert.match(await c.textContent("main p"), /牆上 2 條路線/);
   await login(c, "climber88", "password1", "/gym/mingde");
-  await c.locator('svg[role=img] g[aria-label^="A1 區"] text').first().click();
+  await c.locator('svg[role=img] g[role=button][aria-label^="A1 區"]').first().dispatchEvent("click");
   await c.waitForURL("**/zone?id=**");
   await c.waitForTimeout(800);
   assert.equal(await c.locator('main button[aria-label^="V"]').count(), 2, "照片上 2 個起步點");

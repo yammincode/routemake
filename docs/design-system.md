@@ -22,6 +22,7 @@
 | `bg-accent-soft` | `--accent-soft` | 酒紅 14% | 粉 18% | 完攀標籤底色、月曆第 1 級 |
 | `bg-blush` | `--blush` | #F6E3DF | #2A1C1F | 平面圖完成度 0% 的顏色 |
 | `text-warn` | `--warn` | #B4471F | #F08A5D | 7 天內換線、刪除、危險按鈕 |
+| （平面圖側面） | `--plan-shade` | #000000 | #66726C | 立體平面圖方塊、地板側面的混色（深色模式混灰，完成度低的深色方塊側面也看得到） |
 | `bg-flash` | `--flash` | #F5B700 | #F5B700 | Flash |
 | `text-flash-ink` | `--flash-ink` | #2B2100 | #2B2100 | Flash 黃底上的文字 |
 
@@ -102,7 +103,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Wall.tsx` | `WallPhoto`（`hideable`：左上角「隱藏路線／顯示路線」按鈕，只用在顧客區域頁）、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`（難度色帶版：小縮圖、完成數、`GradeStrip`、難度範圍或篩選結果、換線倒數；guest 只寫條數）、`ZoneList`、`GradeStrip`（區域難度色帶）、`GradeChart`（全館難度分布）、`BandPicker`（全部／入門 VB–V2／進階 V3–V5／挑戰 V6+）、`GoalLine`（快換線提醒）、`NewRouteRow`、`NewRouteCard`（color 不給就不畫色點）、`GymRow`（lines：館名下面的換線小字；tag 給空字串不顯示右邊的字）、`SoonBox`、`dueText`；`ZoneCard` 的 due 是換線（7 天內 warn） |
 | `Resets.tsx` | `ResetLines`（選館頁換線小字：換線中、剛換好 NEW、○ 天後換線）、`ResetMonth`（換線行事曆：一列一週，館的顏色長條，兩天跨兩格，點日期／色塊選日子）、`ResetDateRow`（日期＋名稱一列）、`GymDot`（館的顏色色票） |
-| `FloorPlan.tsx` | `FloorPlan`（guest：每區寫條數、統一底色；7 天內換線只畫虛線框，不寫字；有好幾層的館（南港）同一張卡片由上到下畫，每層上方標 1F、2F；區域名字沒改過寫簡稱，店長改過名字就寫新名字，依旁邊的空間縮小、放不下截短加「…」，見 `lib/floorplan.ts` 的 `planLabel`、`planText`） |
+| `FloorPlan.tsx` | `FloorPlan`（guest：每區寫條數、統一底色；7 天內換線只畫虛線框，不寫字；有好幾層的館（南港）同一張卡片由上到下畫，每層上方標 1F、2F；區域名字沒改過寫簡稱，店長改過名字就寫新名字，依旁邊的空間縮小、放不下截短加「…」，見 `lib/floorplan.ts` 的 `planLabel`、`planText`）。右上角「立體／平面」切換，記在這支手機（`usePlanMode`），館首頁和管理後台一起換；立體（預設）是 2.5D 斜俯視建築模型（幾何在 `lib/plan25d.ts`）：方塊越高路線越多、頂面依完成度上色、側面混 `--plan-shade`、後牆半透明（門口留空）、櫃台是矮方塊；區名正立、固定 13.5px（照卡片寬度換算），太擠自動推開、推遠了加指引線，改過的長名字超過 5 個字寬截短；後台選中的方塊浮起來、區名變深色膠囊 |
 | `Comments.tsx` | `CommentItem`（含 👍 按讚；刪除要按兩次）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
 | `Spray.tsx` | `HoldMarks`（照片上的圈圈：起攀 S 綠、路線點 藍、完攀 T 紅）、`HoldLegend`、`HoldTools`（選種類與大小）、`SprayRow`、`RouteThumb`（列表縮圖，放大到路線範圍）、`HOLD_TYPES`、`HOLD_SIZES` |
 | `Profile.tsx` | `Avatar`（暱稱第一個字）、`HexChart`（六角形能力表）、`ProfileCardView`（人物卡） |
