@@ -10,7 +10,7 @@ export type VideoCard = {
   key: string;
   src?: string; // 沒有網址時顯示黑色預留框（展示頁用）
   name: string;
-  ago: string;
+  ago: string; // 攀爬日（今天、10/05）；沒有紀錄時是分享時間（3 天前分享），見 videoWhen
   caption?: string | null;
   status?: Status | null;
   duration?: number | null; // 秒
@@ -42,7 +42,7 @@ export function VideoResult({ status }: { status: Status }) {
   );
 }
 
-// 影片一列（像 Spray Wall 路線列）：方形縮圖（第一格畫面、▶、片長）｜標題（說明，沒寫就是「某某的攀爬」）、誰・多久前＋紀錄、身高・動作
+// 影片一列（像 Spray Wall 路線列）：方形縮圖（第一格畫面、▶、片長）｜標題（說明，沒寫就是「某某的攀爬」）、誰・攀爬日（或分享時間）＋紀錄、身高・動作
 // 整列點了就播放
 export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) {
   const [bad, setBad] = useState(false);

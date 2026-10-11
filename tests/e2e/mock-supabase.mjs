@@ -65,7 +65,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
+  const state = { offline: false, ascentsFail: null, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -87,7 +87,7 @@ export function createMock() {
     const z = db.zones.find((x) => x.id === route.zone_id);
     const path = `${z.gym_id}/${route.id}/${userId}/${uuid()}.mp4`;
     db.vfiles[path] = { buf: Buffer.from("fake"), owner: userId, created_at: now() };
-    const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, height_band: null, move: null, created_at: now(), ...extra };
+    const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, height_band: null, move: null, climbed_on: null, created_at: now(), ...extra };
     db.videos.push(v);
     return v;
   };
@@ -589,7 +589,7 @@ export function createMock() {
       const routeId = path.split("/")[1];
       const dayAgo = new Date(Date.now() - 86400000).toISOString();
       const recent = Object.values(db.vfiles).filter((f) => f.owner === uid && f.created_at > dayAgo).length;
-      if (!videoPathOk(uid, routeId, path) || !canShare(uid, routeId) || recent >= 10)
+      if (!videoPathOk(uid, routeId, path) || !canShare(uid, routeId) || recent >= 15)
         return J(route, 403, { statusCode: "403", error: "Unauthorized", message: "new row violates row-level security policy" });
       db.vfiles[path] = { buf: req.postDataBuffer() ?? Buffer.alloc(0), owner: uid, created_at: now() };
       return J(route, 200, { Key: "route-videos/" + path });
@@ -810,6 +810,11 @@ export function createMock() {
         state.tagFallbacks++;
         return J(route, 400, { code: "42703", message: "column route_videos.height_band does not exist" });
       }
+      // state.noVideoClimb：模擬資料庫還沒套用 step34（沒有攀爬日欄位，身高、動作還在）
+      if ((state.noVideoClimb || state.noVideoTags) && (m === "GET" || m === "HEAD") && /climbed_on/.test(sel)) {
+        state.tagFallbacks++;
+        return J(route, 400, { code: "42703", message: "column route_videos.climbed_on does not exist" });
+      }
       if (state.noVideoTags && m === "POST" && ("height_band" in body || "move" in body)) {
         state.tagFallbacks++;
         return J(route, 400, { code: "PGRST204", message: "Could not find the 'height_band' column of 'route_videos' in the schema cache" });
@@ -825,6 +830,7 @@ export function createMock() {
         });
         if (gym) rows = rows.filter((v) => v.routes.zones.gym_id === gym);
         if (state.noVideoTags) rows = rows.map(({ height_band, move, ...v }) => v); // 舊資料庫沒有這兩欄
+        if (state.noVideoTags || state.noVideoClimb) rows = rows.map(({ climbed_on, ...v }) => v);
         rows.sort((x, y) => y.created_at.localeCompare(x.created_at));
         rows = filt(rows, q);
         if (m === "HEAD") return route.fulfill({ status: 200, headers: { ...cors, "content-range": `*/${rows.length}` } });
@@ -833,14 +839,17 @@ export function createMock() {
       if (m === "POST") {
         if (!canShare(uid, body.route_id) || !videoPathOk(uid, body.route_id, body.path))
           return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "route_videos"' });
-        // 同 0038 的 route_videos_before_insert：要先有本人上傳的檔案、24 小時 10 筆、說明不能放網址
+        // 同 0039 的 route_videos_before_insert：要先有本人上傳的檔案、24 小時 15 筆、說明不能放網址；
+        // 攀爬日、完成狀態從本人在這條的紀錄帶入（App 送的攀爬日不算）
         if (db.vfiles[body.path]?.owner !== uid) return J(route, 400, { code: "22023", message: "找不到上傳的影片檔，請重新分享" });
         const dayAgo = new Date(Date.now() - 86400000).toISOString();
-        if (db.videos.filter((v) => v.user_id === uid && v.created_at > dayAgo).length >= 10) return J(route, 400, { code: "54000", message: "每人 24 小時內最多分享 10 支影片，明天再來" });
+        if (db.videos.filter((v) => v.user_id === uid && v.created_at > dayAgo).length >= 15) return J(route, 400, { code: "54000", message: "每人 24 小時內最多分享 15 支影片，明天再來" });
         if (hasLink(body.caption)) return J(route, 400, { code: "22023", message: "影片說明不能放網址" });
         if ((body.height_band != null && !["lt160", "160s", "170s", "ge180"].includes(body.height_band)) || (body.move != null && !["dynamic", "static"].includes(body.move)))
           return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_height_band_check"' });
-        db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, height_band: null, move: null, ...body, user_id: uid, created_at: now() });
+        const mine = db.ascents.find((x) => x.user_id === uid && x.route_id === body.route_id);
+        const fromAscent = state.noVideoClimb || state.noVideoTags ? {} : { climbed_on: mine?.climbed_on ?? null, ...(mine ? { status: mine.status } : {}) };
+        db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, height_band: null, move: null, ...body, climbed_on: null, ...fromAscent, user_id: uid, created_at: now() });
         return empty(route, 201);
       }
     }

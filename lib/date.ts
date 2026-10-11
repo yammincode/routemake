@@ -24,3 +24,7 @@ export const isNew = (ts: string, days = 7) => Date.now() - new Date(ts).getTime
 
 // 10/05 格式
 export const md = (date: string) => `${date.slice(5, 7)}/${date.slice(8, 10)}`;
+
+// 影片的時間：有攀爬日顯示攀爬日（今天、10/05）；沒有紀錄時寫明是分享時間（今天分享、3 天前分享）
+export const videoWhen = (climbedOn: string | null | undefined, sharedAt: string) =>
+  climbedOn ? (climbedOn === todayYmd() ? "今天" : md(climbedOn)) : `${ago(sharedAt)}分享`;

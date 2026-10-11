@@ -91,9 +91,9 @@ const DEMO_RESETS: ResetEvent[] = [
 ];
 
 const DEMO_VIDEOS: VideoCard[] = [
-  { key: "1", name: "小安", ago: "2 天前", status: "flash", caption: "第三手用左腳勾", duration: 42, tags: "身高 160–169cm・靜態" },
-  { key: "2", name: "阿明", ago: "昨天", status: "send", caption: "最後一手要果斷", duration: 28, tags: "身高 170–179cm・動態" },
-  { key: "3", name: "我", ago: "今天", status: "project", duration: 19, meta: "B 區 B-03" },
+  { key: "1", name: "小安", ago: "10/05", status: "flash", caption: "第三手用左腳勾", duration: 42, tags: "身高 160–169cm・靜態" },
+  { key: "2", name: "阿明", ago: "今天", status: "send", caption: "最後一手要果斷", duration: 28, tags: "身高 170–179cm・動態" },
+  { key: "3", name: "我", ago: "3 天前分享", status: "project", duration: 19, meta: "B 區 B-03" },
 ];
 
 function Swatch({ name, varName }: { name: string; varName: string }) {

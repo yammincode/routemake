@@ -490,7 +490,7 @@ function RouteBody({
       </div>
 
       <div role="tabpanel" hidden={shownTab !== "video"}>
-        <RouteVideos route={r} gymId={gymId} open={commentsOpen} active={shownTab === "video"} staff={staff} myStatus={ascent?.status ?? null} onLogin={toLogin} onCount={onVideoCount} onProfile={setProfile} />
+        <RouteVideos route={r} gymId={gymId} open={commentsOpen} active={shownTab === "video"} staff={staff} myStatus={ascent?.status ?? null} myDay={ascent?.climbed_on ?? null} onLogin={toLogin} onCount={onVideoCount} onProfile={setProfile} />
       </div>
 
       <div role="tabpanel" hidden={shownTab !== "comment"}>

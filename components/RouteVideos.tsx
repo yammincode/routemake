@@ -12,7 +12,7 @@ import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTri
 import { compressMinBytes, compressType, compressVideo, type VideoEdit } from "@/lib/video";
 import { checkPickedVideo, deleteVideo, getVideos, uploadVideo, videoMaxSeconds, videoUrl, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
-import { ago } from "@/lib/date";
+import { videoWhen } from "@/lib/date";
 import { CLIMB_MOVES, HEIGHT_BANDS, videoTagText, type ClimbMove, type HeightBand, type Status } from "@/lib/design";
 
 // 身高記在這支手機、分帳號記，下次分享不用再選；登出時清掉（lib/offline clearCache）；隱私模式等讀寫失敗就當沒記
@@ -40,6 +40,7 @@ export default function RouteVideos({
   active = true,
   staff,
   myStatus,
+  myDay = null,
   onLogin,
   onCount,
   onProfile,
@@ -51,6 +52,7 @@ export default function RouteVideos({
   active?: boolean; // 「影片」分頁打開時才放影片縮圖（縮圖會下載影片開頭，打開路線卡片時不跟記錄搶網路）
   staff: boolean;
   myStatus: Status | null;
+  myDay?: string | null; // 本人紀錄的攀爬日：分享時資料庫會一起記在影片上
   onLogin: () => void;
   onCount?: (n: number) => void;
 }) {
@@ -96,7 +98,7 @@ export default function RouteVideos({
     key: v.id,
     src: videoUrl(v.path),
     name: v.nickname,
-    ago: ago(v.created_at),
+    ago: videoWhen(v.climbed_on, v.created_at),
     caption: v.caption,
     status: v.status,
     duration: v.duration_s,
@@ -284,6 +286,7 @@ export default function RouteVideos({
                 {myStatus ? (
                   <>
                     你在這條的紀錄會一起顯示：
+                    {myDay && <span>{videoWhen(myDay, myDay)}</span>}
                     <VideoResult status={myStatus} />
                   </>
                 ) : (

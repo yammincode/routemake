@@ -44,7 +44,7 @@ export default function VideoPanel({ gymId, gymName }: { gymId: string; gymName:
     key: v.id,
     src: videoUrl(v.path),
     name: v.nickname,
-    ago: ago(v.created_at),
+    ago: `${ago(v.created_at)}分享`,
     caption: v.caption,
     status: v.status,
     tags: videoTagText(v.height_band, v.move),

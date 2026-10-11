@@ -538,8 +538,9 @@ insert into storage.objects (bucket_id, name, owner) select 'route-videos', v, :
 
 set role authenticated; select tests.login(:A);
 select tests.lives('影片：顧客可以上傳到自己的資料夾', format('insert into storage.objects (bucket_id, name, metadata) values (''route-videos'', %L, ''{"size":1000}'')', (select v from vp where k = 'a1')));
-select tests.lives('影片：顧客可以新增影片資料（含身高、動作）', format('insert into public.route_videos (route_id, path, caption, status, duration_s, size_bytes, height_band, move) values (%L, %L, ''第一次完攀'', ''send'', 12.5, 1000, ''170s'', ''dynamic'')', (select v from ids where k = 'v70'), (select v from vp where k = 'a1')));
+select tests.lives('影片：顧客可以新增影片資料（含身高、動作）', format('insert into public.route_videos (route_id, path, caption, status, duration_s, size_bytes, height_band, move, climbed_on) values (%L, %L, ''第一次完攀'', ''send'', 12.5, 1000, ''170s'', ''dynamic'', ''2020-01-01'')', (select v from ids where k = 'v70'), (select v from vp where k = 'a1')));
 select tests.ok('影片：上傳者自動設為本人', (select user_id from public.route_videos where path = (select v from vp where k = 'a1')) = :A);
+select tests.ok('影片：沒有攀爬紀錄時攀爬日是空的（App 自己填的不算）、完成狀態照 App 送的', (select climbed_on is null and status = 'send' from public.route_videos where path = (select v from vp where k = 'a1')));
 select tests.ok('影片：身高、動作有存下來', (select height_band = '170s' and move = 'dynamic' from public.route_videos where path = (select v from vp where k = 'a1')));
 select tests.throws('影片：身高只能是固定選項', format('insert into public.route_videos (route_id, path, height_band) values (%L, %L, ''185'')', (select v from ids where k = 'v70'), (select v from vp where k = 'a9')), 'height_band');
 select tests.throws('影片：動作只能是固定選項', format('insert into public.route_videos (route_id, path, move) values (%L, %L, ''jump'')', (select v from ids where k = 'v70'), (select v from vp where k = 'a9')), 'move');
@@ -585,12 +586,12 @@ select tests.throws('影片：未登入不能刪除', format('select public.dele
 reset role;
 
 delete from storage.objects where name in (select v from vp where k in ('a9', 'by'));
--- 每人 24 小時最多 10 支：先放 9 支，第 10 支可以，第 11 支被擋
+-- 每人 24 小時最多 15 支：先放 14 支（a1 + 13 支），第 15 支可以，第 16 支被擋
 insert into storage.objects (bucket_id, name, owner)
-select 'route-videos', format('mingde/%s/%s/old%s.mp4', (select v from ids where k = 'v70'), :A, i), :A from generate_series(1, 8) i;
+select 'route-videos', format('mingde/%s/%s/old%s.mp4', (select v from ids where k = 'v70'), :A, i), :A from generate_series(1, 13) i;
 set role authenticated; select tests.login(:A);
-select tests.lives('影片：24 小時內第 10 支可以', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from vp where k = 'a2')));
-select tests.throws('影片：24 小時內第 11 支被擋', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/%s/%s/a3.mp4'')', (select v from ids where k = 'v70'), :A));
+select tests.lives('影片：24 小時內第 15 支可以', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from vp where k = 'a2')));
+select tests.throws('影片：24 小時內第 16 支被擋', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/%s/%s/a3.mp4'')', (select v from ids where k = 'v70'), :A));
 reset role;
 delete from storage.objects where name like '%/old%.mp4' or name = (select v from vp where k = 'a2');
 
@@ -1345,7 +1346,21 @@ set role authenticated; select tests.login(:A);
 select tests.throws('影片：沒有上傳檔案不能新增影片資料（不能洗假影片）', format('insert into public.route_videos (route_id, path) values (%L, %L)', (select v from ids where k = 'h1'), (select v from hp where k = 'fake')));
 select tests.lives('影片：上傳檔案', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from hp where k = 'a')));
 select tests.throws('影片：說明不能放網址', format('insert into public.route_videos (route_id, path, caption) values (%L, %L, ''看 www.evil.com'')', (select v from ids where k = 'h1'), (select v from hp where k = 'a')));
-select tests.lives('影片：有檔案就能分享', format('insert into public.route_videos (route_id, path) values (%L, %L)', (select v from ids where k = 'h1'), (select v from hp where k = 'a')));
+reset role;
+-- 有攀爬紀錄：攀爬日、完成狀態從本人的紀錄帶入（3 天前 Flash、今天才上傳；App 送的嘗試中不算）
+select tests.login(null);
+update public.routes set created_at = now() - interval '10 days' where id = (select v from ids where k = 'h1');
+insert into public.ascents (user_id, route_id, status, climbed_on) values (:A, (select v from ids where k = 'h1'), 'flash', public.taipei_today() - 3);
+set role authenticated; select tests.login(:A);
+select tests.lives('影片：有檔案就能分享', format('insert into public.route_videos (route_id, path, status) values (%L, %L, ''project'')', (select v from ids where k = 'h1'), (select v from hp where k = 'a')));
+select tests.ok('影片：攀爬日從本人的紀錄帶入（不是上傳日）', (select climbed_on = public.taipei_today() - 3 from public.route_videos where path = (select v from hp where k = 'a')));
+select tests.ok('影片：完成狀態從本人的紀錄帶入（App 送的不算）', (select status = 'flash' from public.route_videos where path = (select v from hp where k = 'a')));
+reset role;
+set role anon; select tests.login(null);
+select tests.ok('影片：未登入看得到影片的攀爬日', (select climbed_on = public.taipei_today() - 3 from public.route_videos where path = (select v from hp where k = 'a')));
+select tests.ok('影片：未登入還是讀不到別人的攀爬紀錄', (select count(*) from public.ascents) = 0);
+reset role;
+set role authenticated; select tests.login(:A);
 select tests.ok('影片：分享中的影片檔本人不能直接刪（不能偷換內容，0 筆）', tests.rows(format('delete from storage.objects where name = %L', (select v from hp where k = 'a'))) = 0);
 reset role;
 set role anon; select tests.login(null);
@@ -1359,13 +1374,14 @@ select tests.ok('影片：自己的影片檔列得出來', (select count(*) from
 select tests.ok('影片：用 delete_video 刪資料後可以刪檔', public.delete_video((select id from public.route_videos where path = (select v from hp where k = 'a'))) = (select v from hp where k = 'a')
   and tests.rows(format('delete from storage.objects where name = %L', (select v from hp where k = 'a'))) = 1);
 reset role;
--- 24 小時最多 10 筆影片資料（跟檔案分開算，刪檔也不會空出名額）
+-- 24 小時最多 15 筆影片資料（跟檔案分開算，刪檔也不會空出名額）
 select tests.login(null);
+delete from public.ascents where user_id = :A and route_id = (select v from ids where k = 'h1');
 insert into public.route_videos (route_id, user_id, path)
-select (select v from ids where k = 'h1'), :NN, format('mingde/%s/%s/x%s.mp4', (select v from ids where k = 'h1'), :NN, i) from generate_series(1, 10) i;
+select (select v from ids where k = 'h1'), :NN, format('mingde/%s/%s/x%s.mp4', (select v from ids where k = 'h1'), :NN, i) from generate_series(1, 15) i;
 set role authenticated; select tests.login(:NN);
-select tests.lives('影片：上傳第 11 支的檔案', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/%s/%s/x11.mp4'')', (select v from ids where k = 'h1'), :NN));
-select tests.throws('影片：24 小時內第 11 筆影片資料被擋', format('insert into public.route_videos (route_id, path) values (%L, ''mingde/%s/%s/x11.mp4'')', (select v from ids where k = 'h1'), (select v from ids where k = 'h1'), :NN));
+select tests.lives('影片：上傳第 16 支的檔案', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/%s/%s/x16.mp4'')', (select v from ids where k = 'h1'), :NN));
+select tests.throws('影片：24 小時內第 16 筆影片資料被擋', format('insert into public.route_videos (route_id, path) values (%L, ''mingde/%s/%s/x16.mp4'')', (select v from ids where k = 'h1'), (select v from ids where k = 'h1'), :NN), '15 支');
 reset role; select tests.login(null);
 delete from public.route_videos where user_id = :NN;
 delete from storage.objects where bucket_id = 'route-videos';

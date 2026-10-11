@@ -1,7 +1,7 @@
 // 顧客分享影片：上傳、刪除自己的、員工在後台刪除、下架路線時影片一起刪除；身高、動作標籤與篩選
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { BASE, createMock, launch, login, phone } from "./helpers.mjs";
+import { BASE, createMock, launch, login, phone, taipeiDay } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -418,6 +418,85 @@ function uploaded(buf) {
   const start = buf.indexOf(Buffer.from([0x1a, 0x45, 0xdf, 0xa3])); // WebM 開頭
   return buf.subarray(start, buf.lastIndexOf(Buffer.concat([Buffer.from("\r\n"), sep])));
 }
+
+test("影片時間：有紀錄顯示攀爬日（不是上傳日）、沒有紀錄寫幾天前分享；資料庫還沒套用 step34 時標籤照樣顯示；24 小時最多 15 支", async () => {
+  const mock = createMock();
+  const me = mock.addUser("climber88", "password1", { nickname: "小安" });
+  const other = mock.addUser("other22", "password1", { nickname: "阿明" });
+  const zone = mock.db.zones[0];
+  const r1 = mock.addRoute(zone, 4, "藍");
+  const md = (d) => `${d.slice(5, 7)}/${d.slice(8, 10)}`;
+  const t = (min) => new Date(Date.now() - min * 60000).toISOString();
+  mock.addVideo(other, r1, { caption: "以前分享的", created_at: t(3 * 1440) }); // 沒有攀爬日（沒有紀錄或功能上線前分享的）
+  mock.addVideo(other, r1, { caption: "五天前爬的", status: "send", climbed_on: taipeiDay(-5), height_band: "170s", created_at: t(10) }); // 今天才上傳
+  mock.addAscent(me, r1, "flash", taipeiDay(-2));
+
+  const { page: c, errors } = await phone(browser, mock);
+  await login(c, "climber88", "password1", `/zone?id=${zone.id}`);
+  await c.waitForTimeout(600);
+  const open = async () => {
+    await c.locator("main ul li button", { hasText: "A1-01" }).click();
+    await c.waitForTimeout(600);
+    await c.click('[role=dialog] [role=tab]:has-text("影片")');
+    await c.waitForTimeout(400);
+  };
+  await open();
+  const dialog = c.locator("[role=dialog]");
+  const rows = dialog.locator('li button[aria-label^="播放"]');
+  const row = async (i) => (await rows.nth(i).textContent()).replace(/\s+/g, "");
+  assert.equal(await rows.count(), 2);
+  assert.ok((await row(0)).includes(`阿明・${md(taipeiDay(-5))}完攀`), "今天上傳、5 天前爬的顯示攀爬日：" + (await row(0)));
+  assert.ok(!(await row(0)).includes("今天"), "不會寫成今天");
+  assert.ok((await row(1)).includes("阿明・3天前分享"), "沒有攀爬日的寫明是分享時間：" + (await row(1)));
+
+  // 分享：表單先說會一起顯示攀爬日和紀錄；App 不送攀爬日，資料庫從本人紀錄帶入
+  await dialog.locator("input[type=file]").setInputFiles(clip());
+  await c.waitForTimeout(600);
+  assert.ok((await dialog.textContent()).replace(/\s+/g, "").includes(`你在這條的紀錄會一起顯示：${md(taipeiDay(-2))}Flash`), "表單顯示會一起顯示的攀爬日和紀錄");
+  await dialog.locator("input[type=checkbox]").check();
+  await dialog.locator('button:text-is("分享影片")').click();
+  await c.waitForTimeout(1000);
+  const mine = mock.db.videos.find((v) => v.user_id === me);
+  assert.equal(mine.climbed_on, taipeiDay(-2), "攀爬日是紀錄上的日期");
+  assert.equal(mine.status, "flash");
+  assert.equal(await rows.count(), 3);
+  assert.ok((await row(0)).includes(`小安的攀爬${md(taipeiDay(-2))}Flash`), "自己的影片顯示攀爬日：" + (await row(0)));
+  await rows.first().click();
+  const viewer = c.locator('[aria-label="影片播放"]');
+  await viewer.waitFor();
+  assert.ok((await viewer.textContent()).includes(md(taipeiDay(-2))), "全螢幕播放也顯示攀爬日");
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(200);
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(300);
+
+  // 資料庫還沒套用 step34（沒有攀爬日欄位）：照樣讀得到影片，身高標籤和篩選不會不見，時間改寫分享時間
+  mock.state.noVideoClimb = true;
+  await c.reload({ waitUntil: "networkidle" });
+  await c.waitForTimeout(600);
+  await open();
+  assert.equal(await rows.count(), 3, "還沒套用 step34 也看得到影片");
+  assert.ok((await row(1)).includes("今天分享") && (await row(1)).includes("身高170–179cm"), "身高標籤照樣顯示：" + (await row(1)));
+  assert.ok((await dialog.locator('button[aria-pressed].rounded-full:text-is("170–179cm")').count()) === 1, "身高篩選照樣出現");
+  mock.state.noVideoClimb = false;
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(300);
+
+  // 24 小時最多 15 支：已經分享 15 支時，分享前就擋下
+  for (let i = 0; i < 14; i++) mock.addVideo(me, r1, { created_at: t(60 + i) });
+  await c.reload({ waitUntil: "networkidle" });
+  await c.waitForTimeout(600);
+  await open();
+  await dialog.locator("input[type=file]").setInputFiles(clip("d.mp4"));
+  await c.waitForTimeout(600);
+  await dialog.locator("input[type=checkbox]").check();
+  await dialog.locator('button:text-is("分享影片")').click();
+  await c.waitForTimeout(800);
+  assert.ok((await c.locator("[role=status]").last().textContent()).includes("每人 24 小時內最多分享 15 支影片"), "第 16 支被擋");
+  assert.equal(mock.db.videos.filter((v) => v.user_id === me).length, 15);
+  assert.deepEqual(errors, []);
+  await c.context().close();
+});
 
 test("影片剪輯：太長的自動打開剪輯、只上傳選的那段，可以靜音；不太長的可以自己剪；不能重錄的手機照舊請他先剪短", async () => {
   const mock = createMock();

@@ -614,7 +614,7 @@ export const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 export const VIDEO_MAX_SECONDS = 60;
 // 測試用：調低長度上限（不用真的錄一支 60 秒以上的影片）
 export const videoMaxSeconds = () => (typeof window !== "undefined" && (window as Window & { __RM_VIDEO_MAX?: number }).__RM_VIDEO_MAX) || VIDEO_MAX_SECONDS;
-export const VIDEO_DAILY_LIMIT = 10;
+export const VIDEO_DAILY_LIMIT = 15;
 const VIDEO_TYPES: Record<string, string> = { mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm" };
 
 export type Video = {
@@ -627,19 +627,25 @@ export type Video = {
   duration_s: number | null;
   height_band?: HeightBand | null; // 資料庫還沒套用 step25 時沒有這兩個欄位
   move?: ClimbMove | null;
+  climbed_on?: string | null; // 分享者在這條的攀爬日（分享時由資料庫從本人紀錄帶入；沒有紀錄、或資料庫還沒套用 step34 時沒有）
   created_at: string;
   nickname: string;
 };
 export type GymVideo = Video & { route_code: string; zone_name: string };
 const VIDEO_BASE = "id,route_id,user_id,path,caption,status,duration_s,created_at,profiles!route_videos_user_id_fkey(nickname)";
-const VIDEO_COLS = `${VIDEO_BASE},height_band,move`;
+const VIDEO_TAGS = `${VIDEO_BASE},height_band,move`;
+const VIDEO_COLS = `${VIDEO_TAGS},climbed_on`;
 type VideoRow = Omit<Video, "nickname"> & { profiles: { nickname: string | null } | null };
 const toVideo = ({ profiles, ...v }: VideoRow): Video => ({ ...v, nickname: profiles?.nickname ?? "攀岩者" });
-// 資料庫還沒套用 step25（沒有身高、動作欄位）：讀的時候 42703、寫的時候 PGRST204，改用原本的欄位
+// 資料庫還沒套用新的欄位：讀的時候 42703、寫的時候 PGRST204，改用原本的欄位
 const noTagCols = (e: { code?: string } | null) => e?.code === "42703" || e?.code === "PGRST204";
+// 讀影片：缺攀爬日（還沒套用 step34）先退回身高、動作；再缺（還沒套用 step25）退回原本的欄位
 async function selectVideos<T>(q: (cols: string) => PromiseLike<{ data: T | null; error: { message?: string; code?: string } | null }>): Promise<T> {
-  const r = await q(VIDEO_COLS);
-  return noTagCols(r.error) ? must(await q(VIDEO_BASE)) : must(r);
+  for (const cols of [VIDEO_COLS, VIDEO_TAGS]) {
+    const r = await q(cols);
+    if (!noTagCols(r.error)) return must(r);
+  }
+  return must(await q(VIDEO_BASE));
 }
 
 export const videoUrl = (path: string) => supabase().storage.from("route-videos").getPublicUrl(path).data.publicUrl;
