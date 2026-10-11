@@ -273,7 +273,7 @@ export function createMock() {
       });
     }
     if (fn === "zone_progress")
-      return J(route, 200, db.zones.filter((z) => z.gym_id === a.p_gym && z.kind !== "spray").sort((x, y) => x.sort - y.sort).map((z) => {
+      return J(route, 200, db.zones.filter((z) => z.gym_id === a.p_gym && z.kind !== "spray").sort((x, y) => x.sort - y.sort || x.code.localeCompare(y.code)).map((z) => {
         const rs = db.routes.filter((r) => r.zone_id === z.id && !r.archived_at);
         return { zone_id: z.id, code: z.code, name: z.name, sort: z.sort, photo_path: z.photo_path, next_reset_on: zoneResetOn(z), route_count: rs.length, done_count: rs.filter((r) => db.ascents.some((x) => x.route_id === r.id && x.user_id === uid && x.status !== "project")).length };
       }));
@@ -567,7 +567,7 @@ export function createMock() {
       if (m === "PATCH") { filt(db.gyms, sp).filter((g) => isMgr(uid, g.id)).forEach((g) => Object.assign(g, body)); return empty(route); }
     }
     if (t === "zones") {
-      if (m === "GET") return out(filt([...db.zones].sort((a, b) => a.sort - b.sort), sp));
+      if (m === "GET") return out(filt([...db.zones].sort((a, b) => a.sort - b.sort || a.code.localeCompare(b.code)), sp));
       if (m === "PATCH") {
         const rows = filt(db.zones, sp).filter((z) => isStaff(uid, z.gym_id));
         if (rows.length && "name" in body && !isMgr(uid, rows[0].gym_id)) return J(route, 403, { code: "42501", message: "只有店長可以修改區域名稱、代碼、排序和平面圖位置" });

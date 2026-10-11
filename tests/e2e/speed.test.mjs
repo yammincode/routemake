@@ -1,4 +1,4 @@
-// 速度：區域頁只問資料庫一次；第二次進來先顯示手機裡上次的資料，不用等網路；字型不塞進第一次下載；點區域不等網路
+// 速度：區域頁的資料只問資料庫一次（之後背景問一次區域順序）；第二次進來先顯示手機裡上次的資料，不用等網路；字型不塞進第一次下載；點區域不等網路
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { BASE, createMock, launch, login, phone } from "./helpers.mjs";
@@ -27,7 +27,9 @@ test("區域頁：一次拿齊資料，第二次進來先顯示上次的資料",
   assert.ok(await page.isVisible("main ul li >> text=A1-01"), "路線列表出現");
   assert.ok((await page.locator("main ul li", { hasText: "A1-01" }).textContent()).includes("1"), "顯示留言數");
   const zoneAsks = asked.filter((p) => !["rpc/my_access", "rpc/record_open", "scoring_rules"].includes(p));
-  assert.deepEqual(zoneAsks, ["rpc/zone_view"], `區域頁只問資料庫一次（實際：${asked.join(", ")}）`);
+  // 畫面要的資料只問一次（zone_view）；之後背景問一次這間館的區域順序（上一區／下一區用，每次打開區域頁一次，左右滑換區不再問）
+  assert.equal(zoneAsks[0], "rpc/zone_view", `第一個問的是 zone_view（實際：${asked.join(", ")}）`);
+  assert.deepEqual(zoneAsks.slice(1), ["zones"], `之後只多問一次區域順序（實際：${asked.join(", ")}）`);
 
   // 網路變很慢：先顯示手機裡上次的資料
   await page.route("**/rest/v1/rpc/zone_view", async (route) => {

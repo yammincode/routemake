@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentProps, CSSProperties, KeyboardEvent, ReactNode } from "react";
+import { useEffect, useRef, type ComponentProps, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { GRADE_BANDS, GRADES, gradeColor, gradeLabel, inBand, type BandId, type GradeBand, type HoldColor } from "@/lib/design";
 import { Button } from "./Button";
 import Icon from "./Icon";
@@ -318,6 +318,56 @@ export function SoonBox({ name, onBack, backLabel }: { name: string; onBack: () 
       <Button variant="primary" className="mx-auto max-w-[220px]" onClick={onBack}>
         {backLabel}
       </Button>
+    </div>
+  );
+}
+
+// 區域頁標題下面的「‹ 上一區　下一區 ›」（跟館首頁區域卡片的順序一樣）：左右兩格，第一區沒有左邊、最後一區沒有右邊；
+// 長名字截短（報讀唸完整名字）；跟「‹ 明德館」返回不一樣：圓角膠囊、白底、有框
+// focus：用按鈕換區後，新的那一區焦點停在同一邊的按鈕（到了第一區／最後一區沒有那一邊，就停在另一邊）
+export type ZoneDir = "prev" | "next";
+export function ZoneNav({ prev, next, onGo, focus }: { prev?: string | null; next?: string | null; onGo: (d: ZoneDir) => void; focus?: ZoneDir | null }) {
+  const prevRef = useRef<HTMLButtonElement>(null);
+  const nextRef = useRef<HTMLButtonElement>(null);
+  const hasPrev = !!prev;
+  const hasNext = !!next;
+  useEffect(() => {
+    if (!focus) return;
+    const [want, other] = focus === "prev" ? [prevRef, nextRef] : [nextRef, prevRef];
+    (want.current ?? other.current)?.focus();
+  }, [focus, hasPrev, hasNext]);
+  if (!prev && !next) return null;
+  const btn = "inline-flex max-w-full min-h-10 items-center gap-1 rounded-full border border-line bg-surface px-3.5 text-note font-medium text-muted shadow-card";
+  return (
+    <nav aria-label="切換區域" className="mb-3.5 grid grid-cols-2 gap-2">
+      <div className="min-w-0">
+        {prev && (
+          <button ref={prevRef} aria-label={`上一區：${prev}`} onClick={() => onGo("prev")} className={btn}>
+            <span aria-hidden>‹</span>
+            <span className="truncate">{prev}</span>
+          </button>
+        )}
+      </div>
+      <div className="flex min-w-0 justify-end">
+        {next && (
+          <button ref={nextRef} aria-label={`下一區：${next}`} onClick={() => onGo("next")} className={btn}>
+            <span className="truncate">{next}</span>
+            <span aria-hidden>›</span>
+          </button>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+// 左右滑動換區時，螢幕邊緣出現要去的那一區（往左滑：右邊出現下一區；往右滑：左邊出現上一區）
+export function SwipeHint({ dir, name }: { dir: ZoneDir; name: string }) {
+  return (
+    <div
+      aria-hidden
+      className={`pointer-events-none fixed top-1/2 z-10 max-w-[45%] -translate-y-1/2 truncate rounded-full bg-ink px-3.5 py-1.5 text-note font-bold text-surface shadow-card ${dir === "prev" ? "left-2" : "right-2"}`}
+    >
+      {dir === "prev" ? `‹ ${name}` : `${name} ›`}
     </div>
   );
 }

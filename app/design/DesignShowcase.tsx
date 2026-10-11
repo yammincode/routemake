@@ -20,7 +20,7 @@ import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
 import { Check, ColorPicker, GradePicker, Label, OptionGrid, Rating, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
-import { BandPicker, GoalLine, GradeChart, GymRow, NewRouteCard, NewRouteRow, SoonBox, ZoneCard, ZoneList } from "@/components/ui/Gym";
+import { BandPicker, GoalLine, GradeChart, GymRow, NewRouteCard, NewRouteRow, SoonBox, SwipeHint, ZoneCard, ZoneList, ZoneNav } from "@/components/ui/Gym";
 import { GymDot, ResetDateRow, ResetLines, ResetMonth } from "@/components/ui/Resets";
 import { newRoutesText, type ResetEvent } from "@/lib/resets";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
@@ -352,6 +352,19 @@ export default function DesignShowcase() {
             <NewRouteCard key={r.code} color={r.color} grade={r.grade} zone="A 區" ago={i === 0 ? "今天" : `${i} 天前`} onClick={() => openRoute(r)} />
           ))}
         </NewRouteRow>
+      </Block>
+
+      <Block title="區域頁：上一區／下一區（左右滑動換區）">
+        <p className="mt-0 mb-1.5 text-meta text-muted">標題下面一排；往左滑到下一區、往右滑到上一區，滑的時候螢幕邊緣出現要去的那一區</p>
+        <ZoneNav prev="A1 區" next="A3 區" onGo={(d) => toast(d === "prev" ? "上一區" : "下一區")} />
+        <p className="mt-0 mb-1.5 text-meta text-muted">第一區（只有下一區）、最後一區（只有上一區）、改過的長名字截短</p>
+        <ZoneNav next="比賽牆 1" onGo={() => toast("下一區")} />
+        <ZoneNav prev="非常非常長的區域名字一二三四五六七八" onGo={() => toast("上一區")} />
+        {/* 示範用：平常固定在螢幕邊緣，這裡放進框裡 */}
+        <div className="relative h-14 translate-x-0 overflow-hidden rounded-tile bg-sunk">
+          <SwipeHint dir="prev" name="A1 區" />
+          <SwipeHint dir="next" name="A3 區" />
+        </div>
       </Block>
 
       <Block title="區域頁：照片、標記、篩選">

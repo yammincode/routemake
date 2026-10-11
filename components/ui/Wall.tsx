@@ -160,6 +160,7 @@ export function WallPhoto({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      data-noswipe={zoomed || undefined}
       style={{ touchAction: zoomed ? "none" : "pan-y" }}
       className={`relative mb-3.5 overflow-hidden rounded-tile bg-line shadow-card ${setter ? "cursor-crosshair outline-2 -outline-offset-2 outline-accent outline-dashed" : ""}`}
     >

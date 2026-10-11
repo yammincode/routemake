@@ -56,3 +56,40 @@ export async function monthGrade(page, label) {
 
 // 平面圖畫法（立體是預設）：要測平面圖的形狀、字級時，先指定用平面
 export const planMode = (ctx, mode) => ctx.addInitScript((m) => localStorage.setItem("routemake-plan-mode", m), mode);
+
+// 手指（Chrome 的觸控事件，跟真的手指一樣會捲動頁面、捲篩選列）：phone(..., { hasTouch: true }) 開的頁面才有觸控
+// down／move／up 一步一步來（要在滑到一半時檢查畫面用）；two：再放第二根手指（兩指縮放）；cancel：系統手勢打斷；
+// wait(ms)：手指停著不動 ms 毫秒。每個觸控事件的時間照 step（毫秒）一格一格算，不受電腦快慢影響（速度判斷才穩定）
+export async function finger(page, { step = 16 } = {}) {
+  const cdp = await page.context().newCDPSession(page);
+  let at = null;
+  let clock = Date.now();
+  const send = (type, pts) => {
+    clock += step;
+    return cdp.send("Input.dispatchTouchEvent", { type, timestamp: clock / 1000, touchPoints: pts.map(([x, y], i) => ({ x: Math.round(x), y: Math.round(y), id: i + 1 })) });
+  };
+  return {
+    down: async (x, y) => send("touchStart", [(at = [x, y])]),
+    move: async (x, y, extra = []) => {
+      await send("touchMove", [(at = [x, y]), ...extra]);
+      await page.waitForTimeout(8);
+    },
+    two: async (x, y) => send("touchStart", [at, [x, y]]),
+    up: async () => send("touchEnd", []),
+    cancel: async () => send("touchCancel", []),
+    wait: async (ms) => {
+      clock += ms;
+      await page.waitForTimeout(ms);
+    },
+    done: () => cdp.detach(),
+  };
+}
+// 從 from 滑到 to（畫面座標）：steps 次移動，每次 ms 毫秒（預設 8 次 × 16ms，約 0.13 秒滑完，算是正常速度）；hold：先按住多久才開始滑
+export async function swipe(page, from, to, { steps = 8, ms = 16, hold = 0 } = {}) {
+  const f = await finger(page, { step: ms });
+  await f.down(...from);
+  if (hold) await f.wait(hold);
+  for (let i = 1; i <= steps; i++) await f.move(from[0] + ((to[0] - from[0]) * i) / steps, from[1] + ((to[1] - from[1]) * i) / steps);
+  await f.up();
+  await f.done();
+}

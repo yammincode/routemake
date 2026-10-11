@@ -52,6 +52,14 @@ export async function withCache<T>(key: string, fetcher: () => Promise<T>, onCac
 export function peekCache<T>(key: string): T | null {
   return read<T>(PREFIX + key);
 }
+// 手機裡有沒有這份資料（不用讀出來，例如沒網路時判斷能不能換到那一區）
+export function hasCache(key: string): boolean {
+  try {
+    return localStorage.getItem(PREFIX + key) != null;
+  } catch {
+    return false;
+  }
+}
 
 // 登出時清掉個人資料快取（含記住的身高）
 export function clearCache() {

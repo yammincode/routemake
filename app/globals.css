@@ -142,6 +142,8 @@
   /* 動畫 */
   --animate-sheet: sheet-up 0.22s ease-out;
   --animate-pop: pin-pop 0.25s ease-out;
+  --animate-zone-next: zone-next 0.2s ease-out;
+  --animate-zone-prev: zone-prev 0.2s ease-out;
 
   @keyframes sheet-up {
     from {
@@ -152,6 +154,19 @@
   @keyframes pin-pop {
     from {
       transform: translate(-50%, -50%) scale(0.3);
+    }
+  }
+  /* 換區：下一區從右邊滑進來、上一區從左邊 */
+  @keyframes zone-next {
+    from {
+      transform: translateX(28px);
+      opacity: 0.4;
+    }
+  }
+  @keyframes zone-prev {
+    from {
+      transform: translateX(-28px);
+      opacity: 0.4;
     }
   }
 }
@@ -197,7 +212,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .animate-sheet,
-  .animate-pop {
+  .animate-pop,
+  .animate-zone-next,
+  .animate-zone-prev {
     animation: none;
   }
 }

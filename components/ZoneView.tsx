@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
@@ -14,6 +14,7 @@ import { NoPhoto, Pin, WallPhoto } from "@/components/ui/Wall";
 import {
   getZoneView,
   photoUrl,
+  takeZoneAhead,
   seqTotal,
   type Ascent,
   type Gym,
@@ -28,8 +29,27 @@ import { overlayPending, peekCache, withCache } from "@/lib/offline";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
+// 區域頁換區時先知道的東西（館、區域名字）：路線還在讀的時候標題、返回、上一區／下一區照樣顯示
+export type ZoneHead = { gymId: string; gymName: string; zoneName: string };
+
 // 區域頁：照片＋起步點標記（可隱藏，只看岩牆）、難度／顏色／風格篩選、路線列表
-export default function ZoneView({ zoneId }: { zoneId: string }) {
+// 難度篩選由外面記（左右滑換區時保留：新的區有這個難度就照樣篩，沒有就顯示全部）；nav：標題下面的上一區／下一區
+// onZone：讀到這一區的資料時告訴外面（換區用的館、名字、路線數）
+export default function ZoneView({
+  zoneId,
+  grade: wantGrade,
+  onGrade,
+  head,
+  nav,
+  onZone,
+}: {
+  zoneId: string;
+  grade: number | null;
+  onGrade: (g: number | null) => void;
+  head?: ZoneHead | null;
+  nav?: ReactNode;
+  onZone?: (z: ZoneHead & { total: number }) => void;
+}) {
   const { session, ready } = useAuth();
   const router = useRouter();
   // 從館首頁點進來時，手機裡有上次的資料就直接先畫出來（不會先閃一下「讀取中」）；最新的資料由下面的 load 補上
@@ -40,7 +60,6 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
   const [ascents, setAscents] = useState<Record<string, Ascent>>(() => (init ? overlayPending(init.as, session?.user.id) : {}));
   const [counts, setCounts] = useState<Record<string, number>>(init?.cs ?? {});
   const [error, setError] = useState<string | null>(null);
-  const [grade, setGrade] = useState<number | null>(null);
   const [color, setColor] = useState<HoldColor | null>(null);
   const [tag, setTag] = useState<string | null>(null);
   const [open, setOpen] = useState<Route | null>(null);
@@ -58,7 +77,8 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
       setCounts(data.cs);
     };
     try {
-      const { data } = await withCache(`zone:${zoneId}:${uid ?? "guest"}`, () => getZoneView(zoneId), first.current ? apply : undefined);
+      // 滑向這一區時已經先讀了：直接用那一份（只有第一次）
+      const { data } = await withCache(`zone:${zoneId}:${uid ?? "guest"}`, () => takeZoneAhead(zoneId) ?? getZoneView(zoneId), first.current ? apply : undefined);
       first.current = false;
       apply(data);
       setError(null);
@@ -78,23 +98,50 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
     };
   }, [ready, load]);
 
-  if (error && !zone)
-    return (
+  // 讀到資料就告訴外面（換區用）
+  const total = routes.length;
+  useEffect(() => {
+    if (zone && gym) onZone?.({ gymId: zone.gym_id, gymName: gym.name, zoneName: zone.name, total });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在這一區的資料變了才說
+  }, [zone?.id, zone?.gym_id, zone?.name, gym?.name, total]);
+
+  // 還沒讀到這一區（或讀不到）：知道館和名字（換區過來的）就照樣顯示標題、返回、上一區／下一區
+  if (!zone || !gym) {
+    const retry = (
       <>
-        <BackLink onClick={() => backOr(router, "/gyms")}>返回</BackLink>
         <Empty>{error}</Empty>
         <div className="mt-3">
           <Button onClick={load}>重新整理</Button>
         </div>
       </>
     );
-  if (!zone || !gym) return <Empty>讀取中…</Empty>;
+    if (!head)
+      return error ? (
+        <>
+          <BackLink onClick={() => backOr(router, "/gyms")}>返回</BackLink>
+          {retry}
+        </>
+      ) : (
+        <Empty>讀取中…</Empty>
+      );
+    return (
+      <>
+        <BackLink onClick={() => upTo(router, `/gym/${head.gymId}`)}>{head.gymName}</BackLink>
+        <h1 className="mt-1 mb-1.5 text-title font-black">{head.zoneName}</h1>
+        <p className="mt-0 mb-[18px] text-sub text-muted">&nbsp;</p>
+        {nav}
+        {error ? retry : <Empty>讀取中…</Empty>}
+      </>
+    );
+  }
 
   const status = (r: Route) => ascents[r.id]?.status ?? null;
   const done = routes.filter((r) => status(r) === "flash" || status(r) === "send").length;
+  const grades = [...new Set(routes.map((r) => r.grade))].sort((a, b) => a - b);
+  // 記著的難度這一區有才篩，沒有就顯示全部（記著的不變，換到有的區又會篩）
+  const grade = wantGrade != null && grades.includes(wantGrade) ? wantGrade : null;
   const match = (r: Route) =>
     (grade == null || r.grade === grade) && (color == null || r.hold_color === color) && (tag == null || r.style_tags.includes(tag));
-  const grades = [...new Set(routes.map((r) => r.grade))].sort((a, b) => a - b);
   const tapeExample = grades.find((g) => gradeColor(g)) ?? null;
   const colors = [...new Set(routes.map((r) => r.hold_color))];
   const tags = STYLE_TAGS.filter((t) => routes.some((r) => r.style_tags.includes(t)));
@@ -122,6 +169,7 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
           </>
         )}
       </p>
+      {nav}
 
       {src ? (
         <WallPhoto src={src} alt={`${zone.name}照片`} hideable={routes.length > 0}>
@@ -166,11 +214,11 @@ export default function ZoneView({ zoneId }: { zoneId: string }) {
             ]}
           />
           <ChipRow>
-            <Chip num pressed={grade == null} onClick={() => setGrade(null)}>
+            <Chip num pressed={grade == null} onClick={() => onGrade(null)}>
               全部
             </Chip>
             {grades.map((g) => (
-              <GradeChip key={g} grade={g} pressed={grade === g} onClick={() => setGrade(g)} />
+              <GradeChip key={g} grade={g} pressed={grade === g} onClick={() => onGrade(g)} />
             ))}
           </ChipRow>
           {!endurance && (
