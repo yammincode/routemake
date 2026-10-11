@@ -1,6 +1,6 @@
 // 路線相關的固定選項（來源：原型）
 
-export type HoldColor = "紅" | "橙" | "黃" | "綠" | "藍" | "紫" | "粉" | "黑" | "白" | "灰" | "蒂芬妮";
+export type HoldColor = "紅" | "橙" | "黃" | "綠" | "藍" | "紫" | "粉" | "咖啡" | "黑" | "白" | "灰" | "蒂芬妮";
 export type Status = "flash" | "send" | "project";
 
 // 岩點顏色：順序即選色盤順序
@@ -12,6 +12,7 @@ export const HOLD_COLORS: Record<HoldColor, string> = {
   藍: "#2F6FD6",
   紫: "#7B3FB5",
   粉: "#F07BB5",
+  咖啡: "#7B4B2A", // 資料庫要先執行 step33 才存得進去
   黑: "#1A1A1A",
   白: "#FAFAFA",
   灰: "#8E9196",

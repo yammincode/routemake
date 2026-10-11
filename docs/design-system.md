@@ -26,7 +26,7 @@
 | `bg-flash` | `--flash` | #F5B700 | #F5B700 | Flash |
 | `text-flash-ink` | `--flash-ink` | #2B2100 | #2B2100 | Flash 黃底上的文字 |
 
-**岩點色**（`HOLD_COLORS`）：紅 #D7263D、橙 #F28A1E、黃 #F4D03F、綠 #2E9E5B、藍 #2F6FD6、紫 #7B3FB5、粉 #F07BB5、黑 #1A1A1A、白 #FAFAFA。黃、白、粉的標記用深色字（`holdTextColor()`）。
+**岩點色**（`HOLD_COLORS`，順序＝後台色盤順序，一排 6 色剛好兩排）：紅 #D7263D、橙 #F28A1E、黃 #F4D03F、綠 #2E9E5B、藍 #2F6FD6、紫 #7B3FB5、粉 #F07BB5、咖啡 #7B4B2A、黑 #1A1A1A、白 #FAFAFA、灰 #8E9196、蒂芬妮 #81D8D0。黃、白、粉、蒂芬妮的標記用深色字（`holdTextColor()`），其他用白字。新增顏色要同時改資料庫的 `routes_hold_color_check`（migration）。
 
 **平面圖完成度**：`color-mix(accent (18 + 完成比例×72)%, blush)`。
 
