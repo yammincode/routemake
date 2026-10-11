@@ -193,6 +193,33 @@ test("登入過期、收訊差換新失敗：排隊的紀錄不會被當成沒�
   assert.equal(mock.db.ascents.length, 1, "換新成功後自動送出");
 });
 
+test("有網路但登入過期、換新失敗時記錄：先排隊（不會顯示「沒有權限」），換新成功後送出", async () => {
+  const mock = createMock();
+  mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zA = seed(mock);
+  const { page } = await phone(browser, mock);
+  await login(page, "climber88", "password1", "/zone?id=" + zA.id);
+  await page.waitForTimeout(800);
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem("routemake-auth"));
+    s.expires_at = Math.floor(Date.now() / 1000) - 60;
+    localStorage.setItem("routemake-auth", JSON.stringify(s));
+  });
+  mock.state.refreshFail = true;
+  const toasts = [];
+  await flash(page);
+  // Supabase 換新會重試大約 25 秒，之後用沒登入的身分送出、資料庫回「沒有權限」→ App 判斷是登入過期，先排隊
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("routemake-pending") ?? "[]").length === 1, null, { timeout: 45000 });
+  toasts.push(...(await page.locator("[role=status]").allTextContents()));
+  assert.ok(!toasts.some((t) => t.includes("沒有權限")), `不會顯示沒有權限（${toasts.join("／")}）`);
+  assert.equal(mock.db.ascents.length, 0);
+
+  mock.state.refreshFail = false;
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(2500);
+  assert.equal(mock.db.ascents.length, 1, "換新成功後自動送出");
+});
+
 test("排隊中的舊紀錄不會蓋掉後來直接存成功的新紀錄", async () => {
   const mock = createMock();
   mock.addUser("climber88", "password1", { nickname: "小安" });

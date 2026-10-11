@@ -324,12 +324,11 @@ export async function saveAscent(userId: string, routeId: string, a: Omit<Ascent
       .upsert({ user_id: userId, route_id: routeId, ...row }, { onConflict: "user_id,route_id" })
   );
 }
-// 手機現在登入的是不是這個人、而且登入有效（過期會先試著換新；換新失敗就是 false）
+// 手機現在登入的是不是這個人、而且登入有效（過期會先試著換新；換新失敗時 Supabase 不會給登入）
 // 離線排隊的紀錄送出前用：登入過期時 Supabase 會改用未登入的身分送，資料庫會回「沒有權限」，紀錄就被丟掉
 export async function signedInAs(userId: string): Promise<boolean> {
   const { data } = await supabase().auth.getSession();
-  const s = data.session;
-  return !!s && s.user.id === userId && (s.expires_at ?? 0) * 1000 > Date.now();
+  return data.session?.user.id === userId;
 }
 // 只刪自己的（資料庫也只讓本人刪；離線排隊的「清除」送出時如果換了人登入，不會刪到別人的）
 export async function clearAscent(userId: string, routeId: string) {

@@ -1423,13 +1423,17 @@ select tests.throws('暱稱：不能叫「店長阿甲」', $q$update public.pro
 select tests.throws('暱稱：全形 ＡＤＭＩＮ 也擋', $q$update public.profiles set nickname = 'ＡＤＭＩＮ' where id = auth.uid()$q$);
 select tests.throws('暱稱：不能夾看不見的字元', $q$update public.profiles set nickname = E'阿\u200B甲' where id = auth.uid()$q$, '看不見');
 select tests.throws('暱稱：夾 Tag 字元的「店長」也擋', $q$update public.profiles set nickname = E'店\U000E0020長' where id = auth.uid()$q$, '看不見');
-select tests.throws('暱稱：夾全形空白的「店　長」也擋', $q$update public.profiles set nickname = E'店\u3000長' where id = auth.uid()$q$, '館方');
+select tests.throws('暱稱：夾全形空白的「店\u3000長」也擋', $q$update public.profiles set nickname = E'店\u3000長' where id = auth.uid()$q$, '館方');
 select tests.throws('暱稱：不能只有空白', $q$update public.profiles set nickname = E'\u3000\u3000' where id = auth.uid()$q$, '空白');
 select tests.throws('暱稱：簡體「店长」也擋', $q$update public.profiles set nickname = '店长小美' where id = auth.uid()$q$, '館方');
 select tests.throws('暱稱：「館長」也擋', $q$update public.profiles set nickname = '館長' where id = auth.uid()$q$, '館方');
 select tests.throws('暱稱：staff 這個字擋', $q$update public.profiles set nickname = 'staff 1' where id = auth.uid()$q$, '館方');
+select tests.throws('暱稱：「Staff Amy」也擋（英文字中間有空白）', $q$update public.profiles set nickname = 'Staff Amy' where id = auth.uid()$q$, '館方');
+select tests.throws('暱稱：「Gym Staff」也擋', $q$update public.profiles set nickname = 'Gym Staff' where id = auth.uid()$q$, '館方');
+select tests.throws('暱稱：控制字元夾在「店長」中間也擋', $q$update public.profiles set nickname = E'店\u0001長' where id = auth.uid()$q$, '看不見');
 select tests.ok('暱稱：Stafford 這種名字可以', tests.rows($q$update public.profiles set nickname = 'Stafford' where id = auth.uid()$q$) = 1);
-select tests.ok('暱稱：表情符號（❤️、🧗‍♀️、⛰️）可以', tests.rows($q$update public.profiles set nickname = E'小安\u2764\uFE0F\U0001F9D7\u200D\u2640\uFE0F\u26F0\uFE0F' where id = auth.uid()$q$) = 1);
+select tests.ok('暱稱：數字鍵帽表情符號（1\uFE0F\u20E3）可以', tests.rows($q$update public.profiles set nickname = E'阿明1\uFE0F\u20E3號' where id = auth.uid()$q$) = 1);
+select tests.ok('暱稱：表情符號（❤\uFE0F、🧗\u200D♀\uFE0F、⛰\uFE0F）可以', tests.rows($q$update public.profiles set nickname = E'小安\u2764\uFE0F\U0001F9D7\u200D\u2640\uFE0F\u26F0\uFE0F' where id = auth.uid()$q$) = 1);
 select tests.throws('暱稱：文字後面接表情符號的看不見字元也擋', $q$update public.profiles set nickname = E'阿\uFE0F甲' where id = auth.uid()$q$, '看不見');
 select tests.throws('暱稱：不能放網址', $q$update public.profiles set nickname = 'www.abc.com' where id = auth.uid()$q$, '網址');
 select tests.ok('暱稱：一般的暱稱可以', tests.rows($q$update public.profiles set nickname = '阿甲' where id = auth.uid()$q$) = 1);
@@ -1446,7 +1450,12 @@ select tests.ok('聯絡方式：全形的 ＬＩＮＥ、網址也擋', not publ
 select tests.ok('網址：短網址、中文句號、中間有空白的都算網址',
   not public.link_free('加官方 lin.ee/AbCd') and not public.link_free('填資料 forms.gle/x1') and not public.link_free('youtu.be/xyz')
   and not public.link_free('看 evil。com') and not public.link_free('evil . com') and not public.link_free('pse.is/abc') and not public.link_free('ｆｏｒｍｓ．ｇｌｅ／ａｂｃ'));
-select tests.ok('網址：一般留言不會被當成網址', public.link_free('起步右手很遠。腳點 5.10a 很滑') and public.link_free('V3. 好爬') and public.link_free('第2條比較難'));
+select tests.ok('網址：網址後面直接接中文、中間夾看不見的字元也擋',
+  not public.link_free('官方活動evil.com抽年票') and not public.link_free('看evil。com領獎') and not public.link_free('加官方 lin.ee喔')
+  and not public.link_free(E'evil\u200B.com') and not public.link_free(E'h\u200Bttps://evil.example'));
+select tests.ok('網址：一般留言不會被當成網址', public.link_free('起步右手很遠。腳點 5.10a 很滑') and public.link_free('V3. 好爬') and public.link_free('第2條比較難')
+  and public.link_free('V5. Top 那顆很滑') and public.link_free('Hard. Be careful') and public.link_free('Nice. Me too')
+  and public.link_free('V3. crimp/sloper 都有') and public.link_free('sit start. heel/toe hook') and public.link_free('3.5/5') and public.link_free('evil.community'));
 -- 舊的自我介紹（以前的規則存進來的，例如全形＠）：不影響改暱稱，下次存人物卡時才檢查
 update public.profiles set bio = '平日晚上＠明德' where id = :B;
 set role authenticated; select tests.login(:B);
@@ -1465,8 +1474,44 @@ select tests.lives('刪除帳號：建過長耐力路線（區域已改回抱石
 select tests.ok('刪除帳號：路線還在，只是沒有建立者', (select created_by is null from public.routes where code = 'ZZ-01'));
 -- 放回牆上要照區域現在的規則檢查：ZZ 已經改回抱石，長耐力的舊路線（5.11a、有點）放不回來
 set role authenticated; select tests.login(:ST);
-select tests.throws('放回牆上：區域規則換了，不合規則的舊路線放不回來', $q$update public.routes set archived_at = null where code = 'ZZ-01'$q$, '一般區域');
+select tests.throws('放回牆上：區域規則換了，不合規則的舊路線放不回來', $q$update public.routes set archived_at = null where code = 'ZZ-01'$q$, '一般區域|V0');
 reset role; select tests.login(null);
+-- 上攀（YDS）的舊路線放不回已經改成抱石的區
+insert into public.zones (gym_id, code, name, sort, grade_system) values ('mingde', 'ZY', 'ZY 區', 96, 'yds');
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y) values ((select id from public.zones where gym_id = 'mingde' and code = 'ZY'), 'ZY-01', 108, '紅', 1, 1);
+update public.routes set archived_at = now() where code = 'ZY-01';
+update public.zones set grade_system = 'v' where gym_id = 'mingde' and code = 'ZY';
+set role authenticated; select tests.login(:ST);
+select tests.throws('放回牆上：上攀路線放不回已經改成抱石的區', $q$update public.routes set archived_at = null where code = 'ZY-01'$q$, 'V0');
+reset role; select tests.login(null);
+-- 整區影片路徑（換線、換 Spray Wall 公版照片前用）：只有本館員工拿得到，只回在牆上路線的
+insert into public.route_videos (route_id, user_id, path)
+values ((select v from ids where k = 'h1'), :A, 'mingde/zp/' || :A || '/z1.mp4'),
+       ((select id from public.routes where code = 'ZY-01'), :A, 'mingde/zp/' || :A || '/z2.mp4');
+set role anon; select tests.login(null);
+select tests.throws('整區影片路徑：未登入不能查', format('select public.video_paths_for_zone(%L)', (select v from ids where k = 'zoneB')), 'permission denied');
+reset role;
+set role authenticated; select tests.login(:NN);
+select tests.ok('整區影片路徑：顧客拿到空的', public.video_paths_for_zone((select v from ids where k = 'zoneB')) = '{}');
+reset role;
+set role authenticated; select tests.login(:ST2);
+select tests.ok('整區影片路徑：別館員工拿到空的', public.video_paths_for_zone((select v from ids where k = 'zoneB')) = '{}');
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.ok('整區影片路徑：本館員工拿得到在牆上路線的影片', 'mingde/zp/' || :A || '/z1.mp4' = any (public.video_paths_for_zone((select v from ids where k = 'zoneB')))
+  and cardinality(public.video_paths_for_zone((select id from public.zones where gym_id = 'mingde' and code = 'ZY'))) = 0);
+reset role; select tests.login(null);
+delete from public.route_videos where path like 'mingde/zp/%';
+-- 已經有重複標籤的舊路線：改難度、下架照常可以；改標籤時自動合併
+alter table public.routes disable trigger routes_dedupe_tags;
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y, style_tags) values ((select v from ids where k = 'zoneB'), 'B-DUP', 3, '紅', 1, 1, '{技巧,技巧}');
+alter table public.routes enable trigger routes_dedupe_tags;
+set role authenticated; select tests.login(:ST);
+select tests.ok('風格標籤：有重複標籤的舊路線照樣能改難度', tests.rows($q$update public.routes set grade = 4 where code = 'B-DUP'$q$) = 1);
+select tests.ok('風格標籤：改標籤時自動合併', tests.rows($q$update public.routes set style_tags = style_tags where code = 'B-DUP'$q$) = 1);
+select tests.ok('風格標籤：有重複標籤的舊路線照樣能下架', tests.rows($q$update public.routes set archived_at = now() where code = 'B-DUP'$q$) = 1);
+reset role; select tests.login(null);
+select tests.ok('風格標籤：合併後只剩一個', (select style_tags from public.routes where code = 'B-DUP') = '{技巧}');
 
 -- 7. 其他
 insert into public.zones (gym_id, code, name, sort) values ('mingde', 'ZK', 'ZK 區', 97);

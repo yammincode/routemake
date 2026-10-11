@@ -144,14 +144,21 @@ export function createMock() {
   const gymOfRoute = (id) => zoneOf(db.routes.find((r) => r.id === id).zone_id).gym_id;
   // 路線下架時刪掉影片資料（資料庫觸發器）
   const dropVideos = (routeId) => (db.videos = db.videos.filter((v) => v.route_id !== routeId));
-  // 同 0038 的 link_free：網址（全形、「。」、短網址也算）
+  // 同 0038 的 strip_invisible、link_free：網址（全形、「。」、短網址、夾看不見的字元也算；「V5. Top」這種一般句子不算）
+  const INVISIBLE = /[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFB\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu;
+  const strip = (t) => t.normalize("NFKC").replace(INVISIBLE, "");
   const hasLink = (t) =>
-    /(https?:|www\.|[a-z0-9-]+\.[a-z]{2,}\/|[a-z0-9-]\.(com|tw|net|org|io|me|cc|app|co|ly|gl|gle|ee|is|be|gg|am|to|ws|ai|jp|hk|info|biz|top|vip|club|online|xyz|link|shop|site)\b)/i.test(
-      (t ?? "").normalize("NFKC").replace(/\s*(\.|。|｡|\[\.\]|\(\.\)|\[dot\]|\(dot\))\s*/gi, ".")
+    /(https?:|www\.|[a-z0-9-]+\.[a-z]{2,}\/|[a-z0-9-]\.(com|tw|net|org|io|cc|app|co|ly|gl|gle|ee|gg|jp|hk|biz|vip|xyz)(?![a-z0-9]))/i.test(
+      strip(t ?? "")
+        .replace(/\s*(。|｡|\[\.\]|\(\.\)|\[dot\]|\(dot\))\s*/gi, ".")
+        .replace(/\s+\.\s+/g, ".")
     );
-  // 同 0038 的 nickname_hidden、nickname_bare、profiles_nickname_check
-  const HIDDEN = /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u206F\u3164\uFEFF\uFFA0\uFFF0-\uFFFB\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]|(^|[0-9A-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u3040-\u30FF\u3100-\u312F\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF10-\uFF5A])[\uFE00-\uFE0F\u200D]/u;
-  const bare = (t) => t.normalize("NFKC").replace(/[\s\u00A0\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u2000-\u200F\u2028-\u202F\u205F-\u206F\u2800\u3000\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFB\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu, "");
+  // 同 0038 的 nickname_hidden、nickname_bare、nickname_spaced、profiles_nickname_check
+  const HIDDEN =
+    /[\u0001-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u206F\u3164\uFEFF\uFFA0\uFFF0-\uFFFB\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]|(^|[A-Za-zÀ-ɏͰ-ϿЀ-ӿ\u3040-\u30FF\u3100-\u312F\u3400-\u4DBF一-鿿\uAC00-\uD7AF\uF900-\uFAFF０-ｚ])[\uFE00-\uFE0F\u200D]|[0-9]([\uFE00-\uFE0E\u200D]|\uFE0F(?!⃣))/u;
+  const SPACES = /[\s\u00A0\u2000-\u200A\u2028\u2029\u202F\u205F\u2800\u3000]/gu;
+  const bare = (t) => strip(t).replace(SPACES, "");
+  const spaced = (t) => strip(t).replace(/[\s\u00A0\u2000-\u200A\u2028\u2029\u202F\u205F\u2800\u3000]+/gu, " ");
   const IMPERSONATE = /(原岩|官方|管理員|管理者|管理员|店長|店长|館長|馆长|館方|馆方|定線|定线|員工|员工|客服|老闆|老板|櫃檯|櫃台|柜台)/;
   const IMPERSONATE_EN = /(^|[^a-z])(admin|staff|official)([^a-z]|$)/i;
   // 同 0038 的 can_delete_video_file：員工；分享中的不行；自己的；岩友下架了自己出的路線
@@ -866,10 +873,10 @@ export function createMock() {
     if (t === "profiles" && m === "PATCH") {
       // 同 0038 的 profiles_nickname_check：看不見的字元、網址；冒充館方的字（員工、老闆可以）
       const nick = body.nickname ?? "";
-      if (HIDDEN.test(nick)) return J(route, 400, { code: "22023", message: "暱稱不能有看不見的字元（表情符號可以用）" });
+      if (HIDDEN.test(nick)) return J(route, 400, { code: "22023", message: "暱稱不能有看不見的字元（一般表情符號可以用）" });
       if (!bare(nick)) return J(route, 400, { code: "22023", message: "暱稱不能只有空白" });
       if (hasLink(nick)) return J(route, 400, { code: "22023", message: "暱稱不能放網址" });
-      if ((IMPERSONATE.test(bare(nick)) || IMPERSONATE_EN.test(bare(nick))) && !isOwner(uid) && !db.staff_roles.some((x) => x.user_id === uid))
+      if ((IMPERSONATE.test(bare(nick)) || IMPERSONATE_EN.test(bare(nick)) || IMPERSONATE_EN.test(spaced(nick))) && !isOwner(uid) && !db.staff_roles.some((x) => x.user_id === uid))
         return J(route, 400, { code: "22023", message: "暱稱不能用「原岩、官方、店長、館長、定線、員工、管理員、客服、老闆、櫃檯」這類字，以免被誤會是館方" });
       Object.assign(prof(uid), { nickname: body.nickname });
       return empty(route);

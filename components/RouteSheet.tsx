@@ -26,16 +26,17 @@ import {
   postComment,
   saveAscent,
   seqTotal,
-  signedInAs,
   unlikeComment,
   type Ascent,
   type Comment,
+  type DbError,
   type Route,
 } from "@/lib/data";
 import { ago, md, todayYmd, ymd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, STATUS_LABEL, type Status } from "@/lib/design";
 import { herePath } from "@/lib/nav";
 import { isRetryable, queueAscent, unqueue } from "@/lib/offline";
+import { loginExpired } from "@/lib/supabase";
 import { ascentPoints, routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
@@ -161,8 +162,8 @@ function RouteBody({
       onSaved({ id: ascent?.id ?? "", route_id: r.id, ...a });
       toast(msg);
     } catch (e) {
-      // 送不出去，或登入剛好過期（資料庫回「沒有權限」）：先排隊，之後自動送出
-      if (isRetryable(e) || !(await signedInAs(session.user.id))) {
+      // 送不出去，或登入剛好過期、換新失敗（Supabase 改用沒登入的身分送，資料庫回「沒有權限」）：先排隊，之後自動送出
+      if (isRetryable(e) || ((e as DbError).code === "42501" && loginExpired())) {
         queueAscent({ userId: session.user.id, routeId: r.id, ascent: a });
         onSaved({ id: ascent?.id ?? "", route_id: r.id, ...a });
         toast("目前送不出去，連上網路後會自動送出");
@@ -266,7 +267,7 @@ function RouteBody({
       onClose();
       toast("已清除紀錄");
     } catch (e) {
-      if (isRetryable(e) || !(await signedInAs(session.user.id))) {
+      if (isRetryable(e) || ((e as DbError).code === "42501" && loginExpired())) {
         queueAscent({ userId: session.user.id, routeId: r.id, ascent: null });
         onSaved(null);
         onClose();

@@ -25,13 +25,30 @@ const ZONE_CACHE = "zone-shell";
 // 網路幾秒沒回應就先用手機裡存的頁面（館內訊號差時不用乾等；頁面只是空殼，資料另外抓）
 const PAGE_TIMEOUT = 1;
 
-// 一頁一頁存：其中一頁抓不到，其他頁照樣存好；抓不到的那頁把舊版刪掉（之後直接等網路，不會拿到舊版）
+// 安裝時先把新版頁面抓到暫存快取（一頁一頁抓：其中一頁抓不到，其他頁照樣存好）
+// 新版真的接手（activate）時才換進 others：抓到的換成新版，抓不到的把舊版刪掉（之後直接等網路，不會拿到舊版）
+// 新版沒裝成功時舊版照常用，手機裡的舊頁面不會被刪（離線照樣打得開）
+const PAGES_NEW = "pages-install";
 self.addEventListener("install", (event) => {
   event.waitUntil(
     Promise.allSettled([
-      caches.open("others").then((cache) => Promise.allSettled(OFFLINE_PAGES.map((p) => cache.add(p).catch(() => cache.delete(p))))),
+      caches.open(PAGES_NEW).then((cache) => Promise.allSettled(OFFLINE_PAGES.map((p) => cache.add(p)))),
       caches.open(ZONE_CACHE).then((cache) => cache.add("/zone")),
     ])
+  );
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      const fresh = await caches.open(PAGES_NEW);
+      const pages = await caches.open("others");
+      for (const p of OFFLINE_PAGES) {
+        const res = await fresh.match(p);
+        if (res) await pages.put(p, res);
+        else await pages.delete(p);
+      }
+      await caches.delete(PAGES_NEW);
+    })().catch(() => undefined)
   );
 });
 

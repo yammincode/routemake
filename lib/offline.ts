@@ -129,7 +129,8 @@ export async function flushPending(
   const done = (p: PendingAscent) => write(QUEUE_KEY, getPending().filter((x) => !(same(x, p.userId, p.routeId) && x.at === p.at)));
   try {
     for (const p of getPending().filter((x) => x.userId === userId)) {
-      if (current(p)?.at !== p.at) continue; // 已經不在（登出、直接存成功）或換成新的版本（下一輪再送）
+      const c = current(p);
+      if (!c || c.at !== p.at) continue; // 已經不在（登出、直接存成功）或換成新的版本（下一輪再送）
       if (!(await signedInAs(p.userId))) {
         result.stuck = true; // 登入過期還沒換新、或換了別人：先不送，之後再試
         break;
@@ -148,6 +149,8 @@ export async function flushPending(
         result.reason ??= (e as Error)?.message ?? null;
       }
     }
+    // 送的過程中又排了新的（同一條路線改了）：還有沒送的，讓畫面過一陣子再送一次
+    if (!result.stuck && getPending().some((x) => x.userId === userId)) result.stuck = true;
   } finally {
     flushing = false;
     emit();

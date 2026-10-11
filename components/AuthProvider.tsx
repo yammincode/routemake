@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { authErrorMessage, usernameToEmail, type Access } from "@/lib/auth";
 import { herePath } from "@/lib/nav";
 import { clearCache } from "@/lib/offline";
-import { AUTH_STORAGE_KEY, supabase, supabaseConfigured } from "@/lib/supabase";
+import { AUTH_STORAGE_KEY, storedLogin, supabase, supabaseConfigured } from "@/lib/supabase";
 import { markOpen } from "@/lib/usage";
 
 // 要先去取暱稱：還沒填，或暱稱跟登入帳號一樣（暱稱會公開，帳號不該公開）
@@ -25,15 +25,7 @@ type AuthState = {
 };
 
 const NOT_READY = "登入功能尚未設定完成，請稍後再試";
-const SIGN_OUT_WAIT_MS = 3000;
-// 手機裡存的登入什麼時候過期（秒；讀不到是 0）
-const storedExpiresAt = (): number => {
-  try {
-    return (JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) ?? "null") as { expires_at?: number } | null)?.expires_at ?? 0;
-  } catch {
-    return 0;
-  }
-};
+
 
 const Ctx = createContext<AuthState | null>(null);
 
@@ -132,27 +124,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // 只登出這支手機（其他手機不受影響）
-  // 沒網路又剛好登入過期時，Supabase 會一直重試換新登入（最久 30 秒）、最後回錯誤也沒清掉手機裡的登入：
-  // 最多等 3 秒，沒成功就自己清掉，下一個人打開不會又登入成前一個人
+  // 先清掉手機裡的登入，馬上登出（沒網路、登入過期也一樣，下一個人打開不會又登入成前一個人）；
+  // 再在背景通知伺服器撤銷這支手機的登入（這個請求不會動手機裡的資料，之後有人登入不會被它登出）
   const signOut = useCallback(async () => {
-    const clearStored = () => {
-      try {
-        Object.keys(localStorage)
-          .filter((k) => k.startsWith(AUTH_STORAGE_KEY))
-          .forEach((k) => localStorage.removeItem(k));
-      } catch {}
-    };
-    // 沒網路、或登入已經（快要）過期：先自己清掉，Supabase 就不會去換新登入、重試很久
-    // （不然 3 秒後它還在背景重試，之後有人登入時會把那個人登出）
-    if (!navigator.onLine || storedExpiresAt() * 1000 - Date.now() < 90_000) clearStored();
-    const wait = new Promise<{ error: unknown }>((done) => setTimeout(() => done({ error: "timeout" }), SIGN_OUT_WAIT_MS));
-    const { error } = await Promise.race([
-      supabase()
-        .auth.signOut({ scope: "local" })
-        .catch((e: unknown) => ({ error: e })),
-      wait,
-    ]);
-    if (error) clearStored();
+    const token = storedLogin()?.access_token;
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith(AUTH_STORAGE_KEY))
+        .forEach((k) => localStorage.removeItem(k));
+    } catch {}
+    await supabase()
+      .auth.signOut({ scope: "local" })
+      .catch(() => undefined);
+    if (token) void supabase().auth.admin.signOut(token, "local").catch(() => undefined);
     clearCache();
     setSession(null);
     setAccess(null);

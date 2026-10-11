@@ -32,16 +32,25 @@
 -- ---------------------------------------------------------------------
 -- 共用：文字不能有網址；聯絡方式檢查先轉半形（ＬＩＮＥ、０９１２… 也擋得到）
 -- ---------------------------------------------------------------------
--- 先把全形轉半形，再把「。」「｡」「[.]」「(.)」「 . 」「dot」都當成點；網域後面接斜線（lin.ee/xx、forms.gle/xx）一律算網址
+-- 拿掉看不見的字元（零寬、方向控制、控制字元、Tag 等）：網址、暱稱檢查前先清掉，「evil.com 中間夾零寬字元」才擋得到
+create or replace function public.strip_invisible(p text) returns text
+language sql immutable set search_path = '' as $$
+  select regexp_replace(p, '[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFB\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E007F\U000E0100-\U000E01EF]', '', 'g')
+$$;
+
+-- 網址：先全形轉半形、拿掉看不見的字元，「。」「｡」「[.]」「(.)」「(dot)」當成點，「evil . com」（點的前後都有空白）也當成「evil.com」
+-- 網域後面接斜線（lin.ee/xx、forms.gle/xx）一律算網址；常見結尾（.com、.tw…）後面不能再接英數字（evil.com抽獎 算，evil.community 不算）
+-- 「V5. Top 那顆很滑」這種一般句子：點後面有空白不會合併，Top、Me、Is 這些常見英文字不當成網址結尾
 create or replace function public.link_free(p text) returns boolean
 language sql immutable set search_path = '' as $$
-  select p is null or regexp_replace(normalize(p, NFKC), '\s*(\.|。|｡|\[\.\]|\(\.\)|\[dot\]|\(dot\))\s*', '.', 'gi')
-    !~* '(https?:|www\.|[a-z0-9-]+\.[a-z]{2,}/|[a-z0-9-]\.(com|tw|net|org|io|me|cc|app|co|ly|gl|gle|ee|is|be|gg|am|to|ws|ai|jp|hk|info|biz|top|vip|club|online|xyz|link|shop|site)\y)'
+  select p is null or regexp_replace(regexp_replace(public.strip_invisible(normalize(p, NFKC)),
+      '\s*(。|｡|\[\.\]|\(\.\)|\[dot\]|\(dot\))\s*', '.', 'gi'), '\s+\.\s+', '.', 'g')
+    !~* '(https?:|www\.|[a-z0-9-]+\.[a-z]{2,}/|[a-z0-9-]\.(com|tw|net|org|io|cc|app|co|ly|gl|gle|ee|gg|jp|hk|biz|vip|xyz)(?![a-z0-9]))'
 $$;
 
 create or replace function public.contact_free(p text) returns boolean
 language sql immutable set search_path = '' as $$
-  select p is null or normalize(p, NFKC) !~* '(https?://|www\.|\.(com|tw|net|org|io|me|cc|app)\y|line|instagram|\yig\y|facebook|\yfb\y|threads|wechat|telegram|@|[0-9０-９][0-9０-９ -]{6,}|加賴|加我|私訊|微信|電話)'
+  select p is null or public.strip_invisible(normalize(p, NFKC)) !~* '(https?://|www\.|\.(com|tw|net|org|io|me|cc|app)(?![a-z0-9])|line|instagram|\yig\y|facebook|\yfb\y|threads|wechat|telegram|@|[0-9０-９][0-9０-９ -]{6,}|加賴|加我|私訊|微信|電話)'
 $$;
 
 create or replace function public.bio_ok(p text) returns boolean
@@ -274,6 +283,11 @@ begin
   return new;
 end $$;
 
+-- 放回牆上（archived_at 改變）時也檢查難度跟區域的等級制合不合（區域可能已經從上攀改成抱石）
+drop trigger routes_grade_system on public.routes;
+create trigger routes_grade_system before insert or update of grade, zone_id, archived_at on public.routes
+  for each row execute function public.routes_grade_system();
+
 -- 編號、區域、建立者、建立時間不能改；岩友路線下架後出題者不能再改、留言開關只有員工能動
 create or replace function public.routes_before_update() returns trigger
 language plpgsql set search_path = '' as $$
@@ -297,17 +311,23 @@ end $$;
 -- ---------------------------------------------------------------------
 -- 5. 暱稱、留言
 -- ---------------------------------------------------------------------
--- 看不見的字元：零寬、方向控制、Tag、空白填充等（\u、\U 寫法，貼進 SQL Editor 不會少字）
--- 表情符號常用的 U+FE0F（❤️）和 U+200D（🧗‍♀️）接在符號後面可以，接在文字後面或放在開頭就擋
+-- 看不見的字元：零寬、方向控制、控制字元、Tag、空白填充等（\u、\U 寫法，貼進 SQL Editor 不會少字）
+-- 表情符號常用的 U+FE0F（❤️）和 U+200D（🧗‍♀️）接在符號後面可以，接在文字後面或放在開頭就擋；數字鍵帽（1️⃣＝數字＋FE0F＋20E3）可以
 create or replace function public.nickname_hidden(p text) returns boolean
 language sql immutable set search_path = '' as $$
-  select p ~ '[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u206F\u3164\uFEFF\uFFA0\uFFF0-\uFFFB\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E007F\U000E0100-\U000E01EF]'
-      or p ~ '(^|[0-9A-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u3040-\u30FF\u3100-\u312F\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF10-\uFF5A])[\uFE00-\uFE0F\u200D]'
+  select p ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u206F\u3164\uFEFF\uFFA0\uFFF0-\uFFFB\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E007F\U000E0100-\U000E01EF]'
+      or p ~ '(^|[A-Za-zÀ-ɏͰ-ϿЀ-ӿ\u3040-ヿ\u3100-ㄯ㐀-䶿一-鿿가-\uD7AF豈-\uFAFF０-ｚ])[\uFE00-\uFE0F\u200D]'
+      or p ~ '[0-9]([\uFE00-\uFE0E\u200D]|\uFE0F(?!\u20E3))'
 $$;
--- 比對冒充字之前先拿掉所有空白、看不見的字元（「店 長」「店󠀠長」都算「店長」）
+-- 比對冒充字之前先拿掉所有空白、看不見的字元（「店 長」「店＋Tag 字元＋長」都算「店長」）
 create or replace function public.nickname_bare(p text) returns text
 language sql immutable set search_path = '' as $$
-  select regexp_replace(normalize(p, NFKC), '[\s\u00A0\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u2000-\u200F\u2028-\u202F\u205F-\u206F\u2800\u3000\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFB\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E007F\U000E0100-\U000E01EF]', '', 'g')
+  select regexp_replace(public.strip_invisible(normalize(p, NFKC)), '[\s\u00A0\u2000-\u200A\u2028\u2029\u202F\u205F\u2800\u3000]', '', 'g')
+$$;
+-- 英文字的冒充檢查要保留字中間的空白（「Staff Amy」拿掉空白會變成「StaffAmy」，就看不出 Staff 是一個字）
+create or replace function public.nickname_spaced(p text) returns text
+language sql immutable set search_path = '' as $$
+  select regexp_replace(public.strip_invisible(normalize(p, NFKC)), '[\s\u00A0\u2000-\u200A\u2028\u2029\u202F\u205F\u2800\u3000]+', ' ', 'g')
 $$;
 create or replace function public.profiles_nickname_check() returns trigger
 language plpgsql security definer set search_path = '' as $$
@@ -319,7 +339,7 @@ begin
     return new;
   end if;
   if public.nickname_hidden(new.nickname) then
-    raise exception '暱稱不能有看不見的字元（表情符號可以用）' using errcode = '22023';
+    raise exception '暱稱不能有看不見的字元（一般表情符號可以用）' using errcode = '22023';
   end if;
   v_bare := public.nickname_bare(new.nickname);
   if v_bare = '' then
@@ -328,9 +348,10 @@ begin
   if not public.link_free(new.nickname) then
     raise exception '暱稱不能放網址' using errcode = '22023';
   end if;
-  -- 英文字只在整個字時才算（Stafford、Gustaff 可以；admin、staff1 不行）
+  -- 英文字只在整個字時才算（Stafford、Gustaff 可以；admin、staff1、Staff Amy、S taff 不行）
   if (v_bare ~ '(原岩|官方|管理員|管理者|管理员|店長|店长|館長|馆长|館方|馆方|定線|定线|員工|员工|客服|老闆|老板|櫃檯|櫃台|柜台)'
-      or v_bare ~* '(^|[^a-z])(admin|staff|official)([^a-z]|$)')
+      or v_bare ~* '(^|[^a-z])(admin|staff|official)([^a-z]|$)'
+      or public.nickname_spaced(new.nickname) ~* '(^|[^a-z])(admin|staff|official)([^a-z]|$)')
      and not public.is_owner()
      and not exists (select 1 from public.staff_roles s where s.user_id = auth.uid()) then
     raise exception '暱稱不能用「原岩、官方、店長、館長、定線、員工、管理員、客服、老闆、櫃檯」這類字，以免被誤會是館方' using errcode = '22023';
