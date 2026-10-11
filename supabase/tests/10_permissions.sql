@@ -1342,8 +1342,8 @@ create temp table hp (k text primary key, v text);
 grant all on hp to anon, authenticated;
 insert into hp select 'a', format('mingde/%s/%s/h1.mp4', (select v from ids where k = 'h1'), :A);
 insert into hp select 'fake', format('mingde/%s/%s/fake.mp4', (select v from ids where k = 'h1'), :A);
-insert into hp select 'b', format('mingde/%s/%s/h1b.mp4', (select v from ids where k = 'h1'), :A);
-insert into hp select 'c', format('mingde/%s/%s/h1c.mp4', (select v from ids where k = 'h1'), :A);
+insert into hp select 'vb', format('mingde/%s/%s/h1b.mp4', (select v from ids where k = 'h1'), :A);
+insert into hp select 'vc', format('mingde/%s/%s/h1c.mp4', (select v from ids where k = 'h1'), :A);
 set role authenticated; select tests.login(:A);
 select tests.throws('影片：沒有上傳檔案不能新增影片資料（不能洗假影片）', format('insert into public.route_videos (route_id, path) values (%L, %L)', (select v from ids where k = 'h1'), (select v from hp where k = 'fake')));
 select tests.lives('影片：上傳檔案', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from hp where k = 'a')));
@@ -1376,18 +1376,18 @@ select tests.ok('影片：自己的影片檔列得出來', (select count(*) from
 select tests.ok('影片：用 delete_video 刪資料後可以刪檔', public.delete_video((select id from public.route_videos where path = (select v from hp where k = 'a'))) = (select v from hp where k = 'a')
   and tests.rows(format('delete from storage.objects where name = %L', (select v from hp where k = 'a'))) = 1);
 -- 有紀錄，但 App 沒送完成狀態（分享表單寫「影片上不會顯示紀錄」，例如紀錄正在離線清除）：不帶入紀錄
-select tests.lives('影片：上傳檔案（不顯示紀錄）', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from hp where k = 'b')));
-select tests.lives('影片：沒送完成狀態也能分享', format('insert into public.route_videos (route_id, path, climbed_on) values (%L, %L, public.taipei_today())', (select v from ids where k = 'h1'), (select v from hp where k = 'b')));
-select tests.ok('影片：沒送完成狀態時不公開紀錄的結果和攀爬日', (select status is null and climbed_on is null from public.route_videos where path = (select v from hp where k = 'b')));
+select tests.lives('影片：上傳檔案（不顯示紀錄）', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from hp where k = 'vb')));
+select tests.lives('影片：沒送完成狀態也能分享', format('insert into public.route_videos (route_id, path, climbed_on) values (%L, %L, public.taipei_today())', (select v from ids where k = 'h1'), (select v from hp where k = 'vb')));
+select tests.ok('影片：沒送完成狀態時不公開紀錄的結果和攀爬日', (select status is null and climbed_on is null from public.route_videos where path = (select v from hp where k = 'vb')));
 -- 舊版 App（v2.7）：只送完成狀態、沒送攀爬日（舊版表單沒說會公開日期）：不記攀爬日，完成狀態跟原本一樣照 App 送的
-select tests.lives('影片：上傳檔案（舊版 App）', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from hp where k = 'c')));
-select tests.lives('影片：舊版 App 照常分享', format('insert into public.route_videos (route_id, path, status) values (%L, %L, ''send'')', (select v from ids where k = 'h1'), (select v from hp where k = 'c')));
-select tests.ok('影片：舊版 App 分享不公開攀爬日', (select status = 'send' and climbed_on is null from public.route_videos where path = (select v from hp where k = 'c')));
+select tests.lives('影片：上傳檔案（舊版 App）', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from hp where k = 'vc')));
+select tests.lives('影片：舊版 App 照常分享', format('insert into public.route_videos (route_id, path, status) values (%L, %L, ''send'')', (select v from ids where k = 'h1'), (select v from hp where k = 'vc')));
+select tests.ok('影片：舊版 App 分享不公開攀爬日', (select status = 'send' and climbed_on is null from public.route_videos where path = (select v from hp where k = 'vc')));
 reset role;
 -- 24 小時最多 15 筆影片資料（跟檔案分開算，刪檔也不會空出名額）
 select tests.login(null);
 delete from public.ascents where user_id = :A and route_id = (select v from ids where k = 'h1');
-delete from public.route_videos where path in (select v from hp where k in ('b', 'c'));
+delete from public.route_videos where path in (select v from hp where k in ('vb', 'vc'));
 insert into public.route_videos (route_id, user_id, path)
 select (select v from ids where k = 'h1'), :NN, format('mingde/%s/%s/x%s.mp4', (select v from ids where k = 'h1'), :NN, i) from generate_series(1, 15) i;
 set role authenticated; select tests.login(:NN);

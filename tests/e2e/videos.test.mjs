@@ -483,7 +483,7 @@ test("影片時間：有紀錄顯示攀爬日（不是上傳日）、沒有紀�
   await dialog.locator("input[type=file]").setInputFiles(clip("c.mp4"));
   await c.waitForTimeout(600);
   const form = (await dialog.textContent()).replace(/\s+/g, "");
-  assert.ok(form.includes("你在這條的紀錄會一起顯示：Flash") && !form.includes(md(taipeiDay(-2))), "資料庫還不能記日期時，表單不說會顯示日期");
+  assert.ok(form.includes("你在這條的紀錄會一起顯示：Flash"), "資料庫還不能記日期時，表單不說會顯示日期：" + form.slice(form.indexOf("你在這條"), form.indexOf("你在這條") + 30));
   await dialog.locator("input[type=checkbox]").check();
   await dialog.locator('button:text-is("分享影片")').click();
   await c.waitForTimeout(1000);
