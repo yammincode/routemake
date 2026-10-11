@@ -137,23 +137,15 @@ test("平面圖：每一區都改成新名字時，各館平面圖上的字都�
   }
 });
 
-test("中和 A 區：合併後平面圖畫一個 A 區；資料庫還沒執行 step32（還是 A1、A2）時照舊畫兩區", async () => {
-  for (const merged of [true, false]) {
-    const mock = createMock();
-    if (!merged) {
-      const a = mock.db.zones.find((z) => z.gym_id === "g3" && z.code === "A");
-      Object.assign(a, { code: "A1", name: "A1 區" });
-      mock.db.zones.push({ ...a, id: crypto.randomUUID(), code: "A2", name: "A2 區", sort: 2 });
-    }
-    const { page, errors } = await phone(browser, mock);
-    await page.goto(`${BASE}/gym/g3`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(600);
-    const labels = (await planTexts(page)).sort();
-    assert.deepEqual(labels, (merged ? ["A"] : ["A1", "A2"]).concat(["AB1", "AB2", "B", "C", "D", "抱石區", "速度牆"]).sort(), `${merged ? "合併後" : "合併前"}：${labels.join("、")}`);
-    // 點平面圖進得去
-    await page.locator(`main svg g[role=button][aria-label^="${merged ? "A 區" : "A2 區"}"]`).dispatchEvent("click");
-    await page.waitForURL(/\/zone\?id=/);
-    assert.ok((await page.textContent("main h1")).includes(merged ? "A 區" : "A2 區"));
-    assert.deepEqual(errors, []);
-  }
+test("中和 A 區：A1、A2 合併後平面圖畫一個 A 區，點了進得去", async () => {
+  const mock = createMock();
+  const { page, errors } = await phone(browser, mock);
+  await page.goto(`${BASE}/gym/g3`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(600);
+  const labels = (await planTexts(page)).sort();
+  assert.deepEqual(labels, ["A", "AB1", "AB2", "B", "C", "D", "抱石區", "速度牆"].sort(), labels.join("、"));
+  await page.locator('main svg g[role=button][aria-label^="A 區"]').dispatchEvent("click");
+  await page.waitForURL(/\/zone\?id=/);
+  assert.ok((await page.textContent("main h1")).includes("A 區"));
+  assert.deepEqual(errors, []);
 });

@@ -61,12 +61,6 @@ export const XINDIAN_PLAN: FloorPlanShape = {
   },
 };
 
-// 中和 A1、A2 合併前的畫法：正式資料庫還沒執行 step32 時還是 A1、A2 兩區，先照舊畫（資料庫沒有的區域不會畫）
-// 正式資料庫執行 step32 之後就可以刪掉
-const ZHONGHE_A_SPLIT: Record<string, PlanZoneShape> = {
-  A1: { n: "A1 區", t: "A1", lx: 1235, ly: 715, polys: ["1302,600 1302,770 1338,770 1338,600"] },
-  A2: { n: "A2 區", t: "A2", lx: 1235, ly: 615, polys: ["1338,459 1302,492 1302,600 1338,600"] },
-};
 export const ZHONGHE_PLAN: FloorPlanShape = {
   viewBox: "58 420 1316 734",
   outline: "88,450 1344,450 1344,1124 88,1124",
@@ -81,7 +75,6 @@ export const ZHONGHE_PLAN: FloorPlanShape = {
     AB1: { n: "Auto-Belay 1", t: "AB1", lx: 1130, ly: 545, polys: ["961,456 961,486 1297,485 1330,455"] },
     AB2: { n: "Auto-Belay 2", t: "AB2", lx: 985, ly: 640, polys: ["848,456 914,648 961,486 961,456"] },
     A: { n: "A 區", t: "A", lx: 1235, ly: 665, polys: ["1338,459 1302,492 1302,770 1338,770"] },
-    ...ZHONGHE_A_SPLIT,
     SP: { n: "速度牆", t: "速度牆", lx: 533, ly: 845, polys: ["401,885 401,946 653,946 653,885"] },
     BO: { n: "抱石區", t: "抱石區", lx: 533, ly: 1010, polys: ["741,985 700,985 698,1082 568,1082 537,1040 373,1040 323,1121 741,1121"] },
   },
