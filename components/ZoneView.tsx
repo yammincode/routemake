@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
@@ -78,7 +78,7 @@ export default function ZoneView({
     };
     try {
       // 滑向這一區時已經先讀了：直接用那一份（只有第一次）
-      const { data } = await withCache(`zone:${zoneId}:${uid ?? "guest"}`, () => takeZoneAhead(zoneId) ?? getZoneView(zoneId), first.current ? apply : undefined);
+      const { data } = await withCache(`zone:${zoneId}:${uid ?? "guest"}`, () => takeZoneAhead(zoneId, uid) ?? getZoneView(zoneId), first.current ? apply : undefined);
       first.current = false;
       apply(data);
       setError(null);
@@ -98,9 +98,9 @@ export default function ZoneView({
     };
   }, [ready, load]);
 
-  // 讀到資料就告訴外面（換區用）
+  // 讀到資料就告訴外面（換區用）；layout effect：上一區／下一區跟畫面同一次畫出來，不會晚一點才把照片往下推
   const total = routes.length;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (zone && gym) onZone?.({ gymId: zone.gym_id, gymName: gym.name, zoneName: zone.name, total });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在這一區的資料變了才說
   }, [zone?.id, zone?.gym_id, zone?.name, gym?.name, total]);

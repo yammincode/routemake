@@ -69,7 +69,7 @@ export default function ZonePageClient() {
         setHint(d && latest.current.near[d] ? d : null);
         // 往那邊滑就先讀那一區（有網路才讀）
         const z = d ? latest.current.near[d] : undefined;
-        if (z && latest.current.online) void withCache(`zone:${z.id}:${latest.current.uid ?? "guest"}`, () => readZoneAhead(z.id)).catch(() => {});
+        if (z && latest.current.online) void withCache(`zone:${z.id}:${latest.current.uid ?? "guest"}`, () => readZoneAhead(z.id, latest.current.uid)).catch(() => {});
       },
       onCommit: (d) => latest.current.go(d, false),
     }));

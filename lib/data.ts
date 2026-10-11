@@ -143,18 +143,22 @@ export async function getActiveRoutes(zoneId: string): Promise<Route[]> {
 // 區域頁需要的資料一次拿齊（區域、場館、路線、自己的紀錄、留言數），只問資料庫一次
 export type ZoneData = { z: Zone; g: Gym; rs: Route[]; as: Record<string, Ascent>; cs: Record<string, number> };
 // 區域頁先讀好（滑向下一區時先讀那一區）：區域頁打開時直接拿這份，不再問一次；15 秒內有效
+// 每個帳號分開記（資料裡有自己的紀錄和私人心得，換帳號後不能拿到別人先讀的）
 const zoneAhead = new Map<string, { p: Promise<ZoneData>; t: number }>();
-export function readZoneAhead(zoneId: string): Promise<ZoneData> {
-  const old = zoneAhead.get(zoneId);
+const aheadKey = (zoneId: string, uid?: string) => `${uid ?? "guest"}:${zoneId}`;
+export function readZoneAhead(zoneId: string, uid?: string): Promise<ZoneData> {
+  const k = aheadKey(zoneId, uid);
+  const old = zoneAhead.get(k);
   if (old && Date.now() - old.t < 15000) return old.p;
   const p = getZoneView(zoneId);
-  zoneAhead.set(zoneId, { p, t: Date.now() });
-  p.catch(() => zoneAhead.delete(zoneId));
+  zoneAhead.set(k, { p, t: Date.now() });
+  p.catch(() => zoneAhead.delete(k));
   return p;
 }
-export function takeZoneAhead(zoneId: string): Promise<ZoneData> | null {
-  const old = zoneAhead.get(zoneId);
-  zoneAhead.delete(zoneId);
+export function takeZoneAhead(zoneId: string, uid?: string): Promise<ZoneData> | null {
+  const k = aheadKey(zoneId, uid);
+  const old = zoneAhead.get(k);
+  zoneAhead.delete(k);
   return old && Date.now() - old.t < 15000 ? old.p : null;
 }
 export async function getZoneView(zoneId: string): Promise<ZoneData> {

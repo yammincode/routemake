@@ -35,7 +35,16 @@ test("左右滑換區、按鈕換區：順序跟館首頁一樣；不多一層�
   // 館首頁區域卡片的順序（每張卡片寫的是哪一區）
   const names = mock.db.zones.filter((z) => z.gym_id === "mingde" && z.kind !== "spray").map((z) => z.name);
   const cards = (await page.locator("main button.rounded-card").allTextContents()).map((t) => names.find((n) => t.includes(n))).filter(Boolean);
+  // 第一次打開的區（手機裡只有館首頁的資料）：路線列表出來時上一區／下一區已經在了（不會晚一點才把照片往下推）
+  await page.addInitScript(() => {
+    window.__navLate = false;
+    new MutationObserver(() => {
+      const m = document.querySelector("main");
+      if (m?.querySelector("ul li") && !m.querySelector('nav[aria-label="切換區域"]')) window.__navLate = true;
+    }).observe(document, { childList: true, subtree: true });
+  });
   await open(page, mock, "A1");
+  assert.equal(await page.evaluate(() => window.__navLate), false, "按鈕跟路線同時出來");
   const hist = await page.evaluate(() => history.length);
   assert.deepEqual(await navLabels(page), ["下一區：A2 區"], "第一區沒有上一區");
   await swipe(page, ...RIGHT);

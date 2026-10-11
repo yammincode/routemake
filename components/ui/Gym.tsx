@@ -329,12 +329,18 @@ export type ZoneDir = "prev" | "next";
 export function ZoneNav({ prev, next, onGo, focus }: { prev?: string | null; next?: string | null; onGo: (d: ZoneDir) => void; focus?: ZoneDir | null }) {
   const prevRef = useRef<HTMLButtonElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
+  // 只移一次（按鈕晚一點才出來也等它）；之後上一區／下一區變了（例如斷網）不再搶焦點
   const hasPrev = !!prev;
   const hasNext = !!next;
+  const focused = useRef(false);
   useEffect(() => {
-    if (!focus) return;
+    if (!focus || focused.current) return;
     const [want, other] = focus === "prev" ? [prevRef, nextRef] : [nextRef, prevRef];
-    (want.current ?? other.current)?.focus();
+    const el = want.current ?? other.current;
+    if (el) {
+      el.focus();
+      focused.current = true;
+    }
   }, [focus, hasPrev, hasNext]);
   if (!prev && !next) return null;
   const btn = "inline-flex max-w-full min-h-10 items-center gap-1 rounded-full border border-line bg-surface px-3.5 text-note font-medium text-muted shadow-card";
