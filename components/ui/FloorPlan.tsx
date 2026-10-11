@@ -42,6 +42,7 @@ export function usePlanMode(): [PlanMode, (m: PlanMode) => void] {
   return [mode, set];
 }
 
+// 7 天內換線：平面圖上不畫（換線寫在區域卡片上），只在報讀時說
 const isSoon = (z: PlanZone) => z.resetDays != null && z.resetDays >= 0 && z.resetDays <= 7;
 const ariaOf = (z: PlanZone, count: boolean, admin: boolean) =>
   `${z.name}，${count ? `牆上 ${z.total} 條` : `完成 ${z.done} / ${z.total}`}${!admin && isSoon(z) ? "，" + (z.resetDays === 0 ? "今天換線" : `${z.resetDays} 天後換線`) : ""}`;
@@ -142,7 +143,6 @@ export default function FloorPlan({
             {zones.map((z) => {
               const P = shape.zones[z.code];
               if (!P) return null;
-              const soon = isSoon(z);
               const on = selected === z.code;
               // 名字沒改過寫簡稱（A1、Slab…），店長改過名字就寫新名字（依旁邊的空間縮小，放不下截短）
               const label = planText(shape, z.code, z.name, 40, shown);
@@ -165,9 +165,8 @@ export default function FloorPlan({
                       key={i}
                       points={pt}
                       fill={fill}
-                      stroke={on ? "var(--ink)" : soon ? "var(--warn)" : "var(--surface)"}
-                      strokeWidth={on ? 6 : soon ? 4 : 2}
-                      strokeDasharray={soon ? "10 7" : undefined}
+                      stroke={on ? "var(--ink)" : "var(--surface)"}
+                      strokeWidth={on ? 6 : 2}
                       className="group-hover:[stroke-width:4] group-hover:[stroke:var(--ink)] group-focus:[stroke-width:4] group-focus:[stroke:var(--ink)]"
                     />
                   ))}
@@ -197,9 +196,6 @@ export default function FloorPlan({
             完成度 少<i className="inline-block h-2 w-[22px] rounded bg-linear-to-r from-blush to-accent" />多
           </span>
         )}
-        <span className="inline-flex items-center gap-[5px]">
-          <b className="inline-block h-0 w-3.5 border-t-2 border-dashed border-warn" />7 天內換線
-        </span>
       </div>
     </div>
   );
@@ -293,7 +289,6 @@ function Floor25d({
             );
           const z = byCode.get(it.code)!;
           const on = selected === z.code;
-          const soon = isSoon(z);
           const fill = fillOf(z, on, admin, guest);
           return (
             <g key={z.code} data-block={z.code} aria-hidden onClick={goTo(z.code)} className="group cursor-pointer">
@@ -309,9 +304,8 @@ function Floor25d({
                     data-top
                     points={t}
                     fill={fill}
-                    stroke={on ? "var(--ink)" : soon ? "var(--warn)" : "var(--surface)"}
-                    strokeWidth={(on ? 2 : soon ? 1.5 : 0.7) * u}
-                    strokeDasharray={soon && !on ? `${(3 * u).toFixed(1)} ${(2 * u).toFixed(1)}` : undefined}
+                    stroke={on ? "var(--ink)" : "var(--surface)"}
+                    strokeWidth={(on ? 2 : 0.7) * u}
                     strokeLinejoin="round"
                     className={on ? undefined : "group-hover:[stroke-width:var(--hw)] group-hover:[stroke:var(--ink)]"}
                   />

@@ -3,7 +3,7 @@
 // 真的點下去：每區方塊看得到、點得到自己（不被前面的高方塊擋掉、不被半透明的牆和櫃台擋住），區名點得到自己
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { BASE, createMock, launch, login, phone } from "./helpers.mjs";
+import { BASE, createMock, launch, login, phone, taipeiDay } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -17,7 +17,7 @@ const fill = (mock, gym, counts, def = 0) => {
 };
 // 畫面上實際取樣（elementFromPoint）：
 // tap：每區方塊（頂面＋側面）有幾成點下去會進這一區（點到方塊或自己的區名都算）
-// top：頂面（顏色、虛線框畫在這裡）有幾成看得到（先不管區名，只看有沒有被別的方塊擋住）
+// top：頂面（完成度的顏色畫在這裡）有幾成看得到（先不管區名，只看有沒有被別的方塊擋住）
 // onOther：區名的框有幾成蓋在別區的方塊上；label：區名中間點下去是不是自己
 const hits = (page) =>
   page.evaluate(async () => {
@@ -306,6 +306,33 @@ test("立體平面圖：南港 1F、2F 的方塊高度用同一個比例（2F 18
     }, code);
   const [a1, b1, d1, d2] = [await zh("A1"), await zh("B1"), await zh("D1"), await zh("D2")];
   assert.ok(d2 < a1 && d1 < a1 && a1 < b1, `越多越高、兩層一樣比例（A1 25 條 ${a1.toFixed(1)}px、B1 30 條 ${b1.toFixed(1)}px、D1 20 條 ${d1.toFixed(1)}px、D2 18 條 ${d2.toFixed(1)}px）`);
+  assert.deepEqual(errors, []);
+});
+
+test("7 天內換線的區：平面圖（立體、平面、後台）不畫虛線框、沒有「7 天內換線」說明；報讀照樣唸", async () => {
+  const mock = createMock();
+  fill(mock, "mingde", { A1: 3, A2: 2 });
+  zone(mock, "mingde", "A1").next_reset_on = taipeiDay(2);
+  mock.addUser("boss", "password1", { nickname: "老闆", is_owner: true });
+  const { page, errors } = await phone(browser, mock);
+  const check = async (where) => {
+    assert.equal(await page.locator("main svg [stroke-dasharray]").count(), 0, `${where}：沒有虛線框`);
+    assert.ok(!(await page.textContent("main")).includes("7 天內換線"), `${where}：沒有「7 天內換線」說明`);
+  };
+  await page.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  await check("立體");
+  assert.match(await page.getAttribute('main svg[data-plan="3d"] g[role=button][aria-label^="A1 區"]', "aria-label"), /2 天後換線/, "報讀照樣唸");
+  await page.click('main [aria-label="平面圖畫法"] button:text-is("平面")');
+  await page.waitForTimeout(300);
+  await check("平面");
+  assert.match(await page.getAttribute('main svg g[role=button][aria-label^="A1 區"]', "aria-label"), /2 天後換線/);
+  await login(page, "boss", "password1", "/admin");
+  await page.waitForTimeout(1200);
+  await check("後台平面");
+  await page.click('main [aria-label="平面圖畫法"] button:text-is("立體")');
+  await page.waitForTimeout(300);
+  await check("後台立體");
   assert.deepEqual(errors, []);
 });
 
