@@ -29,24 +29,31 @@ const PAGE_TIMEOUT = 1;
 // 新版真的接手（activate）時才換進 others：抓到的換成新版，抓不到的把舊版刪掉（之後直接等網路，不會拿到舊版）
 // 新版沒裝成功時舊版照常用，手機裡的舊頁面不會被刪（離線照樣打得開）
 const PAGES_NEW = "pages-install";
+// 區域頁（/zone）也一樣：先抓到暫存，接手時才換進 zone-shell
+// 安裝前先清掉暫存（上一次沒裝成功留下的舊頁面不會被當成這次的新版）
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    Promise.allSettled([
-      caches.open(PAGES_NEW).then((cache) => Promise.allSettled(OFFLINE_PAGES.map((p) => cache.add(p)))),
-      caches.open(ZONE_CACHE).then((cache) => cache.add("/zone")),
-    ])
+    caches
+      .delete(PAGES_NEW)
+      .then(() => caches.open(PAGES_NEW))
+      .then((cache) => Promise.allSettled([...OFFLINE_PAGES, "/zone"].map((p) => cache.add(p))))
+      .catch(() => undefined)
   );
 });
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const fresh = await caches.open(PAGES_NEW);
-      const pages = await caches.open("others");
-      for (const p of OFFLINE_PAGES) {
-        const res = await fresh.match(p);
-        if (res) await pages.put(p, res);
-        else await pages.delete(p);
-      }
+      const swap = async (cacheName: string, pages: string[]) => {
+        const cache = await caches.open(cacheName);
+        for (const p of pages) {
+          const res = await fresh.match(p);
+          if (res) await cache.put(p, res);
+          else await cache.delete(p);
+        }
+      };
+      await swap("others", OFFLINE_PAGES);
+      await swap(ZONE_CACHE, ["/zone"]);
       await caches.delete(PAGES_NEW);
     })().catch(() => undefined)
   );

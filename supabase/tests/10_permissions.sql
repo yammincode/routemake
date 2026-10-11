@@ -1453,7 +1453,9 @@ select tests.ok('網址：短網址、中文句號、中間有空白的都算網
 select tests.ok('網址：網址後面直接接中文、中間夾看不見的字元也擋',
   not public.link_free('官方活動evil.com抽年票') and not public.link_free('看evil。com領獎') and not public.link_free('加官方 lin.ee喔')
   and not public.link_free(E'evil\u200B.com') and not public.link_free(E'h\u200Bttps://evil.example'));
+select tests.ok('網址：中文句號的網址、各種短網址也擋', not public.link_free('看 lin。ee/abc') and not public.link_free('rb.gy/abc') and not public.link_free('evil.ru/login'));
 select tests.ok('網址：一般留言不會被當成網址', public.link_free('起步右手很遠。腳點 5.10a 很滑') and public.link_free('V3. 好爬') and public.link_free('第2條比較難')
+  and public.link_free('V3。crimp/sloper 都有') and public.link_free('sit start。heel/toe 都可以') and public.link_free('V7。GG')
   and public.link_free('V5. Top 那顆很滑') and public.link_free('Hard. Be careful') and public.link_free('Nice. Me too')
   and public.link_free('V3. crimp/sloper 都有') and public.link_free('sit start. heel/toe hook') and public.link_free('3.5/5') and public.link_free('evil.community'));
 -- 舊的自我介紹（以前的規則存進來的，例如全形＠）：不影響改暱稱，下次存人物卡時才檢查
@@ -1475,6 +1477,21 @@ select tests.ok('刪除帳號：路線還在，只是沒有建立者', (select c
 -- 放回牆上要照區域現在的規則檢查：ZZ 已經改回抱石，長耐力的舊路線（5.11a、有點）放不回來
 set role authenticated; select tests.login(:ST);
 select tests.throws('放回牆上：區域規則換了，不合規則的舊路線放不回來', $q$update public.routes set archived_at = null where code = 'ZZ-01'$q$, '一般區域|V0');
+reset role; select tests.login(null);
+-- 長耐力的舊路線（有點、5.x）放不回已經改成上攀的區：難度那一關會過，要由路線規則（routes_spray_check）擋下
+insert into public.zones (gym_id, code, name, sort, grade_system) values ('mingde', 'ZE', 'ZE 區', 95, 'endurance');
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y, holds) values ((select id from public.zones where gym_id = 'mingde' and code = 'ZE'), 'ZE-01', 103, '白', 1, 1, '[{"x":1,"y":1},{"x":2,"y":2}]');
+update public.routes set archived_at = now() where code = 'ZE-01';
+update public.zones set grade_system = 'yds' where gym_id = 'mingde' and code = 'ZE';
+set role authenticated; select tests.login(:ST);
+select tests.throws('放回牆上：長耐力路線（有點）放不回已改成上攀的區', $q$update public.routes set archived_at = null where code = 'ZE-01'$q$, '一般區域');
+reset role; select tests.login(null);
+-- 只是下架不檢查難度：就算牆上有難度跟區域不合的舊資料，下架照樣做得到
+alter table public.routes disable trigger routes_grade_system;
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y) values ((select id from public.zones where gym_id = 'mingde' and code = 'ZE'), 'ZE-02', 3, '紅', 1, 1);
+alter table public.routes enable trigger routes_grade_system;
+set role authenticated; select tests.login(:ST);
+select tests.ok('下架：難度跟區域不合的舊路線照樣能下架', tests.rows($q$update public.routes set archived_at = now() where code = 'ZE-02'$q$) = 1);
 reset role; select tests.login(null);
 -- 上攀（YDS）的舊路線放不回已經改成抱石的區
 insert into public.zones (gym_id, code, name, sort, grade_system) values ('mingde', 'ZY', 'ZY 區', 96, 'yds');

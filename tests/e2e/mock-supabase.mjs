@@ -147,12 +147,12 @@ export function createMock() {
   // 同 0038 的 strip_invisible、link_free：網址（全形、「。」、短網址、夾看不見的字元也算；「V5. Top」這種一般句子不算）
   const INVISIBLE = /[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFB\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu;
   const strip = (t) => t.normalize("NFKC").replace(INVISIBLE, "");
-  const hasLink = (t) =>
-    /(https?:|www\.|[a-z0-9-]+\.[a-z]{2,}\/|[a-z0-9-]\.(com|tw|net|org|io|cc|app|co|ly|gl|gle|ee|gg|jp|hk|biz|vip|xyz)(?![a-z0-9]))/i.test(
-      strip(t ?? "")
-        .replace(/\s*(。|｡|\[\.\]|\(\.\)|\[dot\]|\(dot\))\s*/gi, ".")
-        .replace(/\s+\.\s+/g, ".")
-    );
+  const TLDS = "(com|tw|net|org|io|cc|app|co|ly|gl|gle|ee|jp|hk|biz|vip|xyz)(?![a-z0-9])";
+  const hasLink = (t) => {
+    const a = strip(t ?? "").replace(/\s+\.\s+/g, ".");
+    const b = a.replace(/\s*(。|｡|\[\.\]|\(\.\)|\[dot\]|\(dot\))\s*/gi, ".");
+    return new RegExp(`(https?:|www\\.|[a-z0-9-]+\\.[a-z]{2,}/|[a-z0-9-]\\.${TLDS})`, "i").test(a) || new RegExp(`[a-z0-9-]\\.${TLDS}`, "i").test(b);
+  };
   // 同 0038 的 nickname_hidden、nickname_bare、nickname_spaced、profiles_nickname_check
   const HIDDEN =
     /[\u0001-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u206F\u3164\uFEFF\uFFA0\uFFF0-\uFFFB\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]|(^|[A-Za-zÀ-ɏͰ-ϿЀ-ӿ\u3040-\u30FF\u3100-\u312F\u3400-\u4DBF一-鿿\uAC00-\uD7AF\uF900-\uFAFF０-ｚ])[\uFE00-\uFE0F\u200D]|[0-9]([\uFE00-\uFE0E\u200D]|\uFE0F(?!⃣))/u;

@@ -28,14 +28,18 @@ language sql immutable set search_path = '' as $$
   select regexp_replace(p, '[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFB\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E007F\U000E0100-\U000E01EF]', '', 'g')
 $$;
 
--- 網址：先全形轉半形、拿掉看不見的字元，「。」「｡」「[.]」「(.)」「(dot)」當成點，「evil . com」（點的前後都有空白）也當成「evil.com」
--- 網域後面接斜線（lin.ee/xx、forms.gle/xx）一律算網址；常見結尾（.com、.tw…）後面不能再接英數字（evil.com抽獎 算，evil.community 不算）
--- 「V5. Top 那顆很滑」這種一般句子：點後面有空白不會合併，Top、Me、Is 這些常見英文字不當成網址結尾
+-- 網址：先全形轉半形、拿掉看不見的字元，「evil . com」（點的前後都有空白）當成「evil.com」
+-- - 網域後面接斜線（lin.ee/xx、forms.gle/xx、rb.gy/xx）一律算網址
+-- - 常見結尾（.com、.tw…）後面不能再接英數字（evil.com抽獎 算，evil.community 不算）
+-- - 「。」「｡」「[.]」「(.)」「(dot)」當成點之後，只比對常見結尾（evil。com 算；「V3。crimp/sloper」這種中文句號不算）
+-- - 「V5. Top 那顆很滑」這種一般句子：點後面有空白不會合併，Top、Me、Is 這些常見英文字不當成網址結尾
 create or replace function public.link_free(p text) returns boolean
 language sql immutable set search_path = '' as $$
-  select p is null or regexp_replace(regexp_replace(public.strip_invisible(normalize(p, NFKC)),
-      '\s*(。|｡|\[\.\]|\(\.\)|\[dot\]|\(dot\))\s*', '.', 'gi'), '\s+\.\s+', '.', 'g')
-    !~* '(https?:|www\.|[a-z0-9-]+\.[a-z]{2,}/|[a-z0-9-]\.(com|tw|net|org|io|cc|app|co|ly|gl|gle|ee|gg|jp|hk|biz|vip|xyz)(?![a-z0-9]))'
+  with t as (select regexp_replace(public.strip_invisible(normalize(p, NFKC)), '\s+\.\s+', '.', 'g') as a)
+  select p is null or (
+    (select a from t) !~* '(https?:|www\.|[a-z0-9-]+\.[a-z]{2,}/|[a-z0-9-]\.(com|tw|net|org|io|cc|app|co|ly|gl|gle|ee|jp|hk|biz|vip|xyz)(?![a-z0-9]))'
+    and regexp_replace((select a from t), '\s*(。|｡|\[\.\]|\(\.\)|\[dot\]|\(dot\))\s*', '.', 'gi')
+        !~* '[a-z0-9-]\.(com|tw|net|org|io|cc|app|co|ly|gl|gle|ee|jp|hk|biz|vip|xyz)(?![a-z0-9])')
 $$;
 
 create or replace function public.contact_free(p text) returns boolean
@@ -273,7 +277,27 @@ begin
   return new;
 end $$;
 
--- 放回牆上（archived_at 改變）時也檢查難度跟區域的等級制合不合（區域可能已經從上攀改成抱石）
+-- 放回牆上時也檢查難度跟區域的等級制合不合（區域可能已經從上攀改成抱石）
+-- 只是下架（難度、區域沒變）不檢查：就算有不合的舊資料，下架、整區換線照樣做得到
+create or replace function public.routes_grade_system() returns trigger
+language plpgsql set search_path = '' as $$
+declare
+  v_sys text;
+begin
+  if tg_op = 'UPDATE' and new.grade = old.grade and new.zone_id = old.zone_id
+     and not (old.archived_at is not null and new.archived_at is null) then
+    return new;
+  end if;
+  v_sys := (select grade_system from public.zones where id = new.zone_id);
+  if v_sys = 'yds' and new.grade < 100 then
+    raise exception '這個區域是上攀，難度要用 YDS（5.6–5.13d）' using errcode = '22023';
+  elsif v_sys = 'endurance' and new.grade < 100 then
+    raise exception '這個區域是長耐力，難度要用 YDS（5.6–5.13d）' using errcode = '22023';
+  elsif v_sys = 'v' and new.grade >= 100 then
+    raise exception '這個區域是抱石，難度要用 V0–V10' using errcode = '22023';
+  end if;
+  return new;
+end $$;
 drop trigger routes_grade_system on public.routes;
 create trigger routes_grade_system before insert or update of grade, zone_id, archived_at on public.routes
   for each row execute function public.routes_grade_system();
