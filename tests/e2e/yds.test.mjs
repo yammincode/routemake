@@ -22,6 +22,8 @@ test("YDS：上攀區顯示 5.11a、記錄後我的紀錄顯示最高難度；�
   const list = await c.textContent("main ul");
   assert.ok(list.includes("5.11a") && list.includes("5.10a"), "列表顯示 YDS");
   assert.ok(!/V1\d?\b|V10/.test(list), "沒有 V 級");
+  assert.equal(await c.locator('main button:has-text("VB–V10")').count(), 0, "上攀區沒有難度四格（用一個一個難度的小按鈕）");
+  assert.equal(await c.locator("main section h2").count(), 0, "路線不分入門／進階／挑戰");
   await c.click('main button:text-is("5.11a")');
   await c.waitForTimeout(200);
   assert.equal(await c.locator("main ul li").count(), 1, "用 5.11a 篩選");

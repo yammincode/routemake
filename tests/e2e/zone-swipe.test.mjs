@@ -1,5 +1,5 @@
 // 區域頁左右滑動換區：往左滑下一區、往右滑上一區（順序跟館首頁區域卡片一樣，不含 Spray Wall）；標題下面「‹ 上一區　下一區 ›」；
-// 換區不多一層上一頁、返回回館首頁；難度篩選換區時保留；捲動、篩選列、放大的照片、兩指、長按、路線卡片、系統手勢都不會換區；
+// 換區不多一層上一頁、返回回館首頁；難度篩選（四格）換區時保留；捲動、篩選列、放大的照片、兩指、長按、路線卡片、系統手勢都不會換區；
 // 沒網路只能換到存過的區；從連結直接打開也有；減少動態效果不跟著手指動；360 寬長名字不撐破畫面
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -159,9 +159,9 @@ test("這些不會換區：太短、慢慢滑一點點、上下捲、斜斜捲�
   await stays("系統手勢打斷");
 
   // 篩選列：可以左右捲的那排上滑，是在捲篩選列
-  const row = page.locator("main button[aria-pressed]", { hasText: "全部" }).first().locator("xpath=..");
+  const row = page.locator('main button[aria-pressed]:text-is("所有顏色")').locator("xpath=..");
   await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
-  assert.ok(await row.evaluate((el) => el.scrollWidth > el.clientWidth + 1), "難度篩選列真的可以左右捲（測試資料夠多）");
+  assert.ok(await row.evaluate((el) => el.scrollWidth > el.clientWidth + 1), "顏色篩選列真的可以左右捲（測試資料夠多）");
   const rb = await row.boundingBox();
   await swipe(page, [rb.x + 300, rb.y + rb.height / 2], [rb.x + 80, rb.y + rb.height / 2]);
   await stays("在篩選列上滑");
@@ -209,28 +209,32 @@ test("這些不會換區：太短、慢慢滑一點點、上下捲、斜斜捲�
   assert.deepEqual(errors, []);
 });
 
-test("難度篩選換區時保留：新的區有這個難度照樣篩，沒有就顯示全部，再換到有的區又會篩", async () => {
+test("難度篩選換區時保留：新的區有這一段照樣篩，沒有就顯示全部（那一段點不了），再換到有的區又會篩", async () => {
   const mock = createMock();
   seed(mock);
   const { page, errors } = await phone(browser, mock, { hasTouch: true });
   await open(page, mock, "A2");
-  await page.click('main button[aria-pressed][aria-label^="V3"], main button[aria-pressed]:text-is("V3")');
+  const box = (range) => page.locator(`main button[aria-pressed]:has-text("${range}")`);
+  const pressed = async () => {
+    for (const r of ["VB–V10", "VB–V2", "V3–V5", "V6+"]) if ((await box(r).getAttribute("aria-pressed")) === "true") return r;
+  };
+  await box("V3–V5").click();
   await page.waitForTimeout(300);
-  const pressed = () => page.locator("main button[aria-pressed=true]").first().textContent();
-  assert.equal((await pressed()).trim(), "V3");
+  assert.equal(await pressed(), "V3–V5");
   await swipe(page, ...LEFT);
   await settle(page);
   assert.equal(await here(page), "A3 區");
-  assert.equal((await pressed()).trim(), "V3", "A3 有 V3：照樣篩");
-  assert.equal(await page.locator("main ul li").count(), 1, "只列 V3");
+  assert.equal(await pressed(), "V3–V5", "A3 有 V3、V5：照樣篩");
+  assert.equal(await page.locator("main ul li").count(), 2, "只列進階");
   await swipe(page, ...LEFT);
   await settle(page);
   assert.equal(await here(page), "A4 區");
-  assert.equal((await pressed()).trim(), "全部", "A4 沒有 V3：顯示全部");
+  assert.equal(await pressed(), "VB–V10", "A4 沒有進階：顯示全部");
+  assert.equal(await box("V3–V5").isDisabled(), true, "進階點不了");
   assert.equal(await page.locator("main ul li").count(), 2);
   await swipe(page, ...RIGHT);
   await settle(page);
-  assert.equal((await pressed()).trim(), "V3", "回到 A3 又篩 V3");
+  assert.equal(await pressed(), "V3–V5", "回到 A3 又篩進階");
   assert.deepEqual(errors, []);
 });
 

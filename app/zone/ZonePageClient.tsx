@@ -6,6 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import ZoneView, { type ZoneHead } from "@/components/ZoneView";
 import { Empty } from "@/components/ui/Card";
 import { SwipeHint, ZoneNav, type ZoneDir } from "@/components/ui/Gym";
+import { useBand } from "@/lib/band";
 import { readZoneAhead, type ZoneLink } from "@/lib/data";
 import { hasCache, peekCache, useOnline, withCache } from "@/lib/offline";
 import { attachSwipe } from "@/lib/swipe";
@@ -13,7 +14,7 @@ import { useZoneOrder } from "@/lib/zoneOrder";
 
 // 區域頁：左右滑動（或標題下面的「‹ 上一區　下一區 ›」）換到同一館的上一區、下一區，順序跟館首頁的區域卡片一樣
 // - 換區只換網址（replaceState），不重新載入整頁，也不會多一層上一頁：「‹ 明德館」、手機返回都直接回館首頁
-// - 難度篩選記在這裡：換區後新的區有這個難度就照樣篩
+// - 難度篩選記在這裡：換區後新的區有這個難度就照樣篩；V 級的四格跟館首頁同一個（記在手機），YDS、長耐力的小按鈕只記到離開區域頁
 // - 換區後報讀新區的名字；用按鈕換的，焦點停在同一邊的按鈕
 // - 沒網路時只能換到手機裡存過的區
 export default function ZonePageClient() {
@@ -25,6 +26,7 @@ export default function ZonePageClient() {
   // 手機裡存過這一區：一開始就知道是哪一館，上一區／下一區跟畫面一起出來（不會晚一點才把照片往下推）
   const cachedGym = useMemo(() => (id ? (peekCache<{ z?: { gym_id: string } }>(`zone:${id}:${uid ?? "guest"}`)?.z?.gym_id ?? null) : null), [id, uid]);
   const order = useZoneOrder(here?.gymId ?? cachedGym, uid);
+  const [band, setBand] = useBand();
   const [grade, setGrade] = useState<number | null>(null);
   const [moved, setMoved] = useState<{ dir: ZoneDir; byButton: boolean; to: string } | null>(null); // 怎麼換到 to 這一區的
   const [say, setSay] = useState("");
@@ -97,6 +99,8 @@ export default function ZonePageClient() {
       <div key={id} ref={content} className={arrived ? (arrived.dir === "next" ? "animate-zone-next" : "animate-zone-prev") : undefined}>
         <ZoneView
           zoneId={id}
+          band={band}
+          onBand={setBand}
           grade={grade}
           onGrade={setGrade}
           head={here && arrived ? here : null}

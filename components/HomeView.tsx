@@ -24,8 +24,9 @@ import {
   type Route,
   type ZoneProgress,
 } from "@/lib/data";
+import { useBand } from "@/lib/band";
 import { ago, daysUntil, isNew, todayYmd } from "@/lib/date";
-import { GRADE_BANDS, inBand, isYds, type BandId } from "@/lib/design";
+import { GRADE_BANDS, inBand, isYds } from "@/lib/design";
 import { addDays, resetPhase, resetRange, type ResetEvent } from "@/lib/resets";
 import { PLANS } from "@/lib/floorplan";
 import { saveLastGym, SPRAY_WALLS, sprayPath } from "@/lib/gyms";
@@ -33,17 +34,6 @@ import { overlayPending, withCache } from "@/lib/offline";
 
 const PLACEHOLDER =
   "data:image/svg+xml," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'><rect width='4' height='3' fill='#D2D7D2'/></svg>");
-
-// 難度篩選記在這支手機（隱私模式等讀寫失敗就當沒選）
-const BAND_KEY = "routemake:home-band";
-function savedBand(): BandId | null {
-  try {
-    const v = localStorage.getItem(BAND_KEY);
-    return GRADE_BANDS.some((b) => b.id === v) ? (v as BandId) : null;
-  } catch {
-    return null;
-  }
-}
 
 // 館內路線首頁：平面圖、最新路線、快換線提醒、全館難度分布與難度篩選、各區難度色帶卡片（含換線日）
 // 換線日：有換線公告就照公告（10/19–20 換線、換線中），沒有公告就用員工設的下次換線日
@@ -56,7 +46,7 @@ export default function HomeView({ gymId }: { gymId: string }) {
   const [ascents, setAscents] = useState<Record<string, Ascent>>({});
   const [grades, setGrades] = useState<GradeRow[]>([]);
   const [resets, setResets] = useState<ResetEvent[]>([]);
-  const [bandId, setBandId] = useState<BandId | null>(savedBand);
+  const [bandId, pickBand] = useBand(); // 跟區域頁同一個選擇
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<(Route & { zone_name: string }) | null>(null);
   const uid = session?.user.id;
@@ -129,13 +119,6 @@ export default function HomeView({ gymId }: { gymId: string }) {
   // 上攀（YDS）為主的館沒有膠帶顏色，不顯示難度分布和篩選
   const showBands = boulder.length > 0 && boulder.length * 2 >= grades.length;
   const band = showBands ? (GRADE_BANDS.find((b) => b.id === bandId) ?? null) : null;
-  const pickBand = (b: BandId | null) => {
-    setBandId(b);
-    try {
-      if (b) localStorage.setItem(BAND_KEY, b);
-      else localStorage.removeItem(BAND_KEY);
-    } catch {}
-  };
 
   if (error && !zones)
     return (

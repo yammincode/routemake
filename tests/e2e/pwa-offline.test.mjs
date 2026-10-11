@@ -162,8 +162,8 @@ test("隱藏路線點：看不到也點不到、放大時可切換、篩選淡�
   await page.waitForTimeout(300);
   assert.equal(await page.locator("[role=dialog]").count(), 0);
 
-  // 先篩選 V2，V4 的標記變淡
-  await page.click('main button[aria-pressed]:text-is("V2")');
+  // 先篩選入門（VB–V2），V4 的標記變淡
+  await page.click('main button[aria-pressed]:has-text("VB–V2")');
   assert.match(await pin.getAttribute("class"), /opacity-\[0\.16\]/);
   await wall.evaluate((el) => el.scrollIntoView({ block: "center" }));
   const box = await pin.boundingBox();

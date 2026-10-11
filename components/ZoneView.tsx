@@ -5,10 +5,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { useAuth } from "@/components/AuthProvider";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
-import { BackLink, Empty } from "@/components/ui/Card";
+import { BackLink, Empty, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow, GradeChip } from "@/components/ui/Chip";
 import { HowTo } from "@/components/ui/HowTo";
-import { dueText } from "@/components/ui/Gym";
+import { BandHeading, BandPicker, dueText, ZoneGradeCard } from "@/components/ui/Gym";
 import { CommentCount, Points, RouteList, RouteRow, Tags } from "@/components/ui/Route";
 import { NoPhoto, Pin, WallPhoto } from "@/components/ui/Wall";
 import {
@@ -23,7 +23,7 @@ import {
   type ZoneData,
 } from "@/lib/data";
 import { ago, daysUntil, isNew } from "@/lib/date";
-import { gradeColor, gradeLabel, type HoldColor, STYLE_TAGS } from "@/lib/design";
+import { GRADE_BANDS, gradeColor, gradeLabel, inBand, isYds, type BandId, type HoldColor, STYLE_TAGS } from "@/lib/design";
 import { backOr, upTo } from "@/lib/nav";
 import { overlayPending, peekCache, withCache } from "@/lib/offline";
 import { routePoints } from "@/lib/scoring";
@@ -32,11 +32,16 @@ import { useScoring } from "@/lib/useScoring";
 // 區域頁換區時先知道的東西（館、區域名字）：路線還在讀的時候標題、返回、上一區／下一區照樣顯示
 export type ZoneHead = { gymId: string; gymName: string; zoneName: string };
 
-// 區域頁：照片＋起步點標記（可隱藏，只看岩牆）、難度／顏色／風格篩選、路線列表
-// 難度篩選由外面記（左右滑換區時保留：新的區有這個難度就照樣篩，沒有就顯示全部）；nav：標題下面的上一區／下一區
+// 區域頁（版型固定，見 CLAUDE.md）：標題 → 上一區／下一區 → 照片＋起步點標記（可隱藏，只看岩牆）→ 難度色帶卡 → 難度四格 → 說明 →
+// 顏色、風格篩選 → 路線依入門／進階／挑戰分段
+// YDS、長耐力的區（沒有膠帶顏色）：難度篩選用一個一個難度的小按鈕、路線不分段
+// 難度篩選由外面記（左右滑換區時保留：新的區有這個難度就照樣篩，沒有就顯示全部）：
+// band 是四格（跟館首頁同一個，記在手機）、grade 是 YDS／長耐力的小按鈕；nav：標題下面的上一區／下一區
 // onZone：讀到這一區的資料時告訴外面（換區用的館、名字、路線數）
 export default function ZoneView({
   zoneId,
+  band: wantBand,
+  onBand,
   grade: wantGrade,
   onGrade,
   head,
@@ -44,6 +49,8 @@ export default function ZoneView({
   onZone,
 }: {
   zoneId: string;
+  band: BandId | null;
+  onBand: (b: BandId | null) => void;
   grade: number | null;
   onGrade: (g: number | null) => void;
   head?: ZoneHead | null;
@@ -138,10 +145,16 @@ export default function ZoneView({
   const status = (r: Route) => ascents[r.id]?.status ?? null;
   const done = routes.filter((r) => status(r) === "flash" || status(r) === "send").length;
   const grades = [...new Set(routes.map((r) => r.grade))].sort((a, b) => a - b);
+  // V 級的區用四格、路線分段；YDS、長耐力（或 V 級的區裡還留著 YDS 的路線）用小按鈕
+  const banded = zone.grade_system === "v" && !routes.some((r) => isYds(r.grade));
+  const missing = GRADE_BANDS.filter((b) => !routes.some((r) => inBand(r.grade, b))).map((b) => b.id);
   // 記著的難度這一區有才篩，沒有就顯示全部（記著的不變，換到有的區又會篩）
-  const grade = wantGrade != null && grades.includes(wantGrade) ? wantGrade : null;
+  const askedBand = banded ? (GRADE_BANDS.find((b) => b.id === wantBand) ?? null) : null;
+  const band = askedBand && !missing.includes(askedBand.id) ? askedBand : null;
+  const grade = !banded && wantGrade != null && grades.includes(wantGrade) ? wantGrade : null;
   const match = (r: Route) =>
-    (grade == null || r.grade === grade) && (color == null || r.hold_color === color) && (tag == null || r.style_tags.includes(tag));
+    inBand(r.grade, band) && (grade == null || r.grade === grade) && (color == null || r.hold_color === color) && (tag == null || r.style_tags.includes(tag));
+  const shown = routes.filter(match);
   const tapeExample = grades.find((g) => gradeColor(g)) ?? null;
   const colors = [...new Set(routes.map((r) => r.hold_color))];
   const tags = STYLE_TAGS.filter((t) => routes.some((r) => r.style_tags.includes(t)));
@@ -155,6 +168,30 @@ export default function ZoneView({
     const hp = ascents[r.id]?.status === "project" ? ascents[r.id]?.highpoint : null;
     return n ? `${n} 點${hp ? `・你爬到 ${hp}／${n}` : ""}` : null;
   };
+
+  const row = (r: Route) => (
+    <RouteRow
+      key={r.id}
+      color={seqTotal(r) ? undefined : r.hold_color}
+      grade={r.grade}
+      title={
+        <>
+          {seqTotal(r) ? r.code : `${r.hold_color}色 ${r.code}`}
+          {rules && <Points n={routePoints(r.grade, r.style_tags, rules)} />}
+        </>
+      }
+      isNew={isNew(r.created_at)}
+      status={status(r)}
+      meta={
+        <>
+          {progress(r) && <span className="mr-1.5">{progress(r)}</span>}
+          <Tags tags={r.style_tags} /> {ago(r.created_at)}
+          {commentsOn && r.comments_enabled && (counts[r.id] ?? 0) > 0 && <CommentCount n={counts[r.id]} />}
+        </>
+      }
+      onClick={() => setOpen(r)}
+    />
+  );
 
   return (
     <>
@@ -196,6 +233,21 @@ export default function ZoneView({
 
       {routes.length > 0 && (
         <>
+          {banded && (
+            <>
+              <ZoneGradeCard name={zone.name} grades={routes.map((r) => r.grade)} band={band} />
+              <div className="mt-3 mb-2">
+                <BandPicker value={band?.id ?? null} onChange={onBand} missing={missing} />
+              </div>
+              <Tip>
+                {band
+                  ? `只列 ${band.range}，照片上其他難度的路線變淡。`
+                  : askedBand
+                    ? `這區沒有 ${askedBand.range} 的路線，先顯示全部。`
+                    : "色帶是牆上的膠帶顏色，數字是這個難度有幾條。"}
+              </Tip>
+            </>
+          )}
           {/* 第一次來的人看不懂：圓點顏色、膠帶顏色、Flash、分數 */}
           <HowTo
             id="zone"
@@ -213,14 +265,16 @@ export default function ZoneView({
               `難度越高分數越高；有風格標籤的再加分${rules ? `（每種加的不一樣，最多 +${rules.max_style_bonus}%）` : ""}`,
             ]}
           />
-          <ChipRow>
-            <Chip num pressed={grade == null} onClick={() => onGrade(null)}>
-              全部
-            </Chip>
-            {grades.map((g) => (
-              <GradeChip key={g} grade={g} pressed={grade === g} onClick={() => onGrade(g)} />
-            ))}
-          </ChipRow>
+          {!banded && (
+            <ChipRow>
+              <Chip num pressed={grade == null} onClick={() => onGrade(null)}>
+                全部
+              </Chip>
+              {grades.map((g) => (
+                <GradeChip key={g} grade={g} pressed={grade === g} onClick={() => onGrade(g)} />
+              ))}
+            </ChipRow>
+          )}
           {!endurance && (
             <ChipRow>
               <Chip pressed={color == null} onClick={() => setColor(null)}>
@@ -248,34 +302,23 @@ export default function ZoneView({
         </>
       )}
 
-      {routes.filter(match).length ? (
-        <RouteList>
-          {routes.filter(match).map((r) => (
-            <RouteRow
-              key={r.id}
-              color={seqTotal(r) ? undefined : r.hold_color}
-              grade={r.grade}
-              title={
-                <>
-                  {seqTotal(r) ? r.code : `${r.hold_color}色 ${r.code}`}
-                  {rules && <Points n={routePoints(r.grade, r.style_tags, rules)} />}
-                </>
-              }
-              isNew={isNew(r.created_at)}
-              status={status(r)}
-              meta={
-                <>
-                  {progress(r) && <span className="mr-1.5">{progress(r)}</span>}
-                  <Tags tags={r.style_tags} /> {ago(r.created_at)}
-                  {commentsOn && r.comments_enabled && (counts[r.id] ?? 0) > 0 && <CommentCount n={counts[r.id]} />}
-                </>
-              }
-              onClick={() => setOpen(r)}
-            />
-          ))}
-        </RouteList>
-      ) : (
+      {!shown.length ? (
         <Empty>{routes.length ? "沒有符合的路線。" : "這區目前沒有路線。"}</Empty>
+      ) : banded ? (
+        // 依入門／進階／挑戰分段（選了一段就只有那一段）
+        GRADE_BANDS.map((b) => {
+          const rs = shown.filter((r) => inBand(r.grade, b));
+          return (
+            rs.length > 0 && (
+              <section key={b.id}>
+                <BandHeading band={b} count={rs.length} />
+                <RouteList>{rs.map(row)}</RouteList>
+              </section>
+            )
+          );
+        })
+      ) : (
+        <RouteList>{shown.map(row)}</RouteList>
       )}
 
       <RouteSheet

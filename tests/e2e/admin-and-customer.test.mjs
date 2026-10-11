@@ -127,9 +127,9 @@ test("老闆標路線、顧客記錄與留言、整區換線", async () => {
   assert.equal(mock.db.comments.length, 1);
   await c.keyboard.press("Escape");
 
-  await c.click('main button:text-is("V2")');
+  await c.click('main button[aria-pressed]:has-text("VB–V2")');
   await c.waitForTimeout(200);
-  assert.equal(await c.locator("main ul li").count(), 1, "篩選 V2");
+  assert.equal(await c.locator("main ul li").count(), 1, "篩選入門（V2）");
   assert.equal(await c.locator("main button.opacity-\\[0\\.16\\]").count(), 1, "不符合的標記變淡");
 
   // ---- 老闆整區換線 ----

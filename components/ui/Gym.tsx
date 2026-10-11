@@ -100,8 +100,28 @@ export function GradeChart({ grades, band, onBand }: { grades: number[]; band: G
   );
 }
 
+// 難度段的三段小色條（四格篩選、區域頁路線分段的標題）
+// onInk：放在選中（ink 底）的格子裡，黑色、螢光黃膠帶要換成淺色細框才看得到
+export function BandSwatch({ grades, onInk = false }: { grades: readonly number[]; onInk?: boolean }) {
+  return (
+    <span aria-hidden className="flex flex-none gap-[2px]">
+      {grades.map((g) => {
+        const t = tapeLook(g);
+        return (
+          <span
+            key={g}
+            style={t.style}
+            className={`h-3.5 w-[5px] rounded-tape ${t.cls} ${onInk ? "group-aria-pressed:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--bg)_70%,transparent)]" : ""}`}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
 // 難度篩選：全部／入門／進階／挑戰四格一排（360 寬也放得下），每格是三段小色條＋名稱、下面是難度範圍
-export function BandPicker({ value, onChange }: { value: BandId | null; onChange: (b: BandId | null) => void }) {
+// missing：這裡沒有路線的難度段（區域頁：這一區沒有的那段變淡、點不了）
+export function BandPicker({ value, onChange, missing = [] }: { value: BandId | null; onChange: (b: BandId | null) => void; missing?: readonly BandId[] }) {
   const opts = [{ id: null, name: "全部", range: "VB–V10", swatch: [] as number[] }, ...GRADE_BANDS];
   return (
     <div className="grid grid-cols-4 gap-1.5">
@@ -109,31 +129,58 @@ export function BandPicker({ value, onChange }: { value: BandId | null; onChange
         <button
           key={o.id ?? "all"}
           aria-pressed={value === o.id}
+          disabled={o.id != null && missing.includes(o.id)}
           onClick={() => onChange(o.id)}
-          className="group grid justify-items-center gap-1 rounded-field border border-line bg-surface px-0.5 pt-2 pb-1.5 aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-bg"
+          className="group grid justify-items-center gap-1 rounded-field border border-line bg-surface px-0.5 pt-2 pb-1.5 disabled:opacity-40 aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-bg"
         >
           <span className="flex items-center gap-1.5 text-note leading-none font-bold">
-            {o.swatch.length > 0 && (
-              <span className="flex gap-[2px]">
-                {o.swatch.map((g) => {
-                  const t = tapeLook(g);
-                  // 選中時底色是 ink，黑色、螢光黃膠帶要換成淺色細框才看得到
-                  return (
-                    <span
-                      key={g}
-                      style={t.style}
-                      className={`h-3.5 w-[5px] rounded-tape ${t.cls} group-aria-pressed:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--bg)_70%,transparent)]`}
-                    />
-                  );
-                })}
-              </span>
-            )}
+            {o.swatch.length > 0 && <BandSwatch grades={o.swatch} onInk />}
             {o.name}
           </span>
           <span className="font-num text-sub leading-none font-semibold text-muted group-aria-pressed:text-bg">{o.range}</span>
         </button>
       ))}
     </div>
+  );
+}
+
+// 區域頁的難度色帶卡（跟館首頁區域卡片同一條色帶，拉滿整個寬度）：「B2 區難度」、共幾條｜色帶｜難度範圍；選了難度時寫「V3–V5 有 10 條」
+export function ZoneGradeCard({ name, grades, band }: { name: string; grades: number[]; band: GradeBand | null }) {
+  const hit = band ? grades.filter((g) => inBand(g, band)).length : grades.length;
+  const lo = gradeLabel(Math.min(...grades));
+  const hi = gradeLabel(Math.max(...grades));
+  // 「B2 區難度」；英文、數字結尾的名字（比賽牆 1）中間空一格
+  const title = `${name}${/[\u3400-\u9fff]$/.test(name) ? "" : " "}難度`;
+  return (
+    <div className="rounded-card bg-surface px-4 pt-3.5 pb-3 shadow-card">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <b className="min-w-0 truncate text-note">{title}</b>
+        <span className="flex-none text-meta text-muted">
+          共 <b className="font-num text-num-chip leading-none text-ink">{grades.length}</b> 條
+        </span>
+      </div>
+      <GradeStrip grades={grades} band={band} scale={grades.length} />
+      <p className="mt-2 mb-0 text-meta leading-none">
+        {band ? (
+          <span className="font-bold text-accent">
+            {band.range} 有 <span className="font-num text-sub leading-none">{hit}</span> 條
+          </span>
+        ) : (
+          <span className="font-num text-sub leading-none font-semibold text-muted">{lo === hi ? lo : `${lo}–${hi}`}</span>
+        )}
+      </p>
+    </div>
+  );
+}
+
+// 區域頁路線列表的分段標題：三段小色條＋「入門 VB–V2」＋幾條
+export function BandHeading({ band, count }: { band: GradeBand; count: number }) {
+  return (
+    <h2 className="mt-4 mb-2 flex items-center gap-2 text-note font-bold">
+      <BandSwatch grades={band.swatch} />
+      {band.name} {band.range}
+      <span className="font-normal text-muted">{count} 條</span>
+    </h2>
   );
 }
 
@@ -322,8 +369,8 @@ export function SoonBox({ name, onBack, backLabel }: { name: string; onBack: () 
   );
 }
 
-// 區域頁標題下面的「‹ 上一區　下一區 ›」（跟館首頁區域卡片的順序一樣）：左右兩格，第一區沒有左邊、最後一區沒有右邊；
-// 長名字截短（報讀唸完整名字）；跟「‹ 明德館」返回不一樣：圓角膠囊、白底、有框
+// 區域頁標題下面的上一區／下一區（跟館首頁區域卡片的順序一樣）：左右兩個方框，上面小字「‹ 上一區」「下一區 ›」、下面是區名；
+// 第一區沒有左邊、最後一區沒有右邊（空著，另一邊不會變寬）；長名字截短（報讀唸完整名字）
 // focus：用按鈕換區後，新的那一區焦點停在同一邊的按鈕（到了第一區／最後一區沒有那一邊，就停在另一邊）
 export type ZoneDir = "prev" | "next";
 export function ZoneNav({ prev, next, onGo, focus }: { prev?: string | null; next?: string | null; onGo: (d: ZoneDir) => void; focus?: ZoneDir | null }) {
@@ -343,22 +390,22 @@ export function ZoneNav({ prev, next, onGo, focus }: { prev?: string | null; nex
     }
   }, [focus, hasPrev, hasNext]);
   if (!prev && !next) return null;
-  const btn = "inline-flex max-w-full min-h-10 items-center gap-1 rounded-full border border-line bg-surface px-3.5 text-note font-medium text-muted shadow-card";
+  const box = "grid w-full min-w-0 gap-0.5 rounded-field border border-line bg-surface px-3.5 py-2 shadow-card";
   return (
     <nav aria-label="切換區域" className="mb-3.5 grid grid-cols-2 gap-2">
       <div className="min-w-0">
         {prev && (
-          <button ref={prevRef} aria-label={`上一區：${prev}`} onClick={() => onGo("prev")} className={btn}>
-            <span aria-hidden>‹</span>
-            <span className="truncate">{prev}</span>
+          <button ref={prevRef} aria-label={`上一區：${prev}`} onClick={() => onGo("prev")} className={`${box} text-left`}>
+            <span className="text-meta text-muted">‹ 上一區</span>
+            <b className="truncate text-sub">{prev}</b>
           </button>
         )}
       </div>
-      <div className="flex min-w-0 justify-end">
+      <div className="min-w-0">
         {next && (
-          <button ref={nextRef} aria-label={`下一區：${next}`} onClick={() => onGo("next")} className={btn}>
-            <span className="truncate">{next}</span>
-            <span aria-hidden>›</span>
+          <button ref={nextRef} aria-label={`下一區：${next}`} onClick={() => onGo("next")} className={`${box} text-right`}>
+            <span className="text-meta text-muted">下一區 ›</span>
+            <b className="truncate text-sub">{next}</b>
           </button>
         )}
       </div>

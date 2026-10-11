@@ -20,7 +20,7 @@ import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
 import { Check, ColorPicker, GradePicker, Label, OptionGrid, Rating, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
-import { BandPicker, GoalLine, GradeChart, GymRow, NewRouteCard, NewRouteRow, SoonBox, SwipeHint, ZoneCard, ZoneList, ZoneNav } from "@/components/ui/Gym";
+import { BandHeading, BandPicker, GoalLine, GradeChart, GymRow, NewRouteCard, NewRouteRow, SoonBox, SwipeHint, ZoneCard, ZoneGradeCard, ZoneList, ZoneNav } from "@/components/ui/Gym";
 import { GymDot, ResetDateRow, ResetLines, ResetMonth } from "@/components/ui/Resets";
 import { newRoutesText, type ResetEvent } from "@/lib/resets";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
@@ -38,6 +38,7 @@ import {
   GRADES,
   HEIGHT_BANDS,
   HOLD_COLOR_NAMES,
+  inBand,
   type BandId,
   type ClimbMove,
   type HeightBand,
@@ -173,6 +174,7 @@ export default function DesignShowcase() {
   const [month, setMonth] = useState(9);
   const [pickDay, setPickDay] = useState<number | null>(23);
   const [bandId, setBandId] = useState<BandId | null>("mid");
+  const [zoneBandId, setZoneBandId] = useState<BandId | null>(null);
   const [resetDay, setResetDay] = useState("2026-10-12");
   const [videoTag, setVideoTag] = useState<string | null>(null);
   const [trimDemo, setTrimDemo] = useState<[number, number]>([12, 53.5]);
@@ -181,9 +183,10 @@ export default function DesignShowcase() {
   const [pickHeight, setPickHeight] = useState<HeightBand | null>("170s");
   const [pickMove, setPickMove] = useState<ClimbMove | null>("dynamic");
   const band = GRADE_BANDS.find((b) => b.id === bandId) ?? null;
+  const zoneBand = GRADE_BANDS.find((b) => b.id === zoneBandId) ?? null;
 
-  const match = (r: DemoRoute) => (grade == null || r.grade === grade) && (color == null || r.color === color);
-  const grades = [...new Set(routes.map((r) => r.grade))].sort((a, b) => a - b);
+  const match = (r: DemoRoute) => inBand(r.grade, zoneBand) && (color == null || r.color === color);
+  const ydsGrades = [102, 104, 105, 107, 108];
   const colors = [...new Set(routes.map((r) => r.color))];
   const counts: Record<number, number> = { 2: 1, 5: 3, 9: 5, 12: 2, 16: 4, 19: 1, 23: 6, 26: 2, 29: 3 };
 
@@ -355,7 +358,7 @@ export default function DesignShowcase() {
       </Block>
 
       <Block title="區域頁：上一區／下一區（左右滑動換區）">
-        <p className="mt-0 mb-1.5 text-meta text-muted">標題下面一排；往左滑到下一區、往右滑到上一區，滑的時候螢幕邊緣出現要去的那一區</p>
+        <p className="mt-0 mb-1.5 text-meta text-muted">標題下面左右兩個方框（上面小字、下面區名）；往左滑到下一區、往右滑到上一區，滑的時候螢幕邊緣出現要去的那一區</p>
         <ZoneNav prev="A1 區" next="A3 區" onGo={(d) => toast(d === "prev" ? "上一區" : "下一區")} />
         <p className="mt-0 mb-1.5 text-meta text-muted">第一區（只有下一區）、最後一區（只有上一區）、改過的長名字截短</p>
         <ZoneNav next="比賽牆 1" onGo={() => toast("下一區")} />
@@ -367,7 +370,7 @@ export default function DesignShowcase() {
         </div>
       </Block>
 
-      <Block title="區域頁：照片、標記、篩選">
+      <Block title="區域頁：照片、難度色帶、篩選、分段列表（版型固定）">
         <Toggle checked={setter} onChange={setSetter} label="管理模式（點照片新增）" />
         <WallPhoto src={wall.uri} alt="A 區照片" setter={setter} hideable={!setter} onPick={(x, y) => setTemp({ x, y })}>
           {routes.map((r) => (
@@ -385,19 +388,16 @@ export default function DesignShowcase() {
           ))}
           {temp && <TempPin x={temp.x} y={temp.y} />}
         </WallPhoto>
+        <ZoneGradeCard name="A 區" grades={routes.map((r) => r.grade)} band={zoneBand} />
+        <div className="mt-3 mb-2">
+          <BandPicker value={zoneBandId} onChange={setZoneBandId} />
+        </div>
+        <Tip>{zoneBand ? `只列 ${zoneBand.range}，照片上其他難度的路線變淡。` : "色帶是牆上的膠帶顏色，數字是這個難度有幾條。"}</Tip>
         <HowTo
           id="design"
           title="顏色和分數怎麼看"
           lines={["照片上的圓點：顏色是岩點的顏色，數字是難度", "難度標籤（例如 V3）的顏色是牆上膠帶的顏色", "Flash：第一次嘗試就完攀，分數 ×1.2"]}
         />
-        <ChipRow>
-          <Chip num pressed={grade == null} onClick={() => setGrade(null)}>
-            全部
-          </Chip>
-          {grades.map((g) => (
-            <GradeChip key={g} grade={g} pressed={grade === g} onClick={() => setGrade(g)} />
-          ))}
-        </ChipRow>
         <ChipRow>
           <Chip pressed={color == null} onClick={() => setColor(null)}>
             所有顏色
@@ -408,24 +408,45 @@ export default function DesignShowcase() {
             </Chip>
           ))}
         </ChipRow>
-        <RouteList>
-          {routes.filter(match).map((r) => (
-            <RouteRow
-              key={r.code}
-              color={r.color}
-              grade={r.grade}
-              title={`${r.color}色 ${r.code}`}
-              isNew={r.isNew}
-              status={r.status}
-              meta={
-                <>
-                  <Tags tags={r.tags} /> 3 天前{r.comments > 0 && <CommentCount n={r.comments} />}
-                </>
-              }
-              onClick={() => openRoute(r)}
-            />
+        {GRADE_BANDS.map((b) => {
+          const rs = routes.filter(match).filter((r) => inBand(r.grade, b));
+          return (
+            rs.length > 0 && (
+              <section key={b.id}>
+                <BandHeading band={b} count={rs.length} />
+                <RouteList>
+                  {rs.map((r) => (
+                    <RouteRow
+                      key={r.code}
+                      color={r.color}
+                      grade={r.grade}
+                      title={`${r.color}色 ${r.code}`}
+                      isNew={r.isNew}
+                      status={r.status}
+                      meta={
+                        <>
+                          <Tags tags={r.tags} /> 3 天前{r.comments > 0 && <CommentCount n={r.comments} />}
+                        </>
+                      }
+                      onClick={() => openRoute(r)}
+                    />
+                  ))}
+                </RouteList>
+              </section>
+            )
+          );
+        })}
+        <p className="mt-4 mb-1.5 text-meta text-muted">這一區沒有的難度段變淡、點不了（missing，這裡是沒有 V6+ 的區）</p>
+        <BandPicker value={null} onChange={() => {}} missing={["hard"]} />
+        <p className="mt-4 mb-1.5 text-meta text-muted">YDS、長耐力的區：沒有膠帶顏色，難度篩選用一個一個難度的小按鈕，路線不分段</p>
+        <ChipRow>
+          <Chip num pressed={grade == null} onClick={() => setGrade(null)}>
+            全部
+          </Chip>
+          {ydsGrades.map((g) => (
+            <GradeChip key={g} grade={g} pressed={grade === g} onClick={() => setGrade(g)} />
           ))}
-        </RouteList>
+        </ChipRow>
       </Block>
 
       <Block title="路線卡片（底部彈出）">

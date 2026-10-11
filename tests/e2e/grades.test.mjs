@@ -42,17 +42,18 @@ test("難度按鈕用膠帶顏色、新增 VB 路線、顧客用顏色篩選", a
   assert.ok(vb, "新增了 VB 路線");
   assert.ok((await a.locator("main ul li", { hasText: vb.code }).textContent()).includes("5分"), "VB 是 5 分（比 V0 低）");
 
-  // 顧客：難度篩選有顏色，VB 排最前面
+  // 顧客：難度色帶用膠帶顏色、VB 排最前面；VB 算入門
   const C = await phone(browser, mock);
   const c = C.page;
   await c.goto(`${BASE}/zone?id=${zA.id}`, { waitUntil: "networkidle" });
   await c.waitForTimeout(800);
-  const chips = c.locator("main button[aria-pressed]").filter({ hasText: /^V(B|\d+)$/ });
-  assert.deepEqual(await chips.allTextContents(), ["VB", "V3"], "只列牆上有的難度，VB 在前");
-  assert.equal(await bg(chips.nth(1)), "rgb(46, 134, 200)", "篩選的 V3 是藍色");
-  await chips.first().click();
+  const segs = c.locator("main div.rounded-card", { hasText: "A1 區難度" }).locator("span[aria-hidden] > span");
+  assert.equal(await segs.count(), 2, "色帶只有牆上有的難度");
+  assert.equal(await bg(segs.nth(1)), "rgb(46, 134, 200)", "V3 是藍色、排在 VB 後面");
+  assert.deepEqual((await c.locator("main section h2").allTextContents()).map((t) => t.replace(/\s+/g, "")), ["入門VB–V21條", "進階V3–V51條"], "VB 在入門");
+  await c.click('main button[aria-pressed]:has-text("VB–V2")');
   await c.waitForTimeout(300);
-  assert.equal(await c.locator("main ul li").count(), 1, "篩選 VB");
+  assert.equal(await c.locator("main ul li").count(), 1, "篩選入門");
   assert.ok((await c.locator("main ul li").first().textContent()).includes("VB"));
   assert.deepEqual([...A.errors, ...C.errors], []);
   await Promise.all([A.ctx.close(), C.ctx.close()]);
