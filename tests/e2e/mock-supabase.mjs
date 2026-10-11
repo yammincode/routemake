@@ -815,6 +815,10 @@ export function createMock() {
         state.tagFallbacks++;
         return J(route, 400, { code: "42703", message: "column route_videos.climbed_on does not exist" });
       }
+      if ((state.noVideoClimb || state.noVideoTags) && m === "POST" && "climbed_on" in body) {
+        state.tagFallbacks++;
+        return J(route, 400, { code: "PGRST204", message: "Could not find the 'climbed_on' column of 'route_videos' in the schema cache" });
+      }
       if (state.noVideoTags && m === "POST" && ("height_band" in body || "move" in body)) {
         state.tagFallbacks++;
         return J(route, 400, { code: "PGRST204", message: "Could not find the 'height_band' column of 'route_videos' in the schema cache" });
@@ -840,15 +844,15 @@ export function createMock() {
         if (!canShare(uid, body.route_id) || !videoPathOk(uid, body.route_id, body.path))
           return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "route_videos"' });
         // 同 0039 的 route_videos_before_insert：要先有本人上傳的檔案、24 小時 15 筆、說明不能放網址；
-        // 攀爬日、完成狀態從本人在這條的紀錄帶入（App 送的攀爬日不算）
+        // App 有送攀爬日和完成狀態時，攀爬日、完成狀態從本人在這條的紀錄帶入（App 送的日期不採用）；沒送就不記攀爬日
         if (db.vfiles[body.path]?.owner !== uid) return J(route, 400, { code: "22023", message: "找不到上傳的影片檔，請重新分享" });
         const dayAgo = new Date(Date.now() - 86400000).toISOString();
         if (db.videos.filter((v) => v.user_id === uid && v.created_at > dayAgo).length >= 15) return J(route, 400, { code: "54000", message: "每人 24 小時內最多分享 15 支影片，明天再來" });
         if (hasLink(body.caption)) return J(route, 400, { code: "22023", message: "影片說明不能放網址" });
         if ((body.height_band != null && !["lt160", "160s", "170s", "ge180"].includes(body.height_band)) || (body.move != null && !["dynamic", "static"].includes(body.move)))
           return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_height_band_check"' });
-        const mine = db.ascents.find((x) => x.user_id === uid && x.route_id === body.route_id);
-        const fromAscent = state.noVideoClimb || state.noVideoTags ? {} : { climbed_on: mine?.climbed_on ?? null, ...(mine ? { status: mine.status } : {}) };
+        const mine = body.status && body.climbed_on ? db.ascents.find((x) => x.user_id === uid && x.route_id === body.route_id) : null;
+        const fromAscent = { climbed_on: mine?.climbed_on ?? null, ...(mine ? { status: mine.status } : {}) };
         db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, height_band: null, move: null, ...body, climbed_on: null, ...fromAscent, user_id: uid, created_at: now() });
         return empty(route, 201);
       }

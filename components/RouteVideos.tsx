@@ -10,7 +10,7 @@ import { ClosedNotice } from "@/components/ui/Comments";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { compressMinBytes, compressType, compressVideo, type VideoEdit } from "@/lib/video";
-import { checkPickedVideo, deleteVideo, getVideos, uploadVideo, videoMaxSeconds, videoUrl, type Route, type Video } from "@/lib/data";
+import { checkPickedVideo, deleteVideo, getVideos, uploadVideo, videoDaySupported, videoMaxSeconds, videoUrl, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { videoWhen } from "@/lib/date";
 import { CLIMB_MOVES, HEIGHT_BANDS, videoTagText, type ClimbMove, type HeightBand, type Status } from "@/lib/design";
@@ -157,6 +157,7 @@ export default function RouteVideos({
         {
           caption: caption.trim() || null,
           status: myStatus,
+          climbed_on: myStatus ? myDay : null,
           height_band: height,
           move,
         },
@@ -286,7 +287,7 @@ export default function RouteVideos({
                 {myStatus ? (
                   <>
                     你在這條的紀錄會一起顯示：
-                    {myDay && <span>{videoWhen(myDay, myDay)}</span>}
+                    {myDay && videoDaySupported() && <span>{videoWhen(myDay, myDay)}</span>}
                     <VideoResult status={myStatus} />
                   </>
                 ) : (

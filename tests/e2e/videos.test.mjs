@@ -300,6 +300,8 @@ test("影片標籤：一支一列、用身高或動作篩選；分享時選身�
   assert.deepEqual(pressed.map((t) => t.replace(/\s+/g, "")), ["全部4"], "分享完篩選回到全部");
   assert.equal(await rows.count(), 4);
   assert.ok((await rows.first().textContent()).includes("小安的攀爬"), "新的在最上面");
+  assert.equal(mine.climbed_on ?? null, null, "沒有紀錄不記攀爬日");
+  assert.ok((await rows.first().textContent()).includes("今天分享"), "沒有紀錄的寫分享時間");
 
   // 下次分享：身高自動帶入，動作不帶
   await dialog.locator("input[type=file]").setInputFiles(clip("b.mp4"));
@@ -428,7 +430,7 @@ test("影片時間：有紀錄顯示攀爬日（不是上傳日）、沒有紀�
   const md = (d) => `${d.slice(5, 7)}/${d.slice(8, 10)}`;
   const t = (min) => new Date(Date.now() - min * 60000).toISOString();
   mock.addVideo(other, r1, { caption: "以前分享的", created_at: t(3 * 1440) }); // 沒有攀爬日（沒有紀錄或功能上線前分享的）
-  mock.addVideo(other, r1, { caption: "五天前爬的", status: "send", climbed_on: taipeiDay(-5), height_band: "170s", created_at: t(10) }); // 今天才上傳
+  mock.addVideo(other, r1, { caption: "五天前爬的", status: "send", climbed_on: taipeiDay(-5), height_band: "170s", created_at: t(0) }); // 今天才上傳
   mock.addAscent(me, r1, "flash", taipeiDay(-2));
 
   const { page: c, errors } = await phone(browser, mock);
@@ -449,7 +451,7 @@ test("影片時間：有紀錄顯示攀爬日（不是上傳日）、沒有紀�
   assert.ok(!(await row(0)).includes("今天"), "不會寫成今天");
   assert.ok((await row(1)).includes("阿明・3天前分享"), "沒有攀爬日的寫明是分享時間：" + (await row(1)));
 
-  // 分享：表單先說會一起顯示攀爬日和紀錄；App 不送攀爬日，資料庫從本人紀錄帶入
+  // 分享：表單先說會一起顯示攀爬日和紀錄；日期、紀錄由資料庫從本人紀錄帶入
   await dialog.locator("input[type=file]").setInputFiles(clip());
   await c.waitForTimeout(600);
   assert.ok((await dialog.textContent()).replace(/\s+/g, "").includes(`你在這條的紀錄會一起顯示：${md(taipeiDay(-2))}Flash`), "表單顯示會一起顯示的攀爬日和紀錄");
@@ -478,12 +480,22 @@ test("影片時間：有紀錄顯示攀爬日（不是上傳日）、沒有紀�
   assert.equal(await rows.count(), 3, "還沒套用 step34 也看得到影片");
   assert.ok((await row(1)).includes("今天分享") && (await row(1)).includes("身高170–179cm"), "身高標籤照樣顯示：" + (await row(1)));
   assert.ok((await dialog.locator('button[aria-pressed].rounded-full:text-is("170–179cm")').count()) === 1, "身高篩選照樣出現");
+  await dialog.locator("input[type=file]").setInputFiles(clip("c.mp4"));
+  await c.waitForTimeout(600);
+  const form = (await dialog.textContent()).replace(/\s+/g, "");
+  assert.ok(form.includes("你在這條的紀錄會一起顯示：Flash") && !form.includes(md(taipeiDay(-2))), "資料庫還不能記日期時，表單不說會顯示日期");
+  await dialog.locator("input[type=checkbox]").check();
+  await dialog.locator('button:text-is("分享影片")').click();
+  await c.waitForTimeout(1000);
+  assert.equal(mock.db.videos.filter((v) => v.user_id === me).length, 2, "照樣分享");
+  assert.equal(mock.db.videos.at(-1).climbed_on, null);
+  assert.equal(mock.db.videos.at(-1).status, "flash");
   mock.state.noVideoClimb = false;
   await c.keyboard.press("Escape");
   await c.waitForTimeout(300);
 
   // 24 小時最多 15 支：已經分享 15 支時，分享前就擋下
-  for (let i = 0; i < 14; i++) mock.addVideo(me, r1, { created_at: t(60 + i) });
+  for (let i = 0; i < 13; i++) mock.addVideo(me, r1, { created_at: t(60 + i) });
   await c.reload({ waitUntil: "networkidle" });
   await c.waitForTimeout(600);
   await open();
