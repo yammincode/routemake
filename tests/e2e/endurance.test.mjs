@@ -33,7 +33,7 @@ test("長耐力：店長切換規則、照順序點岩點新增（不選顏色�
   const { page: m, errors } = await phone(browser, mock);
   await login(m, "manager1", "password1", "/admin");
   await m.waitForTimeout(1000);
-  await m.locator('main svg [aria-label^="訓練區"]').dispatchEvent("click");
+  await m.locator('main svg g[role=button][aria-label^="訓練區"] text').first().click();
   await m.waitForTimeout(600);
   await m.click('main button:text-is("長耐力")');
   await m.waitForTimeout(800);

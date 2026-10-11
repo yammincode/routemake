@@ -22,7 +22,7 @@ function planEntries() {
   }
   return out;
 }
-// 平面圖上每一區的名字：平面圖在區域裡（g[role=button]），立體圖另外放在 [data-zone]
+// 平面圖上每一區的名字：平面圖在區域裡（g[role=button]），立體圖在區名按鈕 [data-zone]（也是 g[role=button]）
 const NAME_SEL = "main svg g[role=button] text:first-of-type, main svg [data-zone] text:first-of-type";
 const planTexts = (page) => page.locator(NAME_SEL).allTextContents();
 
@@ -84,7 +84,7 @@ test("區域改名：按鍵盤完成鍵或「儲存名稱」都會存、只送�
   assert.ok(labels.includes("B1") && labels.includes("訓練區"), "沒改名的區照舊");
 
   // 「儲存名稱」按鈕：長名字在平面圖上縮小
-  await m.locator('main svg [aria-label^="B1 區"]').dispatchEvent("click");
+  await m.locator('main svg g[role=button][aria-label^="B1 區"] text').first().click();
   await m.waitForTimeout(600);
   await m.fill("#zname", "攀岩洞穴入口");
   await m.click('main button:text-is("儲存名稱")');
@@ -151,7 +151,7 @@ test("中和 A 區：A1、A2 合併後平面圖畫一個 A 區，點了進得去
   await page.waitForTimeout(600);
   const labels = (await planTexts(page)).sort();
   assert.deepEqual(labels, ["A", "AB1", "AB2", "B", "C", "D", "抱石區", "速度牆"].sort(), labels.join("、"));
-  await page.locator('main svg g[role=button][aria-label^="A 區"]').dispatchEvent("click");
+  await page.locator('main svg g[role=button][aria-label^="A 區"] text').first().click();
   await page.waitForURL(/\/zone\?id=/);
   assert.ok((await page.textContent("main h1")).includes("A 區"));
   assert.deepEqual(errors, []);

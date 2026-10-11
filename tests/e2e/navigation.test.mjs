@@ -53,7 +53,7 @@ test("入口頁、選館、返回都照順序", async () => {
   await page.waitForTimeout(600);
   assert.equal(await page.textContent("main h1"), "今天爬哪一區？", "中和館已開放");
   assert.ok(await page.isVisible('svg[role=img][aria-label="中和館平面圖"]'), "中和館有平面圖");
-  await page.locator('svg[role=img] g[role=button][aria-label^="速度牆"]').dispatchEvent("click");
+  await page.locator('svg[role=img] g[role=button][aria-label^="速度牆"] text').first().click();
   await page.waitForURL("**/zone?id=**");
   await page.waitForTimeout(400);
   assert.equal(await page.textContent("main h1"), "速度牆", "點平面圖進到速度牆");

@@ -22,7 +22,7 @@ test("後台點平面圖切換區域；圖上沒有的區域用按鈕", async ()
   assert.equal(await b.inputValue("#zname"), "A1 區", "預設第一區");
   assert.equal(await b.getAttribute('svg[role=img] g[aria-label^="A1 區"]', "aria-pressed"), "true");
   assert.ok((await b.getAttribute('svg[role=img] g[aria-label^="B1 區"]', "aria-label")).includes("牆上 1 條"), "平面圖顯示路線數");
-  await b.locator('svg[role=img] g[role=button][aria-label^="B1 區"]').first().dispatchEvent("click");
+  await b.locator('svg[role=img] g[role=button][aria-label^="B1 區"] text').first().click();
   await b.waitForTimeout(500);
   assert.equal(await b.inputValue("#zname"), "B1 區", "點平面圖切換區域");
   assert.equal(await b.locator("main ul li").count(), 1, "顯示 B1 區的路線");
@@ -72,7 +72,7 @@ test("南港平面圖：1F 左側牆 B1（上）／B2（中）／B3（左下斜�
   assert.equal(await zoneAt("2F", 300, 60), null, "樓梯間不屬於任何區");
 
   // 點 C1 的字樣可以進 C1 區
-  await page.locator('svg[role=img] g[role=button][aria-label^="C1 區"]').first().dispatchEvent("click");
+  await page.locator('svg[role=img] g[role=button][aria-label^="C1 區"] text').first().click();
   await page.waitForURL(/\/zone\?id=/);
   await page.waitForTimeout(600);
   assert.equal(await page.textContent("h1"), "C1 區");
@@ -81,7 +81,7 @@ test("南港平面圖：1F 左側牆 B1（上）／B2（中）／B3（左下斜�
   await page.goBack();
   await page.waitForURL("**/gym/g4");
   await page.waitForTimeout(600);
-  await page.locator('svg[role=img] g[role=button][aria-label^="D2 區"]').first().dispatchEvent("click");
+  await page.locator('svg[role=img] g[role=button][aria-label^="D2 區"] text').first().click();
   await page.waitForURL(/\/zone\?id=/);
   await page.waitForTimeout(600);
   assert.equal(await page.textContent("h1"), "D2 區");

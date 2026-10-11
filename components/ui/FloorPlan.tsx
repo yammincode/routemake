@@ -11,7 +11,9 @@ export type PlanZone = { code: string; name: string; done: number; total: number
 export type PlanMode = "3d" | "flat";
 const MODE_KEY = "routemake-plan-mode";
 const MODE_EVENT = "routemake:plan-mode";
+let memMode: PlanMode | null = null; // 存不進手機時（私密瀏覽、空間滿）先記在這裡，這次開著的期間有效
 const readMode = (): PlanMode => {
+  if (memMode) return memMode;
   try {
     return localStorage.getItem(MODE_KEY) === "flat" ? "flat" : "3d";
   } catch {
@@ -31,7 +33,10 @@ export function usePlanMode(): [PlanMode, (m: PlanMode) => void] {
   const set = (m: PlanMode) => {
     try {
       localStorage.setItem(MODE_KEY, m);
-    } catch {}
+      memMode = null;
+    } catch {
+      memMode = m;
+    }
     window.dispatchEvent(new Event(MODE_EVENT));
   };
   return [mode, set];
@@ -201,6 +206,7 @@ export default function FloorPlan({
 // 立體（2.5D 斜俯視）的一層：幾何在 lib/plan25d.ts；方塊越高＝牆上路線越多
 // 字的大小固定：量卡片實際寬度，換成平面圖座標單位
 // 管理後台選中的區域整塊浮起來、地上留影子，區名變成深色膠囊
+// 按鈕（鍵盤、報讀）是區名：照區域順序排，跟平面一樣；方塊照前後順序畫，點方塊也能進那一區；牆、櫃台、地上的字不擋點擊
 function Floor25d({
   shape,
   title,
@@ -219,13 +225,14 @@ function Floor25d({
   selected?: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(342);
+  // 量到寬度才算（不先用猜的寬度算一次再重算）；藏起來（寬度 0）時用 342 先畫
+  const [width, setWidth] = useState<number | null>(null);
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
     const read = () => {
       const w = Math.round(el.clientWidth);
-      if (w > 0) setWidth((old) => (Math.abs(old - w) > 1 ? w : old)); // 藏起來（寬度 0）時不算
+      setWidth((old) => (w > 0 ? (old == null || Math.abs(old - w) > 1 ? w : old) : (old ?? 342)));
     };
     read();
     const ro = new ResizeObserver(read);
@@ -235,13 +242,18 @@ function Floor25d({
   const count = admin || guest;
   const sig = zones.map((z) => `${z.code}:${z.name}:${z.done}:${z.total}`).join("|");
   const m = useMemo(
-    () => buildPlan25d(shape, zones.map((z) => ({ code: z.code, name: z.name, total: z.total, count: count ? `${z.total} 條` : `${z.done}/${z.total}` })), width),
+    () =>
+      width == null
+        ? null
+        : buildPlan25d(shape, zones.map((z) => ({ code: z.code, name: z.name, total: z.total, count: count ? `${z.total} 條` : `${z.done}/${z.total}` })), width),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sig 已經包含 zones 的內容
     [shape, sig, width, count]
   );
+  if (!m) return <div ref={box} />;
   const byCode = new Map(zones.map((z) => [z.code, z]));
   const { u, H } = m;
   const lift = (on: boolean) => ({ transform: on ? `translate(${(-0.22 * H.lift).toFixed(1)}px,${(-H.lift).toFixed(1)}px)` : "translate(0px,0px)" });
+  const goTo = (code: string) => () => onSelect(code);
   const motion = "transition-transform duration-200 ease-out motion-reduce:transition-none";
   const side = (top: string, f: number) => `color-mix(in srgb,${top} ${Math.round(60 + 22 * f)}%,var(--plan-shade))`;
   const wallFill = "color-mix(in srgb,var(--muted) 15%,transparent)";
@@ -258,7 +270,7 @@ function Floor25d({
         {m.items.map((it, i) => {
           if (it.kind === "wall")
             return (
-              <g key={`w${i}`} fill="none" strokeLinecap="round" aria-hidden>
+              <g key={`w${i}`} fill="none" strokeLinecap="round" aria-hidden pointerEvents="none">
                 <polygon points={it.pts} fill={wallFill} />
                 {it.posts.map((p, j) => (
                   <polyline key={j} points={p} stroke="color-mix(in srgb,var(--muted) 35%,transparent)" strokeWidth={0.8 * u} />
@@ -268,7 +280,7 @@ function Floor25d({
             );
           if (it.kind === "fixture")
             return (
-              <g key={`f${i}`} strokeLinejoin="round" aria-hidden>
+              <g key={`f${i}`} strokeLinejoin="round" aria-hidden pointerEvents="none">
                 {it.faces.map((f, j) => (
                   <polygon key={j} points={f.pts} fill={side("var(--line)", f.f)} stroke={side("var(--line)", f.f)} strokeWidth={0.4 * u} />
                 ))}
@@ -279,18 +291,8 @@ function Floor25d({
           const on = selected === z.code;
           const soon = isSoon(z);
           const fill = fillOf(z, on, admin, guest);
-          const go = () => onSelect(z.code);
           return (
-            <g
-              key={z.code}
-              tabIndex={0}
-              role="button"
-              aria-label={ariaOf(z, count, admin)}
-              aria-pressed={admin ? on : undefined}
-              onClick={go}
-              onKeyDown={pressKeys(go)}
-              className="group cursor-pointer focus:outline-none"
-            >
+            <g key={z.code} data-block={z.code} aria-hidden onClick={goTo(z.code)} className="group cursor-pointer">
               {/* 浮起來時地上的影子 */}
               {on && it.base.map((b, j) => <polygon key={j} points={b} fill="color-mix(in srgb,var(--ink) 22%,transparent)" />)}
               <g className={motion} style={lift(on)}>
@@ -300,13 +302,14 @@ function Floor25d({
                 {it.tops.map((t, j) => (
                   <polygon
                     key={j}
+                    data-top
                     points={t}
                     fill={fill}
                     stroke={on ? "var(--ink)" : soon ? "var(--warn)" : "var(--surface)"}
                     strokeWidth={(on ? 2 : soon ? 1.5 : 0.7) * u}
                     strokeDasharray={soon && !on ? `${(3 * u).toFixed(1)} ${(2 * u).toFixed(1)}` : undefined}
                     strokeLinejoin="round"
-                    className={on ? undefined : "group-hover:[stroke-width:var(--hw)] group-hover:[stroke:var(--ink)] group-focus:[stroke-width:var(--hw)] group-focus:[stroke:var(--ink)]"}
+                    className={on ? undefined : "group-hover:[stroke-width:var(--hw)] group-hover:[stroke:var(--ink)]"}
                   />
                 ))}
               </g>
@@ -328,18 +331,21 @@ function Floor25d({
             strokeLinejoin="round"
             paintOrder="stroke"
             aria-hidden
+            pointerEvents="none"
           >
             {n.t}
           </text>
         ))}
 
-        {/* 區名＋條數：正立的字，白邊；被推開的加指引線；點字也能選這一區 */}
+        {/* 區名＋條數：正立的字，白邊；被推開的加指引線；點字也能選這一區（鍵盤、報讀的按鈕在這裡） */}
         {m.labels.map((l) => {
+          const z = byCode.get(l.code)!;
           const dot = m.dots[l.code];
           const on = selected === l.code;
+          const go = goTo(l.code);
           const dx = dot[0] - l.x;
           const dy = dot[1] - l.y;
-          const far = Math.hypot(dx, dy) > Math.max(l.h * 0.9, 18 * u) && Math.hypot(l.x - l.ax, l.y - l.ay) > l.h * 0.45;
+          const far = Math.hypot(dx, dy) > Math.max(l.h * 0.9, 18 * u) && Math.hypot(l.x - l.ox, l.y - l.oy) > l.h * 0.45;
           const t = Math.min(dx ? l.w / 2 / Math.abs(dx) : Infinity, dy ? l.h / 2 / Math.abs(dy) : Infinity);
           const top = l.y - l.h / 2 + 0.6 * H.pad;
           const nameY = top + 0.86 * H.name;
@@ -347,14 +353,37 @@ function Floor25d({
           const ink = on ? "fill-surface" : "fill-ink";
           const halo = on ? undefined : { stroke: "var(--surface)", strokeWidth: 2.4 * u, strokeLinejoin: "round" as const, paintOrder: "stroke" };
           return (
-            <g key={l.code} data-zone={l.code} aria-hidden onClick={() => onSelect(l.code)} className={`cursor-pointer ${motion}`} style={lift(on)}>
+            <g
+              key={l.code}
+              data-zone={l.code}
+              tabIndex={0}
+              role="button"
+              aria-label={ariaOf(z, count, admin)}
+              aria-pressed={admin ? on : undefined}
+              onClick={go}
+              onKeyDown={pressKeys(go)}
+              className="group cursor-pointer focus:outline-none"
+            >
               {far && t < 1 && (
                 <>
                   <line x1={l.x + dx * t} y1={l.y + dy * t} x2={dot[0]} y2={dot[1]} stroke="var(--muted)" strokeWidth={0.9 * u} />
                   <circle cx={dot[0]} cy={dot[1]} r={1.6 * u} fill="var(--muted)" />
                 </>
               )}
+              {/* 選中：深色膠囊；鍵盤移到這一區：外圍深色框（選中的也看得到） */}
               {on && <rect x={l.x - l.w / 2} y={l.y - l.h / 2} width={l.w} height={l.h} rx={l.h / 2.6} fill="var(--ink)" />}
+              <rect
+                x={l.x - l.w / 2 - 1.2 * u}
+                y={l.y - l.h / 2 - 1.2 * u}
+                width={l.w + 2.4 * u}
+                height={l.h + 2.4 * u}
+                rx={l.h / 2.6 + 1.2 * u}
+                fill="none"
+                stroke="var(--ink)"
+                strokeWidth={1.5 * u}
+                pointerEvents="none"
+                className="opacity-0 group-focus-visible:opacity-100"
+              />
               <text x={l.x} y={nameY} fontSize={H.name} textAnchor="middle" className={`${ink} font-black`} {...halo}>
                 {l.name}
               </text>

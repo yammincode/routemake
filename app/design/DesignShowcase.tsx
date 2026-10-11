@@ -56,6 +56,16 @@ const ZONES = [
   { code: "C", name: "C 區", done: 13, total: 14, resetDays: 33, seed: 103 },
   { code: "D", name: "D 區", done: 0, total: 10, resetDays: 48, seed: 104 },
 ];
+// 平面圖示範：明德館的區域代碼（A1–A4、W1–W4、B1–B3、C1–C3、D1–D2），條數有多有少（立體時高低不同），C1 7 天內換線、A3 剛換線（0 條）
+const PLAN_ZONES = (
+  [
+    ["A1", 6, 12], ["A2", 9, 15], ["A3", 0, 0], ["A4", 3, 8],
+    ["W1", 2, 10], ["W2", 5, 6], ["W3", 1, 4], ["W4", 7, 18],
+    ["B1", 4, 9], ["B2", 11, 14], ["B3", 2, 5],
+    ["C1", 8, 20], ["C2", 1, 3], ["C3", 6, 11],
+    ["D1", 0, 10], ["D2", 5, 7],
+  ] as const
+).map(([code, done, total]) => ({ code, name: `${code} 區`, done, total, resetDays: code === "C1" ? 5 : 30 }));
 // 區域卡片的難度色帶示範（每條路線的難度，由易到難；10 = V10 還沒定膠帶顏色）
 const ZONE_GRADES: Record<string, number[]> = {
   A: [-1, 0, 1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 5, 5, 6, 6, 7, 8, 9, 10],
@@ -265,11 +275,11 @@ export default function DesignShowcase() {
 
       <Block title="平面圖與區域">
         <p className="mt-0 mb-1.5 text-meta text-muted">右上角「立體／平面」：立體（2.5D，預設）方塊越高路線越多；三張一起換，記在這支手機</p>
-        <FloorPlan shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={ZONES} onSelect={(c) => toast(`點了 ${c} 區`)} />
+        <FloorPlan shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={PLAN_ZONES} onSelect={(c) => toast(`點了 ${c} 區`)} />
         <p className="mt-3 mb-1.5 text-meta text-muted">管理後台（admin）：顯示路線數，粗框是目前編輯的區域</p>
-        <FloorPlan admin selected="B" shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={ZONES} onSelect={(c) => toast(`切換到 ${c} 區`)} />
+        <FloorPlan admin selected="B1" shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={PLAN_ZONES} onSelect={(c) => toast(`切換到 ${c} 區`)} />
         <p className="mt-3 mb-1.5 text-meta text-muted">沒登入（guest）：每區寫路線數、統一底色</p>
-        <FloorPlan guest shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={ZONES} onSelect={(c) => toast(`點了 ${c} 區`)} />
+        <FloorPlan guest shape={MINGDE_PLAN} gymName={LIVE_GYM.name} zones={PLAN_ZONES} onSelect={(c) => toast(`點了 ${c} 區`)} />
         <GoalLine label="下一個目標" onClick={() => toast("進 A 區")}>
           A 區 5 天後換線，還有 11 條沒完攀
         </GoalLine>

@@ -159,40 +159,46 @@ test("影片上傳前先壓縮成 720p（顯示進度），檔案變小、記錄
   const zone = mock.db.zones[0];
   const r1 = mock.addRoute(zone, 4, "藍");
 
-  // 做一支 1080p、高畫質的真影片（約 3 秒）
-  const maker = await browser.newPage();
-  const b64 = await maker.evaluate(async () => {
-    const c = document.createElement("canvas");
-    c.width = 1920;
-    c.height = 1080;
-    const g = c.getContext("2d");
-    const rec = new MediaRecorder(c.captureStream(30), { mimeType: "video/webm;codecs=vp8", videoBitsPerSecond: 12_000_000 });
-    const chunks = [];
-    rec.ondataavailable = (e) => chunks.push(e.data);
-    const stop = new Promise((r) => (rec.onstop = r));
-    rec.start(200);
-    const t0 = performance.now();
-    await new Promise((done) => {
-      const tick = () => {
-        const t = performance.now() - t0;
-        for (let i = 0; i < 400; i++) {
-          g.fillStyle = `hsl(${(i * 37 + t / 3) % 360},70%,${30 + ((i * 13) % 50)}%)`;
-          g.fillRect((i * 97 + t) % 1920, (i * 53 + t / 2) % 1080, 60, 60);
-        }
-        if (t < 3000) requestAnimationFrame(tick);
-        else done();
-      };
-      tick();
+  // 做一支 1080p、畫面很雜的真影片（約 3 秒）：小色塊很多，原檔一定比 720p 壓縮後大很多
+  // （以前色塊少，原檔只有 250 KB 左右，跟壓縮後差不多大，電腦忙時就判定「壓了沒變小」）；錄出來還是太小就重錄（最多 3 次）
+  const make = async () => {
+    const maker = await browser.newPage();
+    const b64 = await maker.evaluate(async () => {
+      const c = document.createElement("canvas");
+      c.width = 1920;
+      c.height = 1080;
+      const g = c.getContext("2d");
+      const rec = new MediaRecorder(c.captureStream(30), { mimeType: "video/webm;codecs=vp8", videoBitsPerSecond: 12_000_000 });
+      const chunks = [];
+      rec.ondataavailable = (e) => chunks.push(e.data);
+      const stop = new Promise((r) => (rec.onstop = r));
+      rec.start(200);
+      const t0 = performance.now();
+      await new Promise((done) => {
+        const tick = () => {
+          const t = performance.now() - t0;
+          for (let i = 0; i < 2500; i++) {
+            g.fillStyle = `hsl(${(i * 37 + t / 3) % 360},70%,${30 + ((i * 13) % 50)}%)`;
+            g.fillRect((i * 97 + t) % 1920, (i * 53 + t / 2) % 1080, 24, 24);
+          }
+          if (t < 3000) requestAnimationFrame(tick);
+          else done();
+        };
+        tick();
+      });
+      rec.stop();
+      await stop;
+      const buf = await new Blob(chunks).arrayBuffer();
+      let s = "";
+      new Uint8Array(buf).forEach((x) => (s += String.fromCharCode(x)));
+      return btoa(s);
     });
-    rec.stop();
-    await stop;
-    const buf = await new Blob(chunks).arrayBuffer();
-    let s = "";
-    new Uint8Array(buf).forEach((x) => (s += String.fromCharCode(x)));
-    return btoa(s);
-  });
-  await maker.close();
-  const original = Buffer.from(b64, "base64");
+    await maker.close();
+    return Buffer.from(b64, "base64");
+  };
+  let original = await make();
+  for (let i = 0; i < 2 && original.length < 1_500_000; i++) original = await make();
+  assert.ok(original.length >= 1_500_000, `測試影片夠大（${original.length}）`);
 
   const C = await phone(browser, mock);
   const c = C.page;
