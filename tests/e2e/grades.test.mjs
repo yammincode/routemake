@@ -123,3 +123,43 @@ test("區域頁「顏色和分數怎麼看」：第一次展開，按知道了�
   assert.equal(await note.count(), 1, "點一下可以再看");
   assert.deepEqual(errors, []);
 });
+
+test("資料庫還沒執行 step33：選咖啡存路線，提示要先執行 step33（不是「發生錯誤」）", async () => {
+  const mock = createMock();
+  mock.addUser("boss", "password1", { nickname: "老闆", is_owner: true });
+  const zA = mock.db.zones.find((z) => z.gym_id === "mingde" && z.code === "A1");
+  Object.assign(zA, { photo_path: "mingde/zones/A1-1.jpg", photo_width: 800, photo_height: 600 });
+  mock.db.files[zA.photo_path] = fs.readFileSync(WALL);
+
+  const A = await phone(browser, mock);
+  const a = A.page;
+  // 舊資料庫：岩點顏色的檢查還沒有咖啡（跟 Supabase 回的錯誤一樣）
+  await a.route("**/rest/v1/routes*", (route) => {
+    const req = route.request();
+    if (req.method() === "POST" && (req.postData() ?? "").includes("咖啡"))
+      return route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "23514", details: null, hint: null, message: 'new row for relation "routes" violates check constraint "routes_hold_color_check"' }),
+      });
+    return route.fallback();
+  });
+  await login(a, "boss", "password1", "/admin");
+  await a.waitForTimeout(1000);
+  const wall = a.locator("main div.cursor-crosshair");
+  await wall.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  const bb = await wall.boundingBox();
+  await a.mouse.click(bb.x + bb.width * 0.3, bb.y + bb.height * 0.5);
+  await a.waitForTimeout(400);
+  const dlg = a.locator("[role=dialog]");
+  await dlg.locator('button[aria-label="咖啡"]').click();
+  await dlg.locator('button:text-is("V2")').click();
+  await dlg.locator('button:text-is("新增路線")').click();
+  await a.waitForTimeout(700);
+  const toast = await a.locator("[role=status]").allTextContents();
+  assert.ok(toast.some((t) => t.includes("step33")), `提示要先執行 step33（實際：${toast.join("／")}）`);
+  assert.ok(!toast.some((t) => t.includes("發生錯誤")));
+  assert.equal(mock.db.routes.length, 0, "沒有存進去");
+  assert.equal(await dlg.count(), 1, "表單還開著，可以改別的顏色");
+  assert.deepEqual(A.errors, []);
+});

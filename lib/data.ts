@@ -89,6 +89,8 @@ export function dbError(e: { message?: string; code?: string } | null | undefine
   if (e?.code === "42501" || m.includes("row-level security") || m.includes("permission denied")) return "沒有權限";
   if (e?.code === "23503") return "還有資料在使用，不能刪除";
   if (e?.code === "23505") return "已經有相同的資料";
+  // 新的岩點顏色（咖啡）：資料庫還沒套用 step33 時存不進去
+  if (e?.code === "23514" && m.includes("hold_color")) return "資料庫還沒套用新的岩點顏色（step33），請先請老闆在 Supabase 執行 step33";
   if (m.toLowerCase().includes("fetch")) return "連不上網路，請確認網路後再試";
   return "發生錯誤，請稍後再試";
 }

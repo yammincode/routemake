@@ -49,6 +49,17 @@ test("館首頁難度色帶：沒登入只寫條數；登入後有完成數、�
   await c.waitForTimeout(800);
   const main = async () => (await c.textContent("main")).replace(/\s+/g, "");
   assert.ok((await main()).includes("全館難度分布共9條"), "全館難度分布");
+  // 「所有區域」由上而下（版型固定，見 CLAUDE.md）：全館難度分布 → 四格 → 說明一行 → 區域卡片
+  {
+    const text = await main();
+    const steps = ["所有區域", "全館難度分布", "全部VB–V10", "入門VB–V2", "進階V3–V5", "挑戰V6+", "色帶是牆上的膠帶顏色", "A1區1/4"];
+    let at = -1;
+    for (const [k, step] of steps.entries()) {
+      const i = text.indexOf(step, at + 1);
+      assert.ok(i > at, `「${step}」在「${steps[k - 1] ?? "開頭"}」後面`);
+      at = i;
+    }
+  }
   const card = (name) => c.locator("main button.rounded-card", { hasText: name });
   assert.ok((await card("A1 區").textContent()).includes("1 / 4"), "完成數");
   assert.ok((await card("A1 區").textContent()).includes("V0–V4"), "難度範圍");

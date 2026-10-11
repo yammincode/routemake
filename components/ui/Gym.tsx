@@ -149,12 +149,15 @@ export function ZoneGradeCard({ name, grades, band }: { name: string; grades: nu
   const hit = band ? grades.filter((g) => inBand(g, band)).length : grades.length;
   const lo = gradeLabel(Math.min(...grades));
   const hi = gradeLabel(Math.max(...grades));
-  // 「B2 區難度」；英文、數字結尾的名字（比賽牆 1）中間空一格
-  const title = `${name}${/[\u3400-\u9fff]$/.test(name) ? "" : " "}難度`;
+  // 「B2 區難度」；英文、數字結尾的名字（比賽牆 1）中間空一格；名字太長只截名字，「難度」留著
+  const sep = /[\u3400-\u9fff]$/.test(name) ? "" : " ";
   return (
     <div className="rounded-card bg-surface px-4 pt-3.5 pb-3 shadow-card">
       <div className="mb-2 flex items-baseline justify-between gap-2">
-        <b className="min-w-0 truncate text-note">{title}</b>
+        <b className="flex min-w-0 text-note">
+          <span className="truncate">{name}</span>
+          <span className="flex-none whitespace-pre">{sep}難度</span>
+        </b>
         <span className="flex-none text-meta text-muted">
           共 <b className="font-num text-num-chip leading-none text-ink">{grades.length}</b> 條
         </span>

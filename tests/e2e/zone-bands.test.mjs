@@ -13,7 +13,8 @@ const COLORS = ["藍", "紅", "黃", "綠", "黑", "粉", "白", "紫", "橘", "
 const zoneOf = (mock, code) => mock.db.zones.find((z) => z.gym_id === "mingde" && z.code === code);
 function seed(mock) {
   const grades = { A1: [0, 1], A2: [-1, 0, 1, 2, 3, 3, 4, 5, 6, 7], A3: [3, 5] };
-  for (const [code, gs] of Object.entries(grades)) gs.forEach((g, i) => mock.addRoute(zoneOf(mock, code), g, COLORS[i % COLORS.length]));
+  // A2 的 V3 黑色有風格標籤（風格篩選才會出來）
+  for (const [code, gs] of Object.entries(grades)) gs.forEach((g, i) => mock.addRoute(zoneOf(mock, code), g, COLORS[i % COLORS.length], code === "A2" && i === 4 ? ["指力"] : []));
   const a2 = zoneOf(mock, "A2");
   Object.assign(a2, { photo_path: "mingde/zones/A2-1.jpg", photo_width: 800, photo_height: 600 });
   mock.db.files[a2.photo_path] = fs.readFileSync(WALL);
@@ -38,7 +39,26 @@ test("區域頁版型：方框上一區／下一區、照片、難度色帶卡�
 
   // 由上而下的順序（版型固定）
   const text = flat(await page.innerText("main"));
-  const steps = ["A2區", "上一區", "下一區", "A2區難度", "共10條", "全部VB–V10", "入門VB–V2", "進階V3–V5", "挑戰V6+", "色帶是牆上的膠帶顏色", "所有顏色", "入門VB–V24條", "進階V3–V54條", "挑戰V6+2條"];
+  const steps = [
+    "明德館",
+    "A2區",
+    "10條路線",
+    "上一區",
+    "下一區",
+    "A2區難度",
+    "共10條",
+    "全部VB–V10",
+    "入門VB–V2",
+    "進階V3–V5",
+    "挑戰V6+",
+    "色帶是牆上的膠帶顏色",
+    "顏色和分數怎麼看",
+    "所有顏色",
+    "所有風格",
+    "入門VB–V24條",
+    "進階V3–V54條",
+    "挑戰V6+2條",
+  ];
   let at = -1;
   for (const s of steps) {
     const i = text.indexOf(s, at + 1);
@@ -73,7 +93,15 @@ test("區域頁版型：方框上一區／下一區、照片、難度色帶卡�
   assert.ok(flat(await page.innerText("main")).includes("只列V3–V5，照片上其他難度的路線變淡。"));
   assert.match(await page.locator('main button[aria-label^="V0"]').getAttribute("class"), /opacity-\[0\.16\]/, "V0 的標記變淡");
   assert.doesNotMatch(await page.locator('main button[aria-label^="V4"]').getAttribute("class"), /opacity-\[0\.16\]/, "V4 的標記不變淡");
+  // 色帶：進階的色段保持粗，其他縮成細線
+  const segs = page.locator("main div.rounded-card", { hasText: "A2 區難度" }).locator("span[aria-hidden] > span");
+  const heights = await segs.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+  assert.ok(heights[0] < heights[4] / 2, `VB 那段縮成細線、V3 保持粗（${heights.join("、")}）`);
   // 再加顏色篩選：分段的條數跟著變
+  await page.click('main button[aria-pressed]:text-is("黑")');
+  await page.waitForTimeout(200);
+  assert.deepEqual(await headings(page), ["進階V3–V51條"], "進階裡只有 1 條黑色");
+  assert.equal(await page.locator("main ul li").count(), 1);
   await page.click('main button[aria-pressed]:text-is("綠")');
   await page.waitForTimeout(200);
   assert.deepEqual(await headings(page), [], "進階裡沒有綠色");
@@ -92,6 +120,21 @@ test("區域頁版型：方框上一區／下一區、照片、難度色帶卡�
   assert.ok(flat(await page.locator("main div.rounded-card", { hasText: "A3 區難度" }).textContent()).includes("V3–V5有2條"));
 
   // 360 寬不撐破畫面
+  assert.ok((await page.evaluate(() => document.scrollingElement.scrollWidth)) <= 360);
+  assert.deepEqual(errors, []);
+});
+
+test("區域名字很長（20 字）：色帶卡只截名字，「難度」留著；360 寬不撐破畫面", async () => {
+  const mock = createMock();
+  seed(mock);
+  zoneOf(mock, "A2").name = "非常非常長的區域名字一二三四五六七八九十";
+  const { page, errors } = await phone(browser, mock, { viewport: { width: 360, height: 780 } });
+  await open(page, mock, "A2");
+  const title = page.locator("main div.rounded-card b", { hasText: "難度" });
+  const [name, suffix] = await title.locator("span").evaluateAll((els) => els.map((el) => ({ text: el.textContent, cut: el.scrollWidth > el.clientWidth, w: el.getBoundingClientRect().width })));
+  assert.ok(name.cut, "名字截短");
+  assert.equal(suffix.text, "難度");
+  assert.ok(suffix.w > 20, "「難度」整個看得到");
   assert.ok((await page.evaluate(() => document.scrollingElement.scrollWidth)) <= 360);
   assert.deepEqual(errors, []);
 });

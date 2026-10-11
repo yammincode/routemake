@@ -13,7 +13,7 @@ after(async () => browser?.close());
 const COLORS = ["藍", "紅", "黃", "綠", "黑", "粉", "白", "紫", "橘", "灰"];
 const zoneOf = (mock, code) => mock.db.zones.find((z) => z.gym_id === "mingde" && z.code === code);
 // 明德 A1–A4、D1、D2 放路線；grades：每區有哪些難度
-function seed(mock, grades = { A1: [0, 1], A2: [0, 1, 2, 3, 4, 5, 6, 7], A3: [3, 5], A4: [1, 2], D1: [2], D2: [4] }) {
+function seed(mock, grades = { A1: [0, 1], A2: [0, 1, 2, 3, 4, 5, 6, 7], A3: [1, 3, 5], A4: [1, 2], D1: [2], D2: [4] }) {
   for (const [code, gs] of Object.entries(grades)) gs.forEach((g, i) => mock.addRoute(zoneOf(mock, code), g, COLORS[i % COLORS.length]));
 }
 const LEFT = [[320, 560], [80, 565]]; // 往左滑（下一區）
@@ -225,7 +225,7 @@ test("難度篩選換區時保留：新的區有這一段照樣篩，沒有就�
   await settle(page);
   assert.equal(await here(page), "A3 區");
   assert.equal(await pressed(), "V3–V5", "A3 有 V3、V5：照樣篩");
-  assert.equal(await page.locator("main ul li").count(), 2, "只列進階");
+  assert.equal(await page.locator("main ul li").count(), 2, "只列進階（3 條裡的 2 條）");
   await swipe(page, ...LEFT);
   await settle(page);
   assert.equal(await here(page), "A4 區");

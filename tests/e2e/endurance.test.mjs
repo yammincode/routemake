@@ -104,6 +104,9 @@ test("長耐力：顧客記錄最高爬到第幾點、照比例算分、完攀�
   assert.ok((await row.textContent()).includes("10 點"), "列表寫點數");
   assert.ok(!(await row.textContent()).includes("白色"), "不寫顏色");
   assert.equal(await c.locator('main button:text-is("所有顏色")').count(), 0, "沒有顏色篩選");
+  assert.equal(await c.locator('main button:has-text("VB–V10")').count(), 0, "長耐力沒有難度四格（用一個一個難度的小按鈕）");
+  assert.equal(await c.locator("main section h2").count(), 0, "路線不分入門／進階／挑戰");
+  assert.ok(!(await c.textContent("main")).includes("區難度"), "沒有難度色帶卡");
   await row.click();
   const sheet = c.locator("[role=dialog]");
   await sheet.waitFor();
