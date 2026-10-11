@@ -71,6 +71,7 @@ export default function FloorPlan({
   selected?: string;
 }) {
   const floors = Array.isArray(shape) ? shape : [shape];
+  const together = Array.isArray(shape) && shape.length > 1 ? shape : undefined; // 好幾層的館：方塊高度用同一個比例
   const shown = new Set(zones.map((z) => z.code));
   const [mode, setMode] = usePlanMode();
   return (
@@ -106,6 +107,7 @@ export default function FloorPlan({
           {mode === "3d" ? (
             <Floor25d
               shape={shape}
+              together={together}
               title={`${gymName}${floors.length > 1 && shape.label ? ` ${shape.label} ` : ""}平面圖`}
               zones={zones}
               onSelect={onSelect}
@@ -209,6 +211,7 @@ export default function FloorPlan({
 // 按鈕（鍵盤、報讀）是區名：照區域順序排，跟平面一樣；方塊照前後順序畫，點方塊也能進那一區；牆、櫃台、地上的字不擋點擊
 function Floor25d({
   shape,
+  together,
   title,
   zones,
   onSelect,
@@ -217,6 +220,7 @@ function Floor25d({
   selected,
 }: {
   shape: FloorPlanShape;
+  together?: FloorPlanShape[];
   title: string;
   zones: PlanZone[];
   onSelect: (code: string) => void;
@@ -245,9 +249,9 @@ function Floor25d({
     () =>
       width == null
         ? null
-        : buildPlan25d(shape, zones.map((z) => ({ code: z.code, name: z.name, total: z.total, count: count ? `${z.total} 條` : `${z.done}/${z.total}` })), width),
+        : buildPlan25d(shape, zones.map((z) => ({ code: z.code, name: z.name, total: z.total, count: count ? `${z.total} 條` : `${z.done}/${z.total}` })), width, together),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sig 已經包含 zones 的內容
-    [shape, sig, width, count]
+    [shape, together, sig, width, count]
   );
   if (!m) return <div ref={box} />;
   const byCode = new Map(zones.map((z) => [z.code, z]));

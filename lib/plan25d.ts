@@ -202,10 +202,10 @@ function wallSegs(ps: Pt[], doors: { x: number; y: number }[], gap: number, near
     const out: [Pt, Pt][] = [];
     let s = 0;
     for (const [h0, h1] of holes) {
-      if (h0 > s) out.push([at(s), at(h0)]);
+      if (h0 > s + 1e-6) out.push([at(s), at(h0)]); // 太短（門剛好到角落）的不畫
       s = Math.max(s, h1);
     }
-    if (s < 1) out.push([at(s), e.b]);
+    if (s < 1 - 1e-6) out.push([at(s), e.b]);
     return out;
   });
 }
@@ -311,7 +311,8 @@ function prepare(shape: FloorPlanShape): Prep {
 }
 
 // width：卡片裡平面圖實際的寬度（px），用來把 px 換成平面圖座標單位，字就固定大小
-export function buildPlan25d(shape: FloorPlanShape, zones: Plan25dInput[], width: number) {
+// floors：同一張卡片裡的每一層（南港 1F、2F）：每條多高用同一個比例，兩層的方塊才比得出高低
+export function buildPlan25d(shape: FloorPlanShape, zones: Plan25dInput[], width: number, floors: FloorPlanShape[] = [shape]) {
   const prep = prepare(shape);
   const outline = prep.outline;
   const xs = outline.map((p) => p[0]);
@@ -351,7 +352,15 @@ export function buildPlan25d(shape: FloorPlanShape, zones: Plan25dInput[], width
 
   // 每區的高度：整張圖一起算每條多高
   const drawn = zones.flatMap((z) => (shape.zones[z.code] ? [{ z, code: z.code, P: shape.zones[z.code], polys: prep.zones[z.code].polys, n: Math.max(0, z.total) }] : []));
-  const per = perRoute(prep, drawn, u) * u;
+  const per =
+    Math.min(
+      ...floors.map((f) => {
+        const p = prepare(f);
+        const fx = p.outline.map((q) => q[0]);
+        const fu = (Math.max(...fx) - Math.min(...fx)) / Math.max(120, width - 16);
+        return perRoute(p, zones.flatMap((z) => (f.zones[z.code] ? [{ code: z.code, n: Math.max(0, z.total) }] : [])), fu);
+      })
+    ) * u;
   const heightOf = (n: number) => ZONE_BASE * u + per * n;
 
   const labels: Plan25dLabel[] = [];
@@ -448,7 +457,8 @@ export function buildPlan25d(shape: FloorPlanShape, zones: Plan25dInput[], width
   const ly1 = Math.max(maxY, ...labels.map((l) => l.y + l.h / 2 + H.pad / 2));
 
   // 畫的先後：用整張圖（所有區、最高可能的高度）排一次記起來，這次有畫的照那個順序
-  const key = u.toFixed(2);
+  // 依寬度記（門口留空的長度跟著寬度變，牆的段數可能不同）
+  const key = String(u);
   if (!prep.orders.has(key)) {
     const allZones = Object.entries(prep.zones).map(([code, Z]) => ({ id: `z${code}`, wall: false, shapes: Z.polys.map((ps) => ({ ps, closed: true })), h: (ZONE_BASE + PER_ROUTE.rise) * u + H.lift, key: keyOf(Z.polys.flat()) }));
     const solids = [...walls, ...parts, ...fixtures].map((a) => a.solid).concat(allZones);

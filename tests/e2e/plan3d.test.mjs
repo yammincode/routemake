@@ -125,6 +125,16 @@ test("立體平面圖：預設立體；點方塊、點區名都能進那一區�
     });
     assert.ok(Math.abs(px - 13.5) < 0.6, `${w} 寬：區名字 ${px.toFixed(1)}px`);
   }
+  // 換寬度（平板、電腦視窗拉大拉小）後，牆的段數跟重新整理一樣（記起來的前後順序不會拿錯）
+  const walls = () => page.locator('main svg[data-plan="3d"] > g[fill="none"][pointer-events="none"]').count();
+  for (const w of [470, 560, 471]) {
+    await page.setViewportSize({ width: w, height: 844 });
+    await page.waitForTimeout(400);
+  }
+  const resized = await walls();
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  assert.equal(resized, await walls(), "換寬度後牆一道都沒少");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
 
@@ -277,6 +287,25 @@ test("立體平面圖：後台點方塊切換區域，選中的浮起來、區�
   await page.locator('main svg[data-plan="3d"] g[role=button][aria-label^="D2 區"] text').first().click();
   await page.waitForURL(/\/zone\?id=/);
   assert.ok((await page.textContent("main h1")).includes("D2 區"));
+  assert.deepEqual(errors, []);
+});
+
+test("立體平面圖：南港 1F、2F 的方塊高度用同一個比例（2F 18 條比 1F 25 條矮）", async () => {
+  const mock = createMock();
+  fill(mock, "g4", { A1: 25, A2: 15, A3: 8, B1: 30, B2: 12, B3: 15, C1: 10, C2: 12, C3: 12, D1: 20, D2: 18 });
+  const { page, errors } = await phone(browser, mock);
+  await page.goto(`${BASE}/gym/g4`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  // 方塊的高度（px）：側面的上緣到下緣
+  const zh = (code) =>
+    page.evaluate((c) => {
+      const g = document.querySelector(`main svg[data-plan="3d"] g[data-block="${c}"]`);
+      const face = g.querySelector("polygon:not([data-top])");
+      const [top, , , bottom] = [...face.points];
+      return (bottom.y - top.y) * g.ownerSVGElement.getScreenCTM().d;
+    }, code);
+  const [a1, b1, d1, d2] = [await zh("A1"), await zh("B1"), await zh("D1"), await zh("D2")];
+  assert.ok(d2 < a1 && d1 < a1 && a1 < b1, `越多越高、兩層一樣比例（A1 25 條 ${a1.toFixed(1)}px、B1 30 條 ${b1.toFixed(1)}px、D1 20 條 ${d1.toFixed(1)}px、D2 18 條 ${d2.toFixed(1)}px）`);
   assert.deepEqual(errors, []);
 });
 
