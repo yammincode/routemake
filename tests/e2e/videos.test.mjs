@@ -660,6 +660,23 @@ test("影片剪輯：太長的自動打開剪輯、只上傳選的那段，可�
   await D.page.waitForTimeout(800);
   t = await dd.textContent();
   assert.ok(!t.includes("已選") && t.includes("✂ 剪輯長度"), "5 秒的影片在上攀不用剪");
+  // 資料庫還沒套用 step36（舊的 60 秒上限，這裡用 2 秒模擬）：分享後說清楚原因，檔案刪掉
+  mock.state.noRopeVideo = true;
+  mock.state.oldVideoMax = 2;
+  const files0 = Object.keys(mock.db.vfiles).length;
+  await dd.locator("input[type=checkbox]").check();
+  await dd.locator('button:text-is("分享影片")').click();
+  await D.page.waitForFunction(() => document.body.textContent.includes("這支影片太長"), null, { timeout: 20000 });
+  assert.ok((await D.page.locator("[role=status]").last().textContent()).includes("目前每支最長 60 秒（上攀 3 分鐘還沒開放）"), "說清楚原因");
+  assert.equal(mock.db.videos.length, 2, "沒有存進去");
+  assert.equal(Object.keys(mock.db.vfiles).length, files0, "上傳的檔案刪掉");
+  // 資料庫更新後：同一支照樣分享
+  mock.state.noRopeVideo = false;
+  mock.state.oldVideoMax = 60;
+  await dd.locator('button:text-is("分享影片")').click();
+  await D.page.waitForFunction(() => document.body.textContent.includes("已分享影片"), null, { timeout: 20000 });
+  assert.equal(mock.db.videos.length, 3);
+  assert.ok(mock.db.videos.at(-1).duration_s > 4.5, "記錄原本的長度（上攀不用剪）");
   assert.deepEqual(D.errors, []);
   await D.ctx.close();
   void me;

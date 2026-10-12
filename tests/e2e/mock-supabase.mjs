@@ -65,7 +65,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
+  const state = { offline: false, ascentsFail: null, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noRopeVideo: false, oldVideoMax: 60, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -862,6 +862,9 @@ export function createMock() {
         if (hasLink(body.caption)) return J(route, 400, { code: "22023", message: "影片說明不能放網址" });
         if ((body.height_band != null && !["lt160", "160s", "170s", "ge180"].includes(body.height_band)) || (body.move != null && !["dynamic", "static"].includes(body.move)))
           return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_height_band_check"' });
+        // state.noRopeVideo：資料庫還沒套用 step36，所有影片都是 0011 的 60 秒上限（oldVideoMax 讓測試用短影片模擬）
+        if (state.noRopeVideo && (body.duration_s ?? 0) > state.oldVideoMax)
+          return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_duration_s_check"' });
         // 同 0041：上攀區最長 180 秒、100 MB；其他 60 秒、50 MB
         const vr = db.routes.find((x) => x.id === body.route_id);
         const rope = zoneOf(vr.zone_id).grade_system === "yds";
