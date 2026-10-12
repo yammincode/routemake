@@ -764,7 +764,9 @@ export async function uploadVideo(
   if (up.error) {
     const m = up.error.message ?? "";
     if (m.includes("row-level") || m.includes("Unauthorized")) throw new Error("沒辦法分享：這條路線可能已下架或關閉留言，或今天已分享太多支");
-    if (m.toLowerCase().includes("size") || m.includes("413")) throw new Error(`影片超過 ${mb(lim.bytes)} MB，請先剪短再分享`);
+    // 檔案沒超過 App 的上限卻被擋：Supabase 專案的上傳上限還是 50 MB（上攀 100 MB 要老闆另外改設定，見 supabase/README step36）
+    if (m.toLowerCase().includes("size") || m.includes("413"))
+      throw file.size > lim.bytes ? bigError(file.size, lim) : new Error(`影片 ${Math.ceil(file.size / 1048576)} MB，目前每支最多 ${mb(VIDEO_LIMIT.bytes)} MB，請先剪短再分享`);
     if (m.toLowerCase().includes("mime")) throw new Error("只能分享 MP4、MOV 或 WebM 影片");
     throw new Error("影片上傳失敗，請確認網路後再試");
   }
