@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import ProfileSheet from "@/components/ProfileSheet";
@@ -10,6 +10,7 @@ import { Empty } from "@/components/ui/Card";
 import { CommentItem, CommentList } from "@/components/ui/Comments";
 import { RouteTag } from "@/components/ui/Route";
 import { Tabs } from "@/components/ui/Tabs";
+import { useToast } from "@/components/ui/Toast";
 import { VideoList, VideoRow, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import {
   FEED_SIZE,
@@ -27,6 +28,7 @@ import {
   unlikeRoute,
   videoUrl,
   type Ascent,
+  type DbError,
   type Feed,
   type FeedComment,
   type FeedPlace,
@@ -35,11 +37,13 @@ import {
 import { ago, dayStartIso, videoWhen } from "@/lib/date";
 import { feelTagText, videoTagText } from "@/lib/design";
 import { herePath } from "@/lib/nav";
+import { overlayPending } from "@/lib/offline";
 
 // New~：大家最新分享的影片、留言（所有開放的館）
 // - 今天（台北時間）的隨機排、最多 10 筆；今天不到 10 筆用之前最新的補滿
 // - 今天超過 10 筆時可以「↻ 換一批」：先換成還沒看過的，看完一輪才重複
 // - 影片點了全螢幕播放，「看這條路線 ›」在這頁打開那條路線的卡片（停在影片分頁）；留言「看路線 ›」打開卡片停在留言分頁
+// - 打開卡片前先讀好自己的紀錄（卡片打開時就要帶著，不然再點一次狀態會蓋掉原本的心得和日期）
 type Kind = "video" | "comment";
 type Picked<T> = { feed: Feed<T>; shown: T[]; seen: Set<string> };
 
@@ -58,9 +62,21 @@ function next<T extends { id: string }>(p: Picked<T>): Picked<T> {
   const shown = pickFeed(p.feed, seen);
   return { feed: p.feed, shown, seen: new Set([...seen, ...shown.map((x) => x.id)]) };
 }
+// 關掉路線卡片後重讀：順序不變，換成最新的內容（讚、編輯過的留言），被刪掉的拿掉
+function refresh<T extends { id: string }>(p: Picked<T>, feed: Feed<T>): Picked<T> {
+  const byId = new Map([...feed.today, ...feed.older].map((x) => [x.id, x]));
+  return { ...p, feed, shown: p.shown.flatMap((x) => byId.get(x.id) ?? []) };
+}
+// 改一則（今天、之前、正在顯示的三份都要改，換一批後才不會變回舊的）
+function patch<T extends { id: string }>(p: Picked<T>, id: string, f: (x: T) => T): Picked<T> {
+  const m = (xs: T[]) => xs.map((x) => (x.id === id ? f(x) : x));
+  return { ...p, feed: { today: m(p.feed.today), older: m(p.feed.older) }, shown: m(p.shown) };
+}
+const already = (e: unknown) => (e as DbError).code === "23505"; // 已經按過讚（別的分頁按的）
 
 export default function NewView() {
   const router = useRouter();
+  const toast = useToast();
   const { session } = useAuth();
   const uid = session?.user.id;
   const [kind, setKind] = useState<Kind>("video");
@@ -69,8 +85,10 @@ export default function NewView() {
   const [failed, setFailed] = useState(false);
   const [playing, setPlaying] = useState<number | null>(null);
   const [open, setOpen] = useState<{ place: FeedPlace; tab: RouteTab } | null>(null);
-  const [ascents, setAscents] = useState<Record<string, Ascent>>({});
+  // 自己的紀錄：讀過的路線記起來（null＝沒有紀錄），換帳號就重讀
+  const [mine, setMine] = useState<{ uid: string; map: Record<string, Ascent | null> } | null>(null);
   const [spray, setSpray] = useState<{ routeId: string; author: string | null; likers: string[] } | null>(null);
+  const want = useRef<string | null>(null); // 最後點的路線：連點或讀很慢時，只開最後一條
   const [profile, setProfile] = useState<{ userId: string; gymId: string } | null>(null);
 
   useEffect(() => {
@@ -89,25 +107,56 @@ export default function NewView() {
 
   const toLogin = () => router.push(`/login?next=${encodeURIComponent(herePath())}`);
 
-  // 打開路線卡片：自己的紀錄、Spray Wall 的出題者和讚另外讀
-  const openRoute = (p: FeedPlace, tab: RouteTab) => {
+  // 打開路線卡片：先讀好自己的紀錄才打開；Spray Wall 的出題者和讚另外讀
+  const openRoute = async (p: FeedPlace, tab: RouteTab) => {
+    const id = p.route.id;
+    want.current = id;
+    if (uid && !(mine?.uid === uid && id in mine.map)) {
+      try {
+        const a = overlayPending(await getMyAscents([id]), uid);
+        setMine((m) => ({ uid, map: { ...(m?.uid === uid ? m.map : {}), [id]: a[id] ?? null } }));
+      } catch {
+        if (want.current === id) toast("讀不到你的紀錄，請確認網路後再試");
+        return;
+      }
+      if (want.current !== id) return;
+    }
     setPlaying(null);
     setOpen({ place: p, tab });
-    const id = p.route.id;
-    if (uid && !ascents[id]) void getMyAscents([id]).then((a) => setAscents((m) => ({ ...m, ...a }))).catch(() => {});
     setSpray(null);
-    if (p.zone.kind === "spray") void getSprayExtras(p.route).then((x) => setSpray({ routeId: id, ...x })).catch(() => {});
+    if (p.zone.kind === "spray")
+      void getSprayExtras(p.route)
+        .then((x) => want.current === id && setSpray({ routeId: id, ...x }))
+        .catch(() => {});
+  };
+
+  // 關掉卡片：在卡片裡按的讚、改的留言、刪的影片，回到列表也要是最新的
+  const closeRoute = () => {
+    want.current = null;
+    setOpen(null);
+    void getFeedVideos()
+      .then((v) => setVideos((p) => p && refresh(p, v)))
+      .catch(() => {});
+    void getFeedComments()
+      .then((c) => setComments((p) => p && refresh(p, c)))
+      .catch(() => {});
   };
 
   const toggleRouteLike = async () => {
-    if (!session || !spray) return toLogin();
-    const had = spray.likers.includes(session.user.id);
-    const flip = (on: boolean) => setSpray((s) => s && { ...s, likers: on ? [...s.likers, session.user.id] : s.likers.filter((u) => u !== session.user.id) });
+    if (!session) return toLogin();
+    const s = spray?.routeId === open?.place.route.id ? spray : null;
+    if (!s) return toast("讀取中，請稍後再按");
+    const me = session.user.id;
+    const had = s.likers.includes(me);
+    const flip = (on: boolean) =>
+      setSpray((x) => (x?.routeId === s.routeId ? { ...x, likers: on ? [...x.likers.filter((u) => u !== me), me] : x.likers.filter((u) => u !== me) } : x));
     flip(!had);
     try {
-      await (had ? unlikeRoute(spray.routeId) : likeRoute(spray.routeId));
-    } catch {
+      await (had ? unlikeRoute(s.routeId) : likeRoute(s.routeId));
+    } catch (e) {
+      if (already(e)) return;
       flip(had);
+      toast((e as Error).message);
     }
   };
 
@@ -116,18 +165,14 @@ export default function NewView() {
     const me = session.user.id;
     const had = c.likers.includes(me);
     const flip = (on: boolean) =>
-      setComments(
-        (p) =>
-          p && {
-            ...p,
-            shown: p.shown.map((x) => (x.id === c.id ? { ...x, likers: on ? [...x.likers, me] : x.likers.filter((u) => u !== me) } : x)),
-          }
-      );
+      setComments((p) => p && patch(p, c.id, (x) => ({ ...x, likers: on ? [...x.likers.filter((u) => u !== me), me] : x.likers.filter((u) => u !== me) })));
     flip(!had);
     try {
       await (had ? unlikeComment(c.id) : likeComment(c.id));
-    } catch {
+    } catch (e) {
+      if (already(e)) return;
       flip(had);
+      toast((e as Error).message);
     }
   };
 
@@ -181,6 +226,7 @@ export default function NewView() {
   }
 
   const o = open?.place;
+  const sp = o && spray?.routeId === o.route.id ? spray : null;
   return (
     <>
       <Tabs
@@ -216,7 +262,7 @@ export default function NewView() {
               liked={!!uid && c.likers.includes(uid)}
               onLike={() => void toggleLike(c)}
               place={place(c)}
-              onOpen={() => openRoute(c, "comment")}
+              onOpen={() => void openRoute(c, "comment")}
             />
           ),
           (rows) => <CommentList>{rows}</CommentList>
@@ -228,7 +274,7 @@ export default function NewView() {
         index={playing}
         onIndex={setPlaying}
         actions={(i) => (
-          <button onClick={() => videos && openRoute(videos.shown[i], "video")} className="text-sub font-bold text-white">
+          <button onClick={() => videos && void openRoute(videos.shown[i], "video")} className="text-sub font-bold text-white">
             看這條路線 ›
           </button>
         )}
@@ -239,25 +285,17 @@ export default function NewView() {
         zoneName={o ? `${o.gym.name} ${o.zone.name}` : ""}
         gymId={o?.gym.id ?? ""}
         gymCommentsOn={o?.gym.comments_enabled ?? true}
-        ascent={o ? (ascents[o.route.id] ?? null) : null}
+        ascent={o && uid && mine?.uid === uid ? (mine.map[o.route.id] ?? null) : null}
         initialTab={open?.tab}
-        onClose={() => setOpen(null)}
-        onSaved={(a) =>
-          setAscents((m) => {
-            if (!o) return m;
-            const n = { ...m };
-            if (a) n[o.route.id] = a;
-            else delete n[o.route.id];
-            return n;
-          })
-        }
+        onClose={closeRoute}
+        onSaved={(a) => setMine((m) => (m && o ? { ...m, map: { ...m.map, [o.route.id]: a } } : m))}
         spray={
           o?.zone.kind === "spray"
             ? {
                 photo: photoUrl(o.zone.photo_path),
-                author: spray?.author ?? null,
-                likes: spray?.likers.length ?? 0,
-                liked: !!uid && !!spray?.likers.includes(uid),
+                author: sp?.author ?? null,
+                likes: sp?.likers.length ?? 0,
+                liked: !!uid && !!sp?.likers.includes(uid),
                 onLike: () => void toggleRouteLike(),
               }
             : undefined

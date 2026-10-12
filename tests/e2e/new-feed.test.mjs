@@ -1,7 +1,7 @@
 // New~：大家最新的影片、留言（所有開放的館）：今天的隨機排、不到 10 筆用之前的補滿、超過 10 筆可以換一批；點了在這頁打開路線卡片
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { BASE, createMock, launch, login, phone } from "./helpers.mjs";
+import { BASE, createMock, launch, login, phone, taipeiDay } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -140,5 +140,55 @@ test("New~ 留言：今天的隨機排、不到 10 則用之前補滿；看路�
   const dialog = c.locator("[role=dialog]");
   assert.match(await dialog.locator('[role=tab][aria-selected="true"]').textContent(), /留言/, "停在留言分頁");
   assert.ok((await dialog.textContent()).includes(long), "卡片裡是完整的留言");
+  assert.deepEqual(errors, []);
+});
+
+test("New~ 打開自己記錄過的路線：卡片帶著原本的紀錄，再點狀態不會蓋掉心得；卡片裡按讚，關掉後列表也更新", async () => {
+  const mock = createMock();
+  const me = mock.addUser("climber88", "password1", { nickname: "小安" });
+  const other = mock.addUser("other22", "password1", { nickname: "阿明" });
+  const r = mock.addRoute(mock.db.zones[0], 4, "藍");
+  mock.addAscent(me, r, "project", taipeiDay(-6), { private_note: "卡在最後一手" });
+  mock.addVideo(other, r, { caption: "今天的", created_at: ago(within(1)) });
+  mock.addComment(other, r, "先踩右邊那顆", { created_at: ago(within(2)) });
+  const asc = () => mock.db.ascents.find((a) => a.route_id === r.id);
+
+  const { page: c, errors } = await phone(browser, mock);
+  await login(c, "climber88", "password1", "/new");
+  await c.waitForTimeout(600);
+  await c.locator('[role=tabpanel]:not([hidden]) li button[aria-label^="播放"]').first().click();
+  const viewer = c.locator('[aria-label="影片播放"]');
+  await viewer.waitFor();
+  await viewer.locator('button:has-text("看這條路線")').click();
+  const dialog = c.locator("[role=dialog]");
+  await dialog.waitFor();
+  await c.waitForTimeout(400);
+  const pressed = (label) => dialog.locator('button[aria-pressed="true"]', { hasText: label }).count();
+  assert.equal(await pressed("嘗試中"), 1, "卡片一打開就是原本的「嘗試中」");
+  await dialog.locator('[role=tab]:has-text("紀錄")').click();
+  assert.equal(await dialog.locator("#lnote").inputValue(), "卡在最後一手", "心得在");
+
+  // 改成完攀：心得保留、日期改今天
+  await dialog.locator('button:has-text("完攀")').first().click();
+  await c.waitForTimeout(500);
+  assert.equal(asc().status, "send");
+  assert.equal(asc().private_note, "卡在最後一手", "心得沒被蓋掉");
+  assert.equal(asc().climbed_on, taipeiDay(0));
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(400);
+
+  // 從留言再打開同一條：是剛剛存的「完攀」；在卡片裡按讚，關掉後 New~ 的列表也是按過的
+  await c.click('[role=tab]:has-text("留言")');
+  const panel = c.locator("[role=tabpanel]:not([hidden])");
+  await panel.locator('button:text-is("看路線 ›")').click();
+  await dialog.waitFor();
+  await c.waitForTimeout(400);
+  assert.equal(await pressed("完攀"), 1, "記住剛剛存的");
+  await dialog.locator('button[aria-label^="按讚"]').click();
+  await c.waitForTimeout(400);
+  assert.equal(mock.db.likes.length, 1);
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(600);
+  assert.equal(await panel.locator('button[aria-label="收回讚，目前 1 個讚"]').count(), 1, "列表也更新");
   assert.deepEqual(errors, []);
 });
