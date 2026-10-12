@@ -1,5 +1,5 @@
 // 讀寫 Supabase 的資料函式；權限一律由資料庫 RLS 擋，這裡只負責呼叫
-import type { ClimbMove, GradeSystem, HeightBand, HoldColor, Status } from "@/lib/design";
+import type { ClimbMove, FeelTag, GradeSystem, HeightBand, HoldColor, Status } from "@/lib/design";
 import type { ResetEvent } from "@/lib/resets";
 import { NETWORK_RE } from "@/lib/net";
 import type { ScoringRules } from "@/lib/scoring";
@@ -627,6 +627,7 @@ export type Video = {
   duration_s: number | null;
   height_band?: HeightBand | null; // 資料庫還沒套用 step25 時沒有這兩個欄位
   move?: ClimbMove | null;
+  feel_tags?: FeelTag[]; // 型態（資料庫還沒套用 step35 時沒有）
   climbed_on?: string | null; // 分享者在這條的攀爬日（分享時由資料庫從本人紀錄帶入；沒有紀錄、或資料庫還沒套用 step34 時沒有）
   created_at: string;
   nickname: string;
@@ -634,7 +635,8 @@ export type Video = {
 export type GymVideo = Video & { route_code: string; zone_name: string };
 const VIDEO_BASE = "id,route_id,user_id,path,caption,status,duration_s,created_at,profiles!route_videos_user_id_fkey(nickname)";
 const VIDEO_TAGS = `${VIDEO_BASE},height_band,move`;
-const VIDEO_COLS = `${VIDEO_TAGS},climbed_on`;
+const VIDEO_DAYS = `${VIDEO_TAGS},climbed_on`;
+const VIDEO_COLS = `${VIDEO_DAYS},feel_tags`;
 type VideoRow = Omit<Video, "nickname"> & { profiles: { nickname: string | null } | null };
 const toVideo = ({ profiles, ...v }: VideoRow): Video => ({ ...v, nickname: profiles?.nickname ?? "攀岩者" });
 // 資料庫還沒套用新的欄位：讀的時候 42703、寫的時候 PGRST204，改用原本的欄位
@@ -642,17 +644,22 @@ const noTagCols = (e: { code?: string } | null) => e?.code === "42703" || e?.cod
 // 資料庫有沒有影片攀爬日（step34）：讀影片時知道；沒有時分享表單不說會顯示日期、分享時也不送
 let videoDays = true;
 export const videoDaySupported = () => videoDays;
-// 讀影片：缺攀爬日（還沒套用 step34）先退回身高、動作；再缺（還沒套用 step25）退回原本的欄位
+// 資料庫有沒有影片型態（step35）：沒有時分享不送型態
+let videoFeel = true;
+// 讀影片：缺型態（還沒套用 step35）先退回攀爬日；缺攀爬日（step34）退回身高、動作；再缺（step25）退回原本的欄位
 async function selectVideos<T>(q: (cols: string) => PromiseLike<{ data: T | null; error: { message?: string; code?: string } | null }>): Promise<T> {
-  for (const cols of [VIDEO_COLS, VIDEO_TAGS]) {
+  for (const cols of [VIDEO_COLS, VIDEO_DAYS, VIDEO_TAGS]) {
     const r = await q(cols);
     if (!noTagCols(r.error)) {
-      if (!r.error) videoDays = cols === VIDEO_COLS;
+      if (!r.error) {
+        videoFeel = cols === VIDEO_COLS;
+        videoDays = cols !== VIDEO_TAGS;
+      }
       return must(r);
     }
   }
   const r = await q(VIDEO_BASE);
-  if (!r.error) videoDays = false;
+  if (!r.error) videoFeel = videoDays = false;
   return must(r);
 }
 
@@ -722,7 +729,7 @@ export async function uploadVideo(
   routeId: string,
   file: File,
   // climbed_on：本人紀錄的攀爬日，有送才表示要在影片上顯示（實際的日期、完成狀態由資料庫從本人紀錄帶入）
-  info: { caption: string | null; status: Status | null; climbed_on?: string | null; height_band?: HeightBand | null; move?: ClimbMove | null },
+  info: { caption: string | null; status: Status | null; climbed_on?: string | null; height_band?: HeightBand | null; move?: ClimbMove | null; feel_tags?: FeelTag[] },
   // 長度：剪輯過的直接給（剪下來的長度）；只壓縮的從壓縮前的原檔讀（壓縮後的檔有時讀不到長度）
   len?: { source?: File; duration?: number }
 ) {
@@ -751,12 +758,18 @@ export async function uploadVideo(
     duration_s: duration == null ? null : Math.min(VIDEO_MAX_SECONDS, Math.round(duration * 10) / 10),
     size_bytes: file.size,
   };
-  // 身高、動作有選才送；攀爬日有紀錄才送；資料庫還沒套用 step34 時去掉攀爬日、還沒套用 step25 時再去掉標籤（影片照樣分享出去）
+  // 身高、動作、型態有選才送；攀爬日有紀錄才送；資料庫缺欄位時（還沒套用 step35、34、25）一層一層去掉再存（影片照樣分享出去）
   const tags = { ...(info.height_band ? { height_band: info.height_band } : {}), ...(info.move ? { move: info.move } : {}) };
   const day = info.status && info.climbed_on && videoDays ? { climbed_on: info.climbed_on } : {};
-  let ins = await supabase().from("route_videos").insert({ ...row, ...tags, ...day });
-  if (noTagCols(ins.error) && "climbed_on" in day) ins = await supabase().from("route_videos").insert({ ...row, ...tags });
-  if (noTagCols(ins.error)) ins = await supabase().from("route_videos").insert(row);
+  const feel = info.feel_tags?.length && videoFeel ? { feel_tags: info.feel_tags } : {};
+  const tries = [{ ...row, ...tags, ...day, ...feel }, { ...row, ...tags, ...day }, { ...row, ...tags }, row].filter(
+    (b, i, all) => i === 0 || Object.keys(b).length < Object.keys(all[i - 1]).length
+  );
+  let ins = await supabase().from("route_videos").insert(tries[0]);
+  for (const body of tries.slice(1)) {
+    if (!noTagCols(ins.error)) break;
+    ins = await supabase().from("route_videos").insert(body);
+  }
   if (ins.error) {
     await supabase().storage.from("route-videos").remove([path]);
     throw new Error(dbError(ins.error));

@@ -161,9 +161,10 @@ test("影片上傳前先壓縮成 720p（顯示進度），檔案變小、記錄
 
   // 做一支 1080p、畫面很雜的真影片（約 3 秒）：小色塊很多，原檔一定比 720p 壓縮後大很多
   // （以前色塊少，原檔只有 250 KB 左右，跟壓縮後差不多大，電腦忙時就判定「壓了沒變小」）；錄出來還是太小就重錄（最多 3 次）
-  const make = async () => {
+  // 電腦慢時畫不了幾格、檔案偏小：重錄時錄久一點（3 → 5 → 8 秒）
+  const make = async (ms) => {
     const maker = await browser.newPage();
-    const b64 = await maker.evaluate(async () => {
+    const b64 = await maker.evaluate(async (ms) => {
       const c = document.createElement("canvas");
       c.width = 1920;
       c.height = 1080;
@@ -181,7 +182,7 @@ test("影片上傳前先壓縮成 720p（顯示進度），檔案變小、記錄
             g.fillStyle = `hsl(${(i * 37 + t / 3) % 360},70%,${30 + ((i * 13) % 50)}%)`;
             g.fillRect((i * 97 + t) % 1920, (i * 53 + t / 2) % 1080, 24, 24);
           }
-          if (t < 3000) requestAnimationFrame(tick);
+          if (t < ms) requestAnimationFrame(tick);
           else done();
         };
         tick();
@@ -192,12 +193,12 @@ test("影片上傳前先壓縮成 720p（顯示進度），檔案變小、記錄
       let s = "";
       new Uint8Array(buf).forEach((x) => (s += String.fromCharCode(x)));
       return btoa(s);
-    });
+    }, ms);
     await maker.close();
     return Buffer.from(b64, "base64");
   };
-  let original = await make();
-  for (let i = 0; i < 2 && original.length < 1_500_000; i++) original = await make();
+  let original = await make(3000);
+  for (const ms of [5000, 8000]) if (original.length < 1_500_000) original = await make(ms);
   assert.ok(original.length >= 1_500_000, `測試影片夠大（${original.length}）`);
 
   const C = await phone(browser, mock);
@@ -230,7 +231,7 @@ test("影片上傳前先壓縮成 720p（顯示進度），檔案變小、記錄
   await C.ctx.close();
 });
 
-test("影片標籤：一支一列、用身高或動作篩選；分享時選身高、動作，下次自動帶入身高；資料庫還沒更新時照樣分享", async () => {
+test("影片標籤：一支一列、用身高、動作或型態篩選；分享時選型態（最多 2 個）、身高、動作，下次自動帶入身高；資料庫還沒更新時照樣分享", async () => {
   const mock = createMock();
   const me = mock.addUser("climber88", "password1", { nickname: "小安" });
   const other = mock.addUser("other22", "password1", { nickname: "阿明" });
@@ -275,7 +276,7 @@ test("影片標籤：一支一列、用身高或動作篩選；分享時選身�
   await c.waitForTimeout(200);
   assert.equal(await rows.count(), 3, "再按一次回到全部");
 
-  // 分享：選身高、動作，不寫說明、還沒記錄這條；篩選停在別的身高時，分享完回到全部（剛分享的才看得到）
+  // 分享：選型態、身高、動作，不寫心得、還沒記錄這條；篩選停在別的身高時，分享完回到全部（剛分享的才看得到）
   await chip("170–179cm").click();
   await c.waitForTimeout(200);
   await dialog.locator("input[type=file]").setInputFiles(clip());
@@ -283,7 +284,16 @@ test("影片標籤：一支一列、用身高或動作篩選；分享時選身�
   const form = await dialog.textContent();
   assert.ok(form.includes("沒寫的話，標題會顯示「小安的攀爬」"));
   assert.ok(form.includes("你還沒記錄這條，影片上不會顯示紀錄"));
+  assert.ok(form.includes("你爬起來覺得？（選填，最多 2 個）") && form.includes("心得（選填）"));
+  assert.ok(form.indexOf("你爬起來覺得？") < form.indexOf("心得（選填）"), "型態在心得上面");
   const opt = (t) => dialog.locator(`button[aria-pressed].rounded-field:has-text("${t}")`);
+  // 型態：最多 2 個，選滿後其他的按不了；取消一個又可以選
+  await opt("🤏 手指超痛").click();
+  await opt("🧘 risky").click();
+  assert.ok(await opt("💪 力量感").isDisabled(), "選滿 2 個，其他的按不了");
+  await opt("🧘 risky").click();
+  assert.ok(!(await opt("💪 力量感").isDisabled()), "取消一個又可以選");
+  await opt("🧘 risky").click();
   await opt("160–169").click();
   await opt("一手一手慢慢移動").click();
   await opt("一手一手慢慢移動").click(); // 再按一次取消
@@ -295,6 +305,7 @@ test("影片標籤：一支一列、用身高或動作篩選；分享時選身�
   const mine = mock.db.videos.find((v) => v.user_id === me);
   assert.equal(mine.height_band, "160s");
   assert.equal(mine.move, "dynamic");
+  assert.deepEqual(mine.feel_tags, ["fingers", "risky"]);
   assert.equal(mine.caption, null);
   const pressed = await dialog.locator('button[aria-pressed="true"].rounded-full').allTextContents();
   assert.deepEqual(pressed.map((t) => t.replace(/\s+/g, "")), ["全部4"], "分享完篩選回到全部");
@@ -302,12 +313,21 @@ test("影片標籤：一支一列、用身高或動作篩選；分享時選身�
   assert.ok((await rows.first().textContent()).includes("小安的攀爬"), "新的在最上面");
   assert.equal(mine.climbed_on ?? null, null, "沒有紀錄不記攀爬日");
   assert.ok((await rows.first().textContent()).includes("今天分享"), "沒有紀錄的寫分享時間");
+  assert.ok((await rows.first().textContent()).includes("身高 160–169cm・動態・🤏 手指超痛・🧘 risky"), "列上有型態：" + (await rows.first().textContent()));
+  // 用型態篩選
+  await chip("🤏 手指超痛").click();
+  await c.waitForTimeout(200);
+  assert.equal(await rows.count(), 1, "按型態篩選只剩這支");
+  await chip("🤏 手指超痛").click();
+  await c.waitForTimeout(200);
+  assert.equal(await rows.count(), 4);
 
-  // 下次分享：身高自動帶入，動作不帶
+  // 下次分享：身高自動帶入，動作、型態不帶
   await dialog.locator("input[type=file]").setInputFiles(clip("b.mp4"));
   await c.waitForTimeout(600);
   assert.equal(await opt("160–169").getAttribute("aria-pressed"), "true", "身高記在這支手機");
   assert.equal(await opt("有跳、甩的動作").getAttribute("aria-pressed"), "false");
+  assert.equal(await opt("🤏 手指超痛").getAttribute("aria-pressed"), "false", "型態每支重新選");
   await dialog.locator('button:text-is("取消")').click();
   await c.keyboard.press("Escape");
   await c.waitForTimeout(400);
@@ -331,6 +351,29 @@ test("影片標籤：一支一列、用身高或動作篩選；分享時選身�
   assert.ok(mock.state.tagFallbacks >= 2, "讀和寫都走了舊資料庫的備用方式");
   assert.ok((await c.locator("[role=status]").last().textContent()).includes("已分享影片"));
   mock.state.noVideoTags = false;
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(300);
+
+  // 資料庫還沒套用 step35（沒有型態，身高、動作還在）：選了型態照樣分享，身高、動作照存
+  mock.state.noVideoFeel = true;
+  await c.reload({ waitUntil: "networkidle" });
+  await c.waitForTimeout(600);
+  await open();
+  assert.equal(await rows.count(), 5);
+  assert.equal(await chip("🤏 手指超痛").count(), 0, "讀不到型態就沒有型態篩選");
+  assert.equal(await chip("160–169cm").count(), 1, "身高篩選照樣有");
+  await dialog.locator("input[type=file]").setInputFiles(clip("e.mp4"));
+  await c.waitForTimeout(600);
+  await opt("💪 力量感").click();
+  await opt("有跳、甩的動作").click();
+  await dialog.locator("input[type=checkbox]").check();
+  await dialog.locator('button:text-is("分享影片")').click();
+  await c.waitForTimeout(1000);
+  assert.equal(mock.db.videos.length, 6, "去掉型態照樣分享");
+  assert.equal(mock.db.videos.at(-1).height_band, "160s", "身高照存");
+  assert.equal(mock.db.videos.at(-1).move, "dynamic", "動作照存");
+  assert.deepEqual(mock.db.videos.at(-1).feel_tags, []);
+  mock.state.noVideoFeel = false;
   await c.keyboard.press("Escape");
   await c.waitForTimeout(300);
 

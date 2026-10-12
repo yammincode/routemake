@@ -52,7 +52,7 @@ export const STYLE_TAGS = ["力量", "指力", "技巧", "平衡", "腳法", "�
 
 export const STATUS_LABEL: Record<Status, string> = { flash: "Flash", send: "完攀", project: "嘗試中" };
 
-// 影片標籤（分享時選填，固定選項才能篩選）：身高 4 段、動作 2 種；會公開顯示在影片上
+// 影片標籤（分享時選填，固定選項才能篩選）：身高 4 段、動作 2 種、型態（爬起來的感受）6 個選 2 個；會公開顯示在影片上
 export type HeightBand = "lt160" | "160s" | "170s" | "ge180";
 export const HEIGHT_BANDS: readonly { v: HeightBand; label: string; cm: string }[] = [
   { v: "lt160", label: "160 以下", cm: "160cm 以下" },
@@ -65,9 +65,26 @@ export const CLIMB_MOVES: readonly { v: ClimbMove; label: string; hint: string }
   { v: "dynamic", label: "動態", hint: "有跳、甩的動作" },
   { v: "static", label: "靜態", hint: "一手一手慢慢移動" },
 ];
-// 影片列、播放畫面上的灰字，例如「身高 170–179cm・動態」；都沒選回傳空字串
-export const videoTagText = (h: HeightBand | null | undefined, m: ClimbMove | null | undefined) =>
-  [h && `身高 ${HEIGHT_BANDS.find((x) => x.v === h)?.cm}`, m && CLIMB_MOVES.find((x) => x.v === m)?.label].filter(Boolean).join("・");
+// 型態：分享的人爬起來的感受（route_videos.feel_tags，資料庫只收這 6 個、最多 2 個）
+export type FeelTag = "power" | "fingers" | "hard" | "risky" | "footwork" | "flexible";
+export const FEEL_TAGS: readonly { v: FeelTag; label: string }[] = [
+  { v: "power", label: "💪 力量感" },
+  { v: "fingers", label: "🤏 手指超痛" },
+  { v: "hard", label: "🧠 超難爬" },
+  { v: "risky", label: "🧘 risky" },
+  { v: "footwork", label: "🦶 精準腳法" },
+  { v: "flexible", label: "🤸 柔軟大師" },
+];
+export const FEEL_TAG_MAX = 2;
+// 影片列、播放畫面上的灰字，例如「身高 170–179cm・動態・🤏 手指超痛」；都沒選回傳空字串
+export const videoTagText = (h: HeightBand | null | undefined, m: ClimbMove | null | undefined, f?: readonly FeelTag[] | null) =>
+  [
+    h && `身高 ${HEIGHT_BANDS.find((x) => x.v === h)?.cm}`,
+    m && CLIMB_MOVES.find((x) => x.v === m)?.label,
+    ...FEEL_TAGS.filter((x) => f?.includes(x.v)).map((x) => x.label),
+  ]
+    .filter(Boolean)
+    .join("・");
 
 export const FEEL = [
   { v: 1, e: "😌", t: "輕鬆" },

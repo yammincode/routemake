@@ -538,10 +538,13 @@ insert into storage.objects (bucket_id, name, owner) select 'route-videos', v, :
 
 set role authenticated; select tests.login(:A);
 select tests.lives('影片：顧客可以上傳到自己的資料夾', format('insert into storage.objects (bucket_id, name, metadata) values (''route-videos'', %L, ''{"size":1000}'')', (select v from vp where k = 'a1')));
-select tests.lives('影片：顧客可以新增影片資料（含身高、動作）', format('insert into public.route_videos (route_id, path, caption, status, duration_s, size_bytes, height_band, move, climbed_on) values (%L, %L, ''第一次完攀'', ''send'', 12.5, 1000, ''170s'', ''dynamic'', ''2020-01-01'')', (select v from ids where k = 'v70'), (select v from vp where k = 'a1')));
+select tests.lives('影片：顧客可以新增影片資料（含身高、動作、型態）', format('insert into public.route_videos (route_id, path, caption, status, duration_s, size_bytes, height_band, move, climbed_on, feel_tags) values (%L, %L, ''第一次完攀'', ''send'', 12.5, 1000, ''170s'', ''dynamic'', ''2020-01-01'', array[''fingers'', ''risky'', ''fingers''])', (select v from ids where k = 'v70'), (select v from vp where k = 'a1')));
 select tests.ok('影片：上傳者自動設為本人', (select user_id from public.route_videos where path = (select v from vp where k = 'a1')) = :A);
 select tests.ok('影片：沒有攀爬紀錄時攀爬日是空的（App 自己填的不算）、完成狀態照 App 送的', (select climbed_on is null and status = 'send' from public.route_videos where path = (select v from vp where k = 'a1')));
 select tests.ok('影片：身高、動作有存下來', (select height_band = '170s' and move = 'dynamic' from public.route_videos where path = (select v from vp where k = 'a1')));
+select tests.ok('影片：型態有存下來，重複的自動去掉', (select feel_tags = array['fingers', 'risky'] from public.route_videos where path = (select v from vp where k = 'a1')));
+select tests.throws('影片：型態只能是固定選項', format('insert into public.route_videos (route_id, path, feel_tags) values (%L, %L, array[''strong''])', (select v from ids where k = 'v70'), (select v from vp where k = 'a9')), 'feel_tags');
+select tests.throws('影片：型態最多 2 個', format('insert into public.route_videos (route_id, path, feel_tags) values (%L, %L, array[''power'', ''fingers'', ''hard''])', (select v from ids where k = 'v70'), (select v from vp where k = 'a9')), 'feel_tags');
 select tests.throws('影片：身高只能是固定選項', format('insert into public.route_videos (route_id, path, height_band) values (%L, %L, ''185'')', (select v from ids where k = 'v70'), (select v from vp where k = 'a9')), 'height_band');
 select tests.throws('影片：動作只能是固定選項', format('insert into public.route_videos (route_id, path, move) values (%L, %L, ''jump'')', (select v from ids where k = 'v70'), (select v from vp where k = 'a9')), 'move');
 select tests.throws('影片：不能上傳到別人的資料夾', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/%s/%s/x.mp4'')', (select v from ids where k = 'v70'), :B));
@@ -554,9 +557,10 @@ select tests.throws('影片：超過 60 秒被擋', format('insert into public.r
 select tests.throws('影片：說明超過 40 字被擋', format('insert into public.route_videos (route_id, path, caption) values (%L, %L, repeat(''字'', 41))', (select v from ids where k = 'v70'), (select v from vp where k = 'a9')), 'caption');
 select tests.throws('影片：顧客改不了影片資料', 'update public.route_videos set caption = ''改''');
 select tests.throws('影片：顧客改不了身高、動作', 'update public.route_videos set height_band = ''lt160'', move = ''static''');
+select tests.throws('影片：顧客改不了型態', 'update public.route_videos set feel_tags = array[''power'']');
 select tests.throws('影片：顧客不能直接刪影片資料（要用 delete_video）', 'delete from public.route_videos');
 reset role;
-select tests.ok('影片：改資料真的沒有效果', (select caption = '第一次完攀' and height_band = '170s' and move = 'dynamic' from public.route_videos where path = (select v from vp where k = 'a1')));
+select tests.ok('影片：改資料真的沒有效果', (select caption = '第一次完攀' and height_band = '170s' and move = 'dynamic' and feel_tags = array['fingers', 'risky'] from public.route_videos where path = (select v from vp where k = 'a1')));
 
 select tests.login(null);
 update public.profiles set nickname = null where id = :NN;
@@ -581,6 +585,8 @@ reset role;
 set role anon; select tests.login(null);
 select tests.ok('影片：未登入看得到影片清單', (select count(*) from public.route_videos) = 2);
 select tests.ok('影片：未登入看得到身高、動作', (select count(*) from public.route_videos where height_band = '170s' and move = 'dynamic') = 1);
+select tests.ok('影片：未登入看得到型態', (select count(*) from public.route_videos where feel_tags = array['fingers', 'risky']) = 1);
+select tests.ok('影片：沒選型態是空的', (select count(*) from public.route_videos where feel_tags = '{}') = 1);
 select tests.throws('影片：未登入不能上傳', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from vp where k = 'a2')));
 select tests.throws('影片：未登入不能刪除', format('select public.delete_video(%L)', (select id from public.route_videos limit 1)));
 reset role;

@@ -116,6 +116,40 @@ export function OptionGrid<T extends string>({
   );
 }
 
+// 複選小方格（最多 max 個），例如影片的「你爬起來覺得？」：選滿後其他格變淡、按不了，要先取消一個；照選項順序存
+export function MultiOptionGrid<T extends string>({
+  options,
+  value,
+  onChange,
+  max,
+}: {
+  options: readonly { v: T; label: string }[];
+  value: readonly T[];
+  onChange: (v: T[]) => void;
+  max: number;
+}) {
+  const full = value.length >= max;
+  return (
+    <div className="grid grid-cols-3 gap-1.5">
+      {options.map((o) => {
+        const on = value.includes(o.v);
+        return (
+          <button
+            key={o.v}
+            type="button"
+            aria-pressed={on}
+            disabled={!on && full}
+            onClick={() => onChange(options.filter((x) => (x.v === o.v ? !on : value.includes(x.v))).map((x) => x.v))}
+            className="rounded-field border border-line px-0.5 py-2.5 text-note whitespace-nowrap disabled:opacity-45 aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-surface"
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // 岩點顏色選擇（原型 .swatches）
 export function ColorPicker({ value, onChange }: { value: HoldColor; onChange: (c: HoldColor) => void }) {
   return (

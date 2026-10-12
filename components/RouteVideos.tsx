@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Chip, ChipRow } from "@/components/ui/Chip";
-import { Check, Label, OptionGrid, TextField, Toggle } from "@/components/ui/Form";
+import { Check, Label, MultiOptionGrid, OptionGrid, TextField, Toggle } from "@/components/ui/Form";
 import { ClosedNotice } from "@/components/ui/Comments";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
@@ -13,7 +13,7 @@ import { compressMinBytes, compressType, compressVideo, type VideoEdit } from "@
 import { checkPickedVideo, deleteVideo, getVideos, uploadVideo, videoDaySupported, videoMaxSeconds, videoUrl, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { videoWhen } from "@/lib/date";
-import { CLIMB_MOVES, HEIGHT_BANDS, videoTagText, type ClimbMove, type HeightBand, type Status } from "@/lib/design";
+import { CLIMB_MOVES, FEEL_TAG_MAX, FEEL_TAGS, HEIGHT_BANDS, videoTagText, type ClimbMove, type FeelTag, type HeightBand, type Status } from "@/lib/design";
 
 // 身高記在這支手機、分帳號記，下次分享不用再選；登出時清掉（lib/offline clearCache）；隱私模式等讀寫失敗就當沒記
 const heightKey = (uid: string) => `${HEIGHT_KEY_PREFIX}${uid}`;
@@ -26,11 +26,12 @@ function savedHeight(uid: string): HeightBand | null {
   }
 }
 
-// 篩選：一次一個標籤（身高或動作）；影片要有那個標籤才留下
-type TagFilter = HeightBand | ClimbMove;
-const hasTag = (v: Video, t: TagFilter) => v.height_band === t || v.move === t;
+// 篩選：一次一個標籤（身高、動作或型態）；影片要有那個標籤才留下
+type TagFilter = HeightBand | ClimbMove | FeelTag;
+const hasTag = (v: Video, t: TagFilter) => v.height_band === t || v.move === t || !!v.feel_tags?.includes(t as FeelTag);
 
-// 路線卡片的「影片」分頁：一支一列（說明、誰、紀錄、身高・動作），上面用身高或動作篩選；分享時可選身高、動作（選填）
+// 路線卡片的「影片」分頁：一支一列（心得、誰、紀錄、身高・動作・型態），上面用標籤篩選；
+// 分享時可選型態（你爬起來覺得？最多 2 個）配上心得，再選身高、動作（都選填）
 // onCount 回報影片數（分頁標籤用）
 // 規則跟留言一樣：路線在牆上、留言開放才能分享；路線下架時影片會一起刪除
 export default function RouteVideos({
@@ -63,6 +64,7 @@ export default function RouteVideos({
   const [caption, setCaption] = useState("");
   const [height, setHeight] = useState<HeightBand | null>(null);
   const [move, setMove] = useState<ClimbMove | null>(null);
+  const [feel, setFeel] = useState<FeelTag[]>([]);
   const [filter, setFilter] = useState<TagFilter | null>(null);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -87,10 +89,11 @@ export default function RouteVideos({
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
   const canShare = open && !r.archived_at;
-  // 篩選鈕只出現這條路線影片裡有的標籤：身高由矮到高，再來動態、靜態；選的標籤不見了（例如刪掉影片）就回到全部
+  // 篩選鈕只出現這條路線影片裡有的標籤：身高由矮到高，再來動態、靜態，最後型態；選的標籤不見了（例如刪掉影片）就回到全部
   const tagOpts = [
     ...HEIGHT_BANDS.map((h) => ({ v: h.v as TagFilter, label: h.cm })),
     ...CLIMB_MOVES.map((m) => ({ v: m.v as TagFilter, label: m.label })),
+    ...FEEL_TAGS.map((f) => ({ v: f.v as TagFilter, label: f.label })),
   ].filter((o) => videos?.some((v) => hasTag(v, o.v)));
   const tag = filter && tagOpts.some((o) => o.v === filter) ? filter : null;
   const shown = (videos ?? []).filter((v) => !tag || hasTag(v, tag));
@@ -102,7 +105,7 @@ export default function RouteVideos({
     caption: v.caption,
     status: v.status,
     duration: v.duration_s,
-    tags: videoTagText(v.height_band, v.move),
+    tags: videoTagText(v.height_band, v.move, v.feel_tags),
     onName: onProfile ? () => (setPlaying(null), onProfile(v.user_id)) : undefined,
   }));
   if (!canShare && videos && !videos.length) return <ClosedNotice>這條路線目前不開放分享影片</ClosedNotice>;
@@ -127,6 +130,7 @@ export default function RouteVideos({
     setFile(null);
     setCaption("");
     setMove(null);
+    setFeel([]);
     setConsent(false);
     setDur(null);
     setTrim(null);
@@ -160,6 +164,7 @@ export default function RouteVideos({
           climbed_on: myStatus ? myDay : null,
           height_band: height,
           move,
+          feel_tags: feel,
         },
         edit ? { duration: edit.end - edit.start } : small ? { source: file } : undefined,
       );
@@ -272,9 +277,11 @@ export default function RouteVideos({
                   <Toggle checked={mute} onChange={setMute} label="靜音" hint="不放影片的聲音（例如館內音樂、旁邊的人聊天）" disabled={busy} />
                 </>
               )}
-              <Label htmlFor="vcap">一句說明（選填）</Label>
-              <TextField id="vcap" maxLength={40} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="例如：最後一手用左腳勾" />
-              <p className="mt-1.5 mb-0 text-tiny text-muted">沒寫的話，標題會顯示「{access?.nickname ?? "你"}的攀爬」</p>
+              <Label>你爬起來覺得？（選填，最多 {FEEL_TAG_MAX} 個）</Label>
+              <MultiOptionGrid options={FEEL_TAGS} value={feel} onChange={setFeel} max={FEEL_TAG_MAX} />
+              <Label htmlFor="vcap">心得（選填）</Label>
+              <TextField id="vcap" maxLength={40} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="例如：最後一手超遠，用左腳勾" />
+              <p className="mt-1.5 mb-0 text-tiny text-muted">會當成影片標題，大家都看得到；沒寫的話，標題會顯示「{access?.nickname ?? "你"}的攀爬」</p>
               <Label>你的身高（公分，選填）</Label>
               <OptionGrid cols={4} options={HEIGHT_BANDS} value={height} onChange={setHeight} />
               <p className="mt-1.5 mb-0 text-tiny text-muted">

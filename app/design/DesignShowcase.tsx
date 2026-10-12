@@ -19,7 +19,7 @@ import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
-import { Check, ColorPicker, GradePicker, Label, OptionGrid, Rating, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
+import { Check, ColorPicker, GradePicker, Label, MultiOptionGrid, OptionGrid, Rating, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
 import { BandHeading, BandPicker, GoalLine, GradeChart, GymRow, NewRouteCard, NewRouteRow, SoonBox, SwipeHint, ZoneCard, ZoneGradeCard, ZoneList, ZoneNav } from "@/components/ui/Gym";
 import { GymDot, ResetDateRow, ResetLines, ResetMonth } from "@/components/ui/Resets";
 import { newRoutesText, type ResetEvent } from "@/lib/resets";
@@ -33,6 +33,8 @@ import { fakeWall } from "@/lib/demo";
 import {
   CLIMB_MOVES,
   FEEL,
+  FEEL_TAG_MAX,
+  FEEL_TAGS,
   GRADE_BANDS,
   GRADE_FEEL,
   GRADES,
@@ -41,6 +43,7 @@ import {
   inBand,
   type BandId,
   type ClimbMove,
+  type FeelTag,
   type HeightBand,
   type HoldColor,
   type Status,
@@ -91,8 +94,8 @@ const DEMO_RESETS: ResetEvent[] = [
 ];
 
 const DEMO_VIDEOS: VideoCard[] = [
-  { key: "1", name: "小安", ago: "10/05", status: "flash", caption: "第三手用左腳勾", duration: 42, tags: "身高 160–169cm・靜態" },
-  { key: "2", name: "阿明", ago: "今天", status: "send", caption: "最後一手要果斷", duration: 28, tags: "身高 170–179cm・動態" },
+  { key: "1", name: "小安", ago: "10/05", status: "flash", caption: "第三手用左腳勾", duration: 42, tags: "身高 160–169cm・靜態・🤏 手指超痛・🦶 精準腳法" },
+  { key: "2", name: "阿明", ago: "今天", status: "send", caption: "最後一手要果斷", duration: 28, tags: "身高 170–179cm・動態・💪 力量感" },
   { key: "3", name: "我", ago: "3 天前分享", status: "project", duration: 19, meta: "B 區 B-03" },
 ];
 
@@ -182,6 +185,7 @@ export default function DesignShowcase() {
   const [muteDemo, setMuteDemo] = useState(false);
   const [pickHeight, setPickHeight] = useState<HeightBand | null>("170s");
   const [pickMove, setPickMove] = useState<ClimbMove | null>("dynamic");
+  const [pickFeel, setPickFeel] = useState<FeelTag[]>(["fingers", "risky"]);
   const band = GRADE_BANDS.find((b) => b.id === bandId) ?? null;
   const zoneBand = GRADE_BANDS.find((b) => b.id === zoneBandId) ?? null;
 
@@ -713,6 +717,8 @@ export default function DesignShowcase() {
         <p className="mt-3 mb-0 text-meta text-muted">處理中（disabled）：剪輯拉桿、靜音都不能再改</p>
         <VideoTrim duration={80} start={trimDemo[0]} end={trimDemo[1]} max={60} onChange={() => {}} disabled />
         <Toggle checked={muteDemo} onChange={() => {}} label="靜音" disabled />
+        <Label>你爬起來覺得？（選填，最多 2 個）— MultiOptionGrid，選滿後其他格變淡、按不了</Label>
+        <MultiOptionGrid options={FEEL_TAGS} value={pickFeel} onChange={setPickFeel} max={FEEL_TAG_MAX} />
         <Label>你的身高（公分，選填）— OptionGrid cols 4，再按一次取消</Label>
         <OptionGrid cols={4} options={HEIGHT_BANDS} value={pickHeight} onChange={setPickHeight} />
         <Label>動作（選填）— OptionGrid cols 2，有小字說明</Label>

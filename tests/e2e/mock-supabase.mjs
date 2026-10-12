@@ -65,7 +65,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
+  const state = { offline: false, ascentsFail: null, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -87,7 +87,7 @@ export function createMock() {
     const z = db.zones.find((x) => x.id === route.zone_id);
     const path = `${z.gym_id}/${route.id}/${userId}/${uuid()}.mp4`;
     db.vfiles[path] = { buf: Buffer.from("fake"), owner: userId, created_at: now() };
-    const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, height_band: null, move: null, climbed_on: null, created_at: now(), ...extra };
+    const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, height_band: null, move: null, feel_tags: [], climbed_on: null, created_at: now(), ...extra };
     db.videos.push(v);
     return v;
   };
@@ -805,6 +805,16 @@ export function createMock() {
       }
     }
     if (t === "route_videos") {
+      // state.noVideoFeel：模擬資料庫還沒套用 step35（沒有型態欄位）；更舊的資料庫（step34、25 之前）也沒有
+      const noFeel = state.noVideoFeel || state.noVideoClimb || state.noVideoTags;
+      if (noFeel && (m === "GET" || m === "HEAD") && /feel_tags/.test(sel)) {
+        state.tagFallbacks++;
+        return J(route, 400, { code: "42703", message: "column route_videos.feel_tags does not exist" });
+      }
+      if (noFeel && m === "POST" && "feel_tags" in body) {
+        state.tagFallbacks++;
+        return J(route, 400, { code: "PGRST204", message: "Could not find the 'feel_tags' column of 'route_videos' in the schema cache" });
+      }
       // state.noVideoTags：模擬資料庫還沒套用 step25（沒有身高、動作欄位），跟 PostgREST 一樣回錯誤碼
       if (state.noVideoTags && (m === "GET" || m === "HEAD") && /height_band|move/.test(sel)) {
         state.tagFallbacks++;
@@ -835,6 +845,7 @@ export function createMock() {
         if (gym) rows = rows.filter((v) => v.routes.zones.gym_id === gym);
         if (state.noVideoTags) rows = rows.map(({ height_band, move, ...v }) => v); // 舊資料庫沒有這兩欄
         if (state.noVideoTags || state.noVideoClimb) rows = rows.map(({ climbed_on, ...v }) => v);
+        if (noFeel) rows = rows.map(({ feel_tags, ...v }) => v);
         rows.sort((x, y) => y.created_at.localeCompare(x.created_at));
         rows = filt(rows, q);
         if (m === "HEAD") return route.fulfill({ status: 200, headers: { ...cors, "content-range": `*/${rows.length}` } });
@@ -851,9 +862,13 @@ export function createMock() {
         if (hasLink(body.caption)) return J(route, 400, { code: "22023", message: "影片說明不能放網址" });
         if ((body.height_band != null && !["lt160", "160s", "170s", "ge180"].includes(body.height_band)) || (body.move != null && !["dynamic", "static"].includes(body.move)))
           return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_height_band_check"' });
+        // 同 0040：型態去掉重複、只收 6 個固定選項、最多 2 個
+        const feel = [...new Set(body.feel_tags ?? [])];
+        if (feel.some((f) => !["power", "fingers", "hard", "risky", "footwork", "flexible"].includes(f)) || feel.length > 2)
+          return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_feel_tags_check"' });
         const mine = body.status && body.climbed_on ? db.ascents.find((x) => x.user_id === uid && x.route_id === body.route_id) : null;
         const fromAscent = { climbed_on: mine?.climbed_on ?? null, ...(mine ? { status: mine.status } : {}) };
-        db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, height_band: null, move: null, ...body, climbed_on: null, ...fromAscent, user_id: uid, created_at: now() });
+        db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, height_band: null, move: null, ...body, feel_tags: feel, climbed_on: null, ...fromAscent, user_id: uid, created_at: now() });
         return empty(route, 201);
       }
     }
