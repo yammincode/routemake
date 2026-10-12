@@ -553,7 +553,7 @@ select tests.throws('影片：路徑不能少一層', format('insert into storag
 select tests.throws('影片：路徑不是路線 id 被擋', format('insert into storage.objects (bucket_id, name) values (''route-videos'', ''mingde/abc/%s/x.mp4'')', :A));
 select tests.throws('影片：資料路徑要是自己的', format('insert into public.route_videos (route_id, path) values (%L, %L)', (select v from ids where k = 'v70'), (select v from vp where k = 'by')), 'row-level security');
 select tests.throws('影片：資料路徑和路線要相符', format('insert into public.route_videos (route_id, path) values (%L, %L)', (select v from ids where k = 'v71'), (select v from vp where k = 'a9')), 'row-level security');
-select tests.throws('影片：超過 60 秒被擋', format('insert into public.route_videos (route_id, path, duration_s) values (%L, %L, 61)', (select v from ids where k = 'v70'), (select v from vp where k = 'a9')), 'duration');
+select tests.throws('影片：超過 60 秒被擋', format('insert into public.route_videos (route_id, path, duration_s) values (%L, %L, 61)', (select v from ids where k = 'v70'), (select v from vp where k = 'a9')), '60 秒');
 select tests.throws('影片：說明超過 40 字被擋', format('insert into public.route_videos (route_id, path, caption) values (%L, %L, repeat(''字'', 41))', (select v from ids where k = 'v70'), (select v from vp where k = 'a9')), 'caption');
 select tests.throws('影片：顧客改不了影片資料', 'update public.route_videos set caption = ''改''');
 select tests.throws('影片：顧客改不了身高、動作', 'update public.route_videos set height_band = ''lt160'', move = ''static''');
@@ -1402,6 +1402,20 @@ select tests.throws('影片：24 小時內第 16 筆影片資料被擋', format(
 reset role; select tests.login(null);
 delete from public.route_videos where user_id = :NN;
 delete from storage.objects where bucket_id = 'route-videos';
+-- 上攀影片放寬（0041）：上攀區最長 3 分鐘、100 MB；其他區 60 秒、50 MB（依區域檢查，管理者新增也一樣）
+insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y)
+  select id, 110, '紅', 1, 1 from public.zones where gym_id = 'g3' and code = 'A1';
+select tests.ok('影片：上攀測試路線建好了', exists (select 1 from public.routes r join public.zones z on z.id = r.zone_id where z.gym_id = 'g3' and z.code = 'A1' and r.grade = 110));
+insert into ids select 'rope', id from public.routes where zone_id = (select id from public.zones where gym_id = 'g3' and code = 'A1') and grade = 110 order by created_at desc limit 1;
+select tests.lives('影片：上攀區 3 分鐘、100 MB 可以', format('insert into public.route_videos (route_id, user_id, path, duration_s, size_bytes) values (%L, %L, ''g3/rope/a.mp4'', 180, 104857600)', (select v from ids where k = 'rope'), :A));
+select tests.throws('影片：上攀區超過 3 分鐘被擋', format('insert into public.route_videos (route_id, user_id, path, duration_s) values (%L, %L, ''g3/rope/b.mp4'', 180.5)', (select v from ids where k = 'rope'), :A), 'duration');
+select tests.throws('影片：上攀區超過 100 MB 被擋', format('insert into public.route_videos (route_id, user_id, path, size_bytes) values (%L, %L, ''g3/rope/c.mp4'', 104857601)', (select v from ids where k = 'rope'), :A), 'size_bytes');
+select tests.lives('影片：抱石區 60 秒、50 MB 可以', format('insert into public.route_videos (route_id, user_id, path, duration_s, size_bytes) values (%L, %L, ''mingde/v/a.mp4'', 60, 52428800)', (select v from ids where k = 'h1'), :A));
+select tests.throws('影片：抱石區超過 60 秒被擋', format('insert into public.route_videos (route_id, user_id, path, duration_s) values (%L, %L, ''mingde/v/b.mp4'', 61)', (select v from ids where k = 'h1'), :A), '60 秒');
+select tests.throws('影片：抱石區超過 50 MB 被擋', format('insert into public.route_videos (route_id, user_id, path, size_bytes) values (%L, %L, ''mingde/v/c.mp4'', 52428801)', (select v from ids where k = 'h1'), :A), '50 MB');
+select tests.ok('影片：影片檔上限 100 MB', (select file_size_limit from storage.buckets where id = 'route-videos') = 104857600);
+delete from public.route_videos where path in ('g3/rope/a.mp4', 'mingde/v/a.mp4');
+delete from public.routes where id = (select v from ids where k = 'rope');
 
 -- 3、4. Spray Wall 岩友路線
 set role authenticated; select tests.login(:NN);

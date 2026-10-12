@@ -16,7 +16,8 @@ export const HOLD_SIZES = [
 ] as const;
 const look = (t: Hold["t"]) => HOLD_TYPES.find((x) => x.t === t)!;
 
-// 照片上的圈圈（放在 WallPhoto 裡，跟著照片放大縮小）；onTap 時圈圈可以點（編輯時用來刪除）；mini：縮圖用（細框、不顯示 S／T 字）
+// 照片上的圈圈（放在 WallPhoto 裡，大小跟著照片放大縮小）；onTap 時圈圈可以點（編輯時用來刪除）；mini：縮圖用（不顯示 S／T 字）
+// 細框（1.5px）＋外圈極細深色邊；兩指放大照片時框的粗細不變（乘上 --inv），不會變粗蓋住岩點
 export function HoldMarks({ holds, onTap, mini = false }: { holds: Hold[]; onTap?: (i: number) => void; mini?: boolean }) {
   return (
     <>
@@ -29,12 +30,12 @@ export function HoldMarks({ holds, onTap, mini = false }: { holds: Hold[]; onTap
           width: `${d}%`,
           borderColor: k.color,
           transform: "translate(-50%, -50%)",
-          boxShadow: mini ? "0 0 0 1px rgba(255,255,255,.85)" : "0 0 0 1.5px rgba(255,255,255,.85), inset 0 0 0 1.5px rgba(255,255,255,.85)",
-          borderWidth: mini ? 2 : undefined,
+          borderWidth: "calc(1.5px * var(--inv, 1))",
+          boxShadow: "0 0 0 calc(.75px * var(--inv, 1)) rgba(0,0,0,.55)",
         };
         const label = !mini && k.short && (
           <span
-            className="absolute -top-1 -right-1 grid size-[18px] place-items-center rounded-full font-num text-[11px] font-bold text-white"
+            className="absolute -top-[3px] -right-[3px] grid size-[15px] place-items-center rounded-full font-num text-[10px] font-bold text-white"
             style={{ background: k.color, transform: "scale(var(--inv, 1))" }}
           >
             {k.short}
@@ -45,13 +46,13 @@ export function HoldMarks({ holds, onTap, mini = false }: { holds: Hold[]; onTap
             key={i}
             aria-label={`${k.label}（點一下刪除）`}
             onClick={() => onTap(i)}
-            className="absolute aspect-square rounded-full border-[3px]"
+            className="absolute aspect-square rounded-full border-solid"
             style={style}
           >
             {label}
           </button>
         ) : (
-          <span key={i} aria-hidden className="pointer-events-none absolute aspect-square rounded-full border-[3px]" style={style}>
+          <span key={i} aria-hidden className="pointer-events-none absolute aspect-square rounded-full border-solid" style={style}>
             {label}
           </span>
         );
@@ -66,7 +67,7 @@ export function HoldLegend() {
     <div className="mb-2 flex flex-wrap gap-3 text-meta text-muted">
       {HOLD_TYPES.map((k) => (
         <span key={k.t} className="inline-flex items-center gap-1.5">
-          <i className="inline-block size-3.5 rounded-full border-[3px]" style={{ borderColor: k.color }} />
+          <i className="inline-block size-3.5 rounded-full border-2" style={{ borderColor: k.color }} />
           {k.label}
         </span>
       ))}
@@ -96,7 +97,7 @@ export function HoldTools({
             onClick={() => onType(k.t)}
             className="flex items-center justify-center gap-1.5 rounded-field border border-line py-2 text-note font-bold aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-surface"
           >
-            <i className="inline-block size-3.5 rounded-full border-[3px]" style={{ borderColor: k.color }} />
+            <i className="inline-block size-3.5 rounded-full border-2" style={{ borderColor: k.color }} />
             {k.label}
           </button>
         ))}

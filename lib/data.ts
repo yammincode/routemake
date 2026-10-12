@@ -1,5 +1,5 @@
 // 讀寫 Supabase 的資料函式；權限一律由資料庫 RLS 擋，這裡只負責呼叫
-import type { ClimbMove, FeelTag, GradeSystem, HeightBand, HoldColor, Status } from "@/lib/design";
+import { isYds, type ClimbMove, type FeelTag, type GradeSystem, type HeightBand, type HoldColor, type Status } from "@/lib/design";
 import type { ResetEvent } from "@/lib/resets";
 import { NETWORK_RE } from "@/lib/net";
 import type { ScoringRules } from "@/lib/scoring";
@@ -610,10 +610,24 @@ export async function getAuditLog(gym: string, opts: { before?: number; actions?
 }
 
 // ---------- 顧客分享影片 ----------
-export const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
-export const VIDEO_MAX_SECONDS = 60;
-// 測試用：調低長度上限（不用真的錄一支 60 秒以上的影片）
-export const videoMaxSeconds = () => (typeof window !== "undefined" && (window as Window & { __RM_VIDEO_MAX?: number }).__RM_VIDEO_MAX) || VIDEO_MAX_SECONDS;
+// 影片長度、大小上限：上攀（YDS）一趟比較久，最長 3 分鐘、100 MB；抱石、長耐力、Spray Wall 60 秒、50 MB
+// （資料庫依區域同樣檢查，見 migration 0041）
+export type VideoLimit = { seconds: number; bytes: number };
+export const VIDEO_LIMIT: VideoLimit = { seconds: 60, bytes: 50 * 1024 * 1024 };
+export const ROPE_VIDEO_LIMIT: VideoLimit = { seconds: 180, bytes: 100 * 1024 * 1024 };
+export const videoLimit = (r: Pick<Route, "grade" | "holds" | "name">): VideoLimit => (isYds(r.grade) && !seqTotal(r) ? ROPE_VIDEO_LIMIT : VIDEO_LIMIT);
+// 測試用：調低長度上限（不用真的錄一支 60 秒以上的影片）；上攀照比例放寬
+export const videoMaxSeconds = (lim: VideoLimit = VIDEO_LIMIT) => {
+  const t = typeof window !== "undefined" ? (window as Window & { __RM_VIDEO_MAX?: number }).__RM_VIDEO_MAX : undefined;
+  return t ? (t * lim.seconds) / VIDEO_LIMIT.seconds : lim.seconds;
+};
+// 「45 秒」「3 分鐘」「3 分 20 秒」
+export const durText = (s: number) => {
+  const t = Math.round(s);
+  if (t < 120) return `${t} 秒`;
+  return t % 60 ? `${Math.floor(t / 60)} 分 ${t % 60} 秒` : `${t / 60} 分鐘`;
+};
+const mb = (bytes: number) => Math.round(bytes / 1048576);
 export const VIDEO_DAILY_LIMIT = 15;
 const VIDEO_TYPES: Record<string, string> = { mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm" };
 
@@ -706,21 +720,22 @@ function videoKind(file: File): { ext: string; type: string } {
   if (!ext) throw new Error("只能分享 MP4、MOV 或 WebM 影片");
   return { ext, type: VIDEO_TYPES[ext] };
 }
-const tooLong = (d: number | null) => d != null && d > videoMaxSeconds() + 0.5;
-const longError = (d: number) => new Error(`影片 ${Math.round(d)} 秒，最長 ${videoMaxSeconds()} 秒，請先剪短再分享`);
-export async function checkVideo(file: File): Promise<{ ext: string; type: string; duration: number | null }> {
+const tooLong = (d: number | null, lim: VideoLimit) => d != null && d > videoMaxSeconds(lim) + 0.5;
+const longError = (d: number, lim: VideoLimit) => new Error(`影片 ${durText(d)}，最長 ${durText(videoMaxSeconds(lim))}，請先剪短再分享`);
+const bigError = (size: number, lim: VideoLimit) => new Error(`影片 ${Math.ceil(size / 1048576)} MB，超過 ${mb(lim.bytes)} MB，請先剪短再分享`);
+export async function checkVideo(file: File, lim: VideoLimit = VIDEO_LIMIT): Promise<{ ext: string; type: string; duration: number | null }> {
   const { ext } = videoKind(file);
-  if (file.size > VIDEO_MAX_BYTES) throw new Error(`影片 ${Math.ceil(file.size / 1048576)} MB，超過 50 MB，請先剪短再分享`);
+  if (file.size > lim.bytes) throw bigError(file.size, lim);
   const duration = await videoDuration(file);
-  if (tooLong(duration)) throw longError(duration!);
+  if (tooLong(duration, lim)) throw longError(duration!, lim);
   return { ext, type: VIDEO_TYPES[ext], duration };
 }
 // 選影片時檢查：手機能在 App 裡剪輯（editable，能重新錄影）而且讀得到長度時，太長、太大的留到剪完再檢查；
 // 不能剪的手機跟原本一樣，太長、太大就請他先到相簿剪短。回傳影片長度（秒，讀不到是 null）
-export async function checkPickedVideo(file: File, editable: boolean): Promise<number | null> {
+export async function checkPickedVideo(file: File, editable: boolean, lim: VideoLimit = VIDEO_LIMIT): Promise<number | null> {
   videoKind(file);
   const duration = editable ? await videoDuration(file) : null;
-  return duration != null ? duration : (await checkVideo(file)).duration;
+  return duration != null ? duration : (await checkVideo(file, lim)).duration;
 }
 
 export async function uploadVideo(
@@ -731,12 +746,13 @@ export async function uploadVideo(
   // climbed_on：本人紀錄的攀爬日，有送才表示要在影片上顯示（實際的日期、完成狀態由資料庫從本人紀錄帶入）
   info: { caption: string | null; status: Status | null; climbed_on?: string | null; height_band?: HeightBand | null; move?: ClimbMove | null; feel_tags?: FeelTag[] },
   // 長度：剪輯過的直接給（剪下來的長度）；只壓縮的從壓縮前的原檔讀（壓縮後的檔有時讀不到長度）
-  len?: { source?: File; duration?: number }
+  len?: { source?: File; duration?: number },
+  lim: VideoLimit = VIDEO_LIMIT
 ) {
   const duration = len?.duration ?? (await videoDuration(len?.source ?? file));
-  if (tooLong(duration)) throw longError(duration!);
+  if (tooLong(duration, lim)) throw longError(duration!, lim);
   const { ext, type } = videoKind(file);
-  if (file.size > VIDEO_MAX_BYTES) throw new Error(`影片 ${Math.ceil(file.size / 1048576)} MB，超過 50 MB，請先剪短再分享`);
+  if (file.size > lim.bytes) throw bigError(file.size, lim);
   const since = new Date(Date.now() - 86400000).toISOString();
   const recent = await supabase().from("route_videos").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", since);
   if ((recent.count ?? 0) >= VIDEO_DAILY_LIMIT) throw new Error(`每人 24 小時內最多分享 ${VIDEO_DAILY_LIMIT} 支影片，明天再來`);
@@ -746,7 +762,7 @@ export async function uploadVideo(
   if (up.error) {
     const m = up.error.message ?? "";
     if (m.includes("row-level") || m.includes("Unauthorized")) throw new Error("沒辦法分享：這條路線可能已下架或關閉留言，或今天已分享太多支");
-    if (m.toLowerCase().includes("size") || m.includes("413")) throw new Error("影片超過 50 MB，請先剪短再分享");
+    if (m.toLowerCase().includes("size") || m.includes("413")) throw new Error(`影片超過 ${mb(lim.bytes)} MB，請先剪短再分享`);
     if (m.toLowerCase().includes("mime")) throw new Error("只能分享 MP4、MOV 或 WebM 影片");
     throw new Error("影片上傳失敗，請確認網路後再試");
   }
@@ -755,7 +771,7 @@ export async function uploadVideo(
     path,
     caption: info.caption,
     status: info.status,
-    duration_s: duration == null ? null : Math.min(VIDEO_MAX_SECONDS, Math.round(duration * 10) / 10),
+    duration_s: duration == null ? null : Math.min(lim.seconds, Math.round(duration * 10) / 10),
     size_bytes: file.size,
   };
   // 身高、動作、型態有選才送；攀爬日有紀錄才送；資料庫缺欄位時（還沒套用 step35、34、25）一層一層去掉再存（影片照樣分享出去）

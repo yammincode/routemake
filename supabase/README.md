@@ -42,6 +42,7 @@
 | `setup/step33-hold-color-brown.sql` | migration 0037：岩點顏色新增咖啡（排在粉和黑中間）；請先執行這份再更新正式版（新版 App 選咖啡存路線要這份才存得進去，舊版不受影響） | 已套用 |
 | `setup/step34-prelaunch-hardening.sql` | migration 0038–0039：上線前安全加強（路線第 100 條起用 3 位數、取號只能在新增路線時；影片要先有本人上傳的檔案、24 小時 15 支、說明不能放網址、新版分享的影片記下分享者紀錄上的攀爬日（舊版 App 分享的不記）、分享中的影片檔不能偷換、未登入列不出影片檔；Spray Wall 圈圈只存位置、岩友路線下架後不能恢復；暱稱不能冒充館方、留言不能放網址；刪帳號修正；區域類型、清除自介、員工名單、建立時間、頭像、註冊時間、SVG 照片的權限）；舊版 App 照常可用，但舊版改暱稱被新規則擋下時看不到原因（只顯示「發生錯誤」），建議跟新版同一天上線；要先執行 step34 再更新正式版（新版的 15 支、攀爬日要 step34 才有） | 已套用 |
 | `setup/step35-video-feel-tags.sql` | migration 0040：影片型態標籤（route_videos.feel_tags：💪 力量感、🤏 手指超痛、🧠 超難爬、🧘 risky、🦶 精準腳法、🤸 柔軟大師，只收這 6 個、最多 2 個、重複的自動去掉；分享後不能改）；舊版 App 照常可用；新版在還沒執行時照樣分享（不帶型態），建議執行後再更新正式版 | 未套用 |
+| `setup/step36-rope-video-limit.sql` | migration 0041：上攀影片放寬（上攀區每支最長 3 分鐘、100 MB；抱石、長耐力、Spray Wall 照舊 60 秒、50 MB，影片資料依區域檢查；影片檔 bucket 上限 100 MB）。**另外要在 Supabase 把專案的上傳檔案大小上限改成 100 MB**：Storage → Settings（或 Project Settings → Storage）→ Upload file size limit 改成 100 MB → Save；舊版 App 照常可用（自己限制 60 秒、50 MB） | 未套用 |
 
 ## 規則摘要
 
@@ -57,11 +58,11 @@
 | staff_roles | 本人、該館店長 | 只能用函式（會寫操作紀錄）：店長只能指派定線長，店長由老闆指派（`lookup_user()` 先確認暱稱，再 `assign_staff(帳號, 館, 角色)`） | 同左（`remove_staff()`） |
 | audit_log | 該館店長、老闆 | 只能由函式寫入 | 不開放 |
 | scoring_rules | 所有人 | 只有老闆 | 不開放 |
-| route_videos | 所有人 | 登入且有暱稱；路線未下架、留言開啟；路徑要是 `{館}/{路線}/{本人}/檔名`，而且要先上傳好本人的檔案；身高、動作、型態只收固定選項（型態最多 2 個）；24 小時 15 筆；說明不能放網址；App 有送攀爬日和完成狀態時，由資料庫從本人紀錄帶入（舊版 App、沒送完成狀態的不記攀爬日）；不能修改 | `delete_video()`：本人或該館員工（員工刪除寫操作紀錄）；路線下架時自動刪除 |
+| route_videos | 所有人 | 登入且有暱稱；路線未下架、留言開啟；路徑要是 `{館}/{路線}/{本人}/檔名`，而且要先上傳好本人的檔案；身高、動作、型態只收固定選項（型態最多 2 個）；長度、大小依區域（上攀 180 秒、100 MB，其他 60 秒、50 MB）；24 小時 15 筆；說明不能放網址；App 有送攀爬日和完成狀態時，由資料庫從本人紀錄帶入（舊版 App、沒送完成狀態的不記攀爬日）；不能修改 | `delete_video()`：本人或該館員工（員工刪除寫操作紀錄）；路線下架時自動刪除 |
 | comment_likes | 所有人 | 登入且有暱稱；留言未刪除；每人每則一個讚；不能修改 | 只能收回自己的讚 |
 | app_opens | 沒有人能直接讀寫 | 只能用 `record_open()` 記自己今天有打開 | 不開放 |
 | Storage `zone-photos` | 公開（只收 JPEG、PNG、WebP） | `{館}/zones/` 員工、`{館}/floorplan/` 店長 | 同左 |
-| Storage `route-videos` | 用網址公開播放；檔案清單只有本人、該館員工看得到 | 同 route_videos；每支 50 MB、mp4／mov／webm；每人 24 小時 15 支 | 該館員工；本人（分享中的要先用 `delete_video()` 刪資料）；岩友路線下架後出題者可清掉這條路線的影片檔 |
+| Storage `route-videos` | 用網址公開播放；檔案清單只有本人、該館員工看得到 | 同 route_videos；每支 100 MB（影片資料再依區域檢查：上攀 3 分鐘、100 MB，其他 60 秒、50 MB）、mp4／mov／webm；每人 24 小時 15 支 | 該館員工；本人（分享中的要先用 `delete_video()` 刪資料）；岩友路線下架後出題者可清掉這條路線的影片檔 |
 
 函式：`points_summary(年, 月)`、`route_points(難度, 風格)`、`ascent_points(難度, 風格, 狀態)`、`my_access()`、`monthly_stats(年, 月)`、`zone_progress(館)`、`archive_zone(區域)`、`delete_comment(留言)`、`lookup_user(帳號)`、`assign_staff(帳號, 館, 角色)`、`remove_staff(使用者, 館)`、`delete_video(影片)`、`video_paths_for_routes(路線[])`、`video_usage(館)`、`orphan_video_paths(館)`、`reorder_zones(館, 區域[])`
 

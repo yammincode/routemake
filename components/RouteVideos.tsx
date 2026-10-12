@@ -10,7 +10,7 @@ import { ClosedNotice } from "@/components/ui/Comments";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { compressMinBytes, compressType, compressVideo, type VideoEdit } from "@/lib/video";
-import { checkPickedVideo, deleteVideo, getVideos, uploadVideo, videoDaySupported, videoMaxSeconds, videoUrl, type Route, type Video } from "@/lib/data";
+import { checkPickedVideo, deleteVideo, durText, getVideos, uploadVideo, videoDaySupported, videoLimit, videoMaxSeconds, videoUrl, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { videoWhen } from "@/lib/date";
 import { CLIMB_MOVES, FEEL_TAG_MAX, FEEL_TAGS, HEIGHT_BANDS, feelTagText, videoTagText, type ClimbMove, type FeelTag, type HeightBand, type Status } from "@/lib/design";
@@ -111,11 +111,13 @@ export default function RouteVideos({
   }));
   if (!canShare && videos && !videos.length) return <ClosedNotice>這條路線目前不開放分享影片</ClosedNotice>;
 
-  const max = videoMaxSeconds();
+  // 上攀路線最長 3 分鐘、100 MB；其他 60 秒、50 MB
+  const lim = videoLimit(r);
+  const max = videoMaxSeconds(lim);
   const editable = !!compressType() && dur != null;
   const pick = async (f: File) => {
     try {
-      const d = await checkPickedVideo(f, !!compressType());
+      const d = await checkPickedVideo(f, !!compressType(), lim);
       setFile(f);
       setDur(d);
       setTrim(d != null && d > max + 0.5 ? [0, max] : null); // 太長：先選好前 max 秒，再自己拉
@@ -168,6 +170,7 @@ export default function RouteVideos({
           feel_tags: feel,
         },
         edit ? { duration: edit.end - edit.start } : small ? { source: file } : undefined,
+        lim,
       );
       try {
         if (height) localStorage.setItem(heightKey(session.user.id), height);
@@ -256,7 +259,10 @@ export default function RouteVideos({
                 分享攀爬影片
               </VideoPickButton>
               <p className="mt-1.5 mb-0 text-tiny text-muted">
-                {compressType() ? `最長 ${max} 秒，太長的選好後可以剪；會先壓縮成 720p` : `最長 ${max} 秒、50 MB 以內`}；這條路線換線時影片會一起刪除
+                {compressType()
+                  ? `最長 ${durText(max)}，太長的選好後可以剪；會先壓縮成 720p${lim.seconds > 60 ? "（影片越長等越久，3 分鐘大約等 3 分鐘）" : ""}`
+                  : `最長 ${durText(max)}、${Math.round(lim.bytes / 1048576)} MB 以內`}
+                ；這條路線換線時影片會一起刪除
               </p>
             </>
           ) : (
@@ -266,7 +272,7 @@ export default function RouteVideos({
                 <>
                   {trim ? (
                     <>
-                      {dur! > max + 0.5 && <p className="mt-2 mb-0 text-note text-warn">影片 {Math.round(dur!)} 秒，最長 {max} 秒：拉下面的開始、結束選要分享的那一段</p>}
+                      {dur! > max + 0.5 && <p className="mt-2 mb-0 text-note text-warn">影片 {durText(dur!)}，最長 {durText(max)}：拉下面的開始、結束選要分享的那一段</p>}
                       <VideoTrim src={preview} duration={dur!} start={trim[0]} end={trim[1]} max={max} onChange={(a, b) => setTrim([a, b])} disabled={busy} />
                       {dur! <= max + 0.5 && !busy && <LinkButton onClick={() => setTrim(null)}>不剪了，分享整支</LinkButton>}
                     </>

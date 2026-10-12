@@ -862,6 +862,11 @@ export function createMock() {
         if (hasLink(body.caption)) return J(route, 400, { code: "22023", message: "影片說明不能放網址" });
         if ((body.height_band != null && !["lt160", "160s", "170s", "ge180"].includes(body.height_band)) || (body.move != null && !["dynamic", "static"].includes(body.move)))
           return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_height_band_check"' });
+        // 同 0041：上攀區最長 180 秒、100 MB；其他 60 秒、50 MB
+        const vr = db.routes.find((x) => x.id === body.route_id);
+        const rope = zoneOf(vr.zone_id).grade_system === "yds";
+        if ((body.duration_s ?? 0) > (rope ? 180 : 60) || (body.size_bytes ?? 0) > (rope ? 104857600 : 52428800))
+          return J(route, 400, { code: "23514", message: "影片最長 60 秒、50 MB 以內（上攀區最長 3 分鐘、100 MB）" });
         // 同 0040：型態去掉重複、只收 6 個固定選項、最多 2 個
         const feel = [...new Set(body.feel_tags ?? [])];
         if (feel.some((f) => !["power", "fingers", "hard", "risky", "footwork", "flexible"].includes(f)) || feel.length > 2)

@@ -639,6 +639,29 @@ test("影片剪輯：太長的自動打開剪輯、只上傳選的那段，可�
   assert.equal(await C.dialog.locator('button:has-text("剪輯長度")').count(), 0);
   assert.equal(mock.db.videos.length, 2);
   await C.ctx.close();
+
+  // 4. 上攀路線：上限放寬 3 倍（正式是 3 分鐘、100 MB）；同樣 5 秒的影片，抱石上限 2 秒要剪，上攀 6 秒不用剪
+  const zR = mock.db.zones.find((z) => z.gym_id === "g3" && z.grade_system === "yds");
+  const rope = mock.addRoute(zR, 108, "紅");
+  const D = await phone(browser, mock);
+  await D.ctx.addInitScript(() => {
+    window.__RM_VIDEO_MAX = 2;
+    window.__RM_VIDEO_TYPES = ["video/webm;codecs=vp8,opus"];
+  });
+  await login(D.page, "climber88", "password1", `/zone?id=${zR.id}`);
+  await D.page.waitForTimeout(600);
+  await D.page.locator("main ul li button", { hasText: rope.code }).click();
+  await D.page.waitForTimeout(500);
+  const dd = D.page.locator("[role=dialog]");
+  await dd.locator('[role=tab]:has-text("影片")').click().catch(() => {});
+  t = await dd.textContent();
+  assert.ok(t.includes("最長 6 秒") && t.includes("影片越長等越久"), "上攀上限放寬、提醒影片越長等越久：" + t.slice(t.indexOf("最長"), t.indexOf("最長") + 40));
+  await dd.locator("input[type=file]").setInputFiles({ name: "climb.webm", mimeType: "video/webm", buffer: original });
+  await D.page.waitForTimeout(800);
+  t = await dd.textContent();
+  assert.ok(!t.includes("已選") && t.includes("✂ 剪輯長度"), "5 秒的影片在上攀不用剪");
+  assert.deepEqual(D.errors, []);
+  await D.ctx.close();
   void me;
   void r1;
 });

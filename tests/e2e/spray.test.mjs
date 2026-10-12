@@ -47,6 +47,11 @@ test("Spray Wall：岩友出路線、員工出岩館路線與下架", async () =
   await tapPhoto(c, 0.5, 0.15);
   await tapPhoto(c, 0.7, 0.7); // 多點一個再刪掉
   await c.click('[role=dialog] button[aria-label="完攀 T（點一下刪除）"] >> nth=1');
+  // 圈圈是細框（1.5px）；框的粗細乘上 --inv，兩指放大照片時不會變粗蓋住岩點
+  const ring = c.locator('[role=dialog] button[aria-label="起攀 S（點一下刪除）"]');
+  const bw = parseFloat(await ring.evaluate((el) => getComputedStyle(el).borderTopWidth)); // 瀏覽器會對齊像素（1.5px 可能算成 1px）
+  assert.ok(bw > 0 && bw <= 1.5, `圈圈細框（${bw}px）`);
+  assert.ok((await ring.evaluate((el) => el.style.borderWidth)).includes("--inv"), "放大時框不變粗");
   await c.fill("#sname", "下雨天的指力");
   await c.click('[role=dialog] button:text-is("V4")');
   await c.fill("#sdesc", "腳點只能用標記的");
