@@ -138,7 +138,7 @@ test("補縮圖腳本：試跑不改東西；--run 讀影片網址（不整支�
   }
 });
 
-test("補縮圖腳本：沒有管理金鑰、貼成公開金鑰、資料庫還沒有縮圖欄位時說清楚", async () => {
+test("補縮圖腳本：沒有管理金鑰、貼成公開金鑰、資料庫還沒有縮圖欄位時說清楚；.env.local 有 BOM 也讀得到", async () => {
   const noKey = await new Promise((ok) => {
     const p = spawn(process.execPath, [path.join(ROOT, "scripts/video-thumbs.mjs")], { cwd: os.tmpdir(), env: { ...process.env, NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:9", SUPABASE_SERVICE_ROLE_KEY: "" } });
     let out = "";
@@ -151,6 +151,28 @@ test("補縮圖腳本：沒有管理金鑰、貼成公開金鑰、資料庫還�
   const pub = await runScript("http://127.0.0.1:9", [], "sb_publishable_abc");
   assert.equal(pub.code, 1);
   assert.match(pub.out, /公開金鑰/, "貼成公開金鑰時說清楚");
+
+  // .env.local 用記事本存成「UTF-8 有 BOM」也讀得到網址和金鑰
+  const sb = await fakeSupabase([{ id: "v1", path: "mingde/r1/u1/a.mp4", duration_s: 2, thumb_path: null }], {});
+  const envDir = fs.mkdtempSync(path.join(os.tmpdir(), "rm-thumb-env-"));
+  try {
+    fs.writeFileSync(path.join(envDir, ".env.local"), `﻿NEXT_PUBLIC_SUPABASE_URL=${sb.url}\r\nSUPABASE_SERVICE_ROLE_KEY=test-service-key\r\n`);
+    const env = { ...process.env };
+    delete env.NEXT_PUBLIC_SUPABASE_URL;
+    delete env.SUPABASE_SERVICE_ROLE_KEY;
+    const bom = await new Promise((ok) => {
+      const p = spawn(process.execPath, [path.join(ROOT, "scripts/video-thumbs.mjs")], { cwd: envDir, env });
+      let out = "";
+      p.stdout.on("data", (d) => (out += d));
+      p.stderr.on("data", (d) => (out += d));
+      p.on("close", (code) => ok({ code, out }));
+    });
+    assert.equal(bom.code, 0, bom.out);
+    assert.match(bom.out, /還沒有縮圖的影片：1 支/, ".env.local 有 BOM 也讀得到");
+  } finally {
+    sb.server.close();
+    fs.rmSync(envDir, { recursive: true, force: true });
+  }
 
   const server = http.createServer((req, res) => {
     res.writeHead(400, { "content-type": "application/json" });

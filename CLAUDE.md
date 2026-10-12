@@ -84,7 +84,7 @@
 | thumbs | 區域照片縮圖：上傳時自動產生、舊照片用原圖、後台一鍵補齊 | 15 |
 | usage | 使用狀況：記錄打開館頁；老闆看全部、重設，授權的人只看指定館 | 16、21 |
 | videos | 路線影片：分享、刪除、壓縮、剪輯靜音、標籤篩選、攀爬日、上攀 3 分鐘、24 小時 15 支；省流量（列表只放縮圖、按了才下載、分享時做縮圖、刪影片連縮圖、還沒套用 step38 照常）；路線列的影片數、留言數 | 10、14、25、27 |
-| video-thumbs-script | 舊影片補縮圖腳本（scripts/video-thumbs.mjs）：試跑不改東西、說明流量；--run 讀網址（不整支下載）補 WebP 縮圖寫回資料庫、壞檔案報錯、重跑跳過；金鑰錯、還沒跑 step38 說清楚；本機假 Supabase（--run 那段要 ffmpeg：FFMPEG_PATH 或 ffmpeg-static，沒有就跳過那段） | 27 |
+| video-thumbs-script | 舊影片補縮圖腳本（scripts/video-thumbs.mjs）：試跑不改東西、說明流量；--run 讀網址（不整支下載）補 WebP 縮圖寫回資料庫、壞檔案報錯、重跑跳過；金鑰錯、還沒跑 step38 說清楚；.env.local 有 BOM 也讀得到；本機假 Supabase（--run 那段要 ffmpeg：FFMPEG_PATH 或 ffmpeg-static，沒有就跳過那段） | 27 |
 | yds | 上攀區 YDS（5.11a）顯示、篩選、記錄算分；後台用 YDS 選難度；沒有色帶卡和四格 | 12、24 |
 | zone-bands | 區域頁版型：上一區／下一區方框、色帶卡、四格、分段；四格和館首頁同步；※檢查由上而下的順序 | 19、24 |
 | zone-order | 後台點平面圖切區、南港平面圖範圍、店長調整區域順序 | 4 |

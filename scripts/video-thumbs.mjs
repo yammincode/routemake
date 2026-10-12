@@ -34,10 +34,11 @@ const THUMB_WIDTH = 480;
 const MAX_BYTES = 1024 * 1024; // 資料庫 video-thumbs 的上限
 
 // 讀 .env.local（跟 App 一樣的讀法；已經有設定的環境變數優先，測試用）
-function parseEnv(text) {
+function parseEnv(raw) {
+  const text = raw.replace(/^\uFEFF/, ""); // 記事本存成「UTF-8 有 BOM」時，檔頭多一個看不見的字
   if (typeof util.parseEnv === "function") return util.parseEnv(text); // Node 20.12 以後
   const out = {};
-  for (const line of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
+  for (const line of text.split(/\r?\n/)) {
     const m = line.match(/^\s*(?:export\s+)?([A-Za-z0-9_]+)\s*=\s*(.*)$/);
     if (!m) continue;
     let v = m[2].trim();
@@ -80,6 +81,8 @@ function findFfmpeg() {
 // 從影片擷取一格：第 1 秒（不到 2 秒的取中間），寬 480；先做 WebP，ffmpeg 不支援就做 JPEG
 // input 可以是網址（只抓需要的部分）或本機檔案
 function makeThumb(ffmpeg, input, duration, dir) {
+  // 網址：超過 30 秒讀不到資料就放棄（網路斷掉時不會一直卡住），每次最多 2 分鐘；不行就改整支下載再試
+  const net = /^https?:\/\//.test(input) ? ["-rw_timeout", "30000000"] : [];
   const at = duration && duration < 2 ? duration / 2 : 1;
   const scale = `scale='min(${THUMB_WIDTH},iw)':-2`;
   const tries = [
@@ -90,7 +93,7 @@ function makeThumb(ffmpeg, input, duration, dir) {
     for (const t of tries) {
       const out = path.join(dir, `thumb.${t.ext}`);
       fs.rmSync(out, { force: true });
-      const r = spawnSync(ffmpeg, ["-v", "error", "-y", "-ss", String(seek), "-i", input, "-frames:v", "1", "-vf", scale, ...t.codec, out]);
+      const r = spawnSync(ffmpeg, ["-v", "error", "-y", ...net, "-ss", String(seek), "-i", input, "-frames:v", "1", "-vf", scale, ...t.codec, out], { timeout: 120000 });
       if (r.status === 0 && fs.existsSync(out) && fs.statSync(out).size > 0) {
         const buf = fs.readFileSync(out);
         if (buf.length <= MAX_BYTES) return { ...t, buf };
