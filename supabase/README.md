@@ -44,7 +44,7 @@
 | `setup/step35-video-feel-tags.sql` | migration 0040：影片型態標籤（route_videos.feel_tags：💪 力量感、🤏 手指超痛、🧠 超難爬、🧘 risky、🦶 精準腳法、🤸 柔軟大師，只收這 6 個、最多 2 個、重複的自動去掉；分享後不能改）；舊版 App 照常可用；新版在還沒執行時照樣分享（不帶型態），建議執行後再更新正式版 | 未套用 |
 | `setup/step36-rope-video-limit.sql` | migration 0041：上攀影片放寬（上攀區每支最長 3 分鐘、100 MB；抱石、長耐力、Spray Wall 照舊 60 秒、50 MB，影片資料依區域檢查；影片檔 bucket 上限 100 MB）。**另外要在 Supabase 把專案的上傳檔案大小上限改成 100 MB**：Storage → Settings（或 Project Settings → Storage）→ Upload file size limit 改成 100 MB → Save；舊版 App 照常可用（自己限制 60 秒、50 MB）；**請先執行這份、改好上傳上限，再更新正式版**（新版上攀可以選 3 分鐘的影片，資料庫沒更新時要等壓縮、上傳完才被擋） | 已套用 |
 | `setup/step37-xindian-a-merge.sql` | migration 0042：新店抱石 A1、A2 合併成「抱石 A 區」（沿用 A1 那一筆，路線、照片、換線日、紀錄照舊；A2 的舊路線和紀錄搬到 A、換線公告的 A2 改成 A，再刪掉 A2；A2 牆上還有路線時擋下；再執行一次不會改到東西）；新舊版 App 都能用（平面圖還沒執行時畫兩區） | 已套用 |
-| `setup/step38-video-thumbs.sql` | migration 0043＋0044：①影片縮圖（省流量：列表只放縮圖，按了播放才載入影片）。route_videos 多一欄 thumb_path；新的 bucket video-thumbs（公開讀、每張最大 1 MB、只收 webp／jpeg，路徑跟影片一樣、跟影片同名）；縮圖要本人上傳、跟影片同名，不對就當作沒有縮圖（不擋分享）；刪檔規則跟影片一樣；後台「清理漏刪的檔案」一起清縮圖。②路線列顯示影片數：區域頁一次讀資料（zone_view）多帶每條路線的影片數。再執行一次不會改到東西。新舊版 App 都能用（還沒執行時新版照常分享、列表顯示灰色方塊＋▶、路線列只顯示留言數）。**執行後**在自己電腦跑 `scripts/video-thumbs.mjs` 幫舊影片補縮圖（說明在檔案開頭） | 未套用 |
+| `setup/step38-video-thumbs.sql` | migration 0043＋0044：①影片縮圖（省流量：列表只放縮圖，按了播放才載入影片）。route_videos 多一欄 thumb_path；新的 bucket video-thumbs（公開讀、每張最大 1 MB、只收 webp／jpeg，路徑跟影片一樣、跟影片同名）；縮圖要本人上傳、跟影片同名，不對就當作沒有縮圖（不擋分享）；刪檔規則跟影片一樣；後台「清理漏刪的檔案」一起清縮圖。②路線列顯示影片數：區域頁一次讀資料（zone_view）多帶每條路線的影片數。再執行一次不會改到東西。新舊版 App 都能用（還沒執行時新版照常分享、列表顯示灰色方塊＋▶、路線列只顯示留言數）。**執行後**在自己電腦跑 `scripts/video-thumbs.mjs` 幫舊影片補縮圖（說明在檔案開頭） | 已套用 |
 
 ## 規則摘要
 
