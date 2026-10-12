@@ -92,6 +92,8 @@ export function dbError(e: { message?: string; code?: string } | null | undefine
   if (e?.code === "23505") return "已經有相同的資料";
   // 新的岩點顏色（咖啡）：資料庫還沒套用 step33 時存不進去
   if (e?.code === "23514" && m.includes("hold_color")) return "資料庫還沒套用新的岩點顏色（step33），請先請老闆在 Supabase 執行 step33";
+  // 上攀影片 3 分鐘、100 MB：資料庫還沒套用 step36 時，超過 60 秒、50 MB 的存不進去
+  if (e?.code === "23514" && (m.includes("duration_s") || m.includes("size_bytes"))) return "這支影片太長：目前每支最長 60 秒（上攀 3 分鐘還沒開放），請先剪短再分享";
   // 沒網路：各家瀏覽器的訊息不一樣（Chrome「Failed to fetch」、iPhone「Load failed」…）
   if (NETWORK_RE.test(m)) return "連不上網路，請確認網路後再試";
   return "發生錯誤，請稍後再試";

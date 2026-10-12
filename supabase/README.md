@@ -42,7 +42,7 @@
 | `setup/step33-hold-color-brown.sql` | migration 0037：岩點顏色新增咖啡（排在粉和黑中間）；請先執行這份再更新正式版（新版 App 選咖啡存路線要這份才存得進去，舊版不受影響） | 已套用 |
 | `setup/step34-prelaunch-hardening.sql` | migration 0038–0039：上線前安全加強（路線第 100 條起用 3 位數、取號只能在新增路線時；影片要先有本人上傳的檔案、24 小時 15 支、說明不能放網址、新版分享的影片記下分享者紀錄上的攀爬日（舊版 App 分享的不記）、分享中的影片檔不能偷換、未登入列不出影片檔；Spray Wall 圈圈只存位置、岩友路線下架後不能恢復；暱稱不能冒充館方、留言不能放網址；刪帳號修正；區域類型、清除自介、員工名單、建立時間、頭像、註冊時間、SVG 照片的權限）；舊版 App 照常可用，但舊版改暱稱被新規則擋下時看不到原因（只顯示「發生錯誤」），建議跟新版同一天上線；要先執行 step34 再更新正式版（新版的 15 支、攀爬日要 step34 才有） | 已套用 |
 | `setup/step35-video-feel-tags.sql` | migration 0040：影片型態標籤（route_videos.feel_tags：💪 力量感、🤏 手指超痛、🧠 超難爬、🧘 risky、🦶 精準腳法、🤸 柔軟大師，只收這 6 個、最多 2 個、重複的自動去掉；分享後不能改）；舊版 App 照常可用；新版在還沒執行時照樣分享（不帶型態），建議執行後再更新正式版 | 未套用 |
-| `setup/step36-rope-video-limit.sql` | migration 0041：上攀影片放寬（上攀區每支最長 3 分鐘、100 MB；抱石、長耐力、Spray Wall 照舊 60 秒、50 MB，影片資料依區域檢查；影片檔 bucket 上限 100 MB）。**另外要在 Supabase 把專案的上傳檔案大小上限改成 100 MB**：Storage → Settings（或 Project Settings → Storage）→ Upload file size limit 改成 100 MB → Save；舊版 App 照常可用（自己限制 60 秒、50 MB） | 未套用 |
+| `setup/step36-rope-video-limit.sql` | migration 0041：上攀影片放寬（上攀區每支最長 3 分鐘、100 MB；抱石、長耐力、Spray Wall 照舊 60 秒、50 MB，影片資料依區域檢查；影片檔 bucket 上限 100 MB）。**另外要在 Supabase 把專案的上傳檔案大小上限改成 100 MB**：Storage → Settings（或 Project Settings → Storage）→ Upload file size limit 改成 100 MB → Save；舊版 App 照常可用（自己限制 60 秒、50 MB）；**請先執行這份、改好上傳上限，再更新正式版**（新版上攀可以選 3 分鐘的影片，資料庫沒更新時要等壓縮、上傳完才被擋） | 未套用 |
 
 ## 規則摘要
 
