@@ -660,11 +660,18 @@ test("影片剪輯：太長的自動打開剪輯、只上傳選的那段，可�
   await D.page.waitForTimeout(800);
   t = await dd.textContent();
   assert.ok(!t.includes("已選") && t.includes("✂ 剪輯長度"), "5 秒的影片在上攀不用剪");
+  // Supabase 的上傳上限還沒改成 100 MB（這裡用很小的上限模擬）：檔案沒超過 App 的上限，提示寫真正的上限，不會說「超過 100 MB」
+  mock.state.uploadMax = 100;
+  await dd.locator("input[type=checkbox]").check();
+  await dd.locator('button:text-is("分享影片")').click();
+  await D.page.waitForFunction(() => document.body.textContent.includes("目前每支最多 50 MB"), null, { timeout: 20000 });
+  assert.ok(!(await D.page.locator("[role=status]").last().textContent()).includes("超過 100 MB"), "不會說超過 100 MB");
+  assert.equal(mock.db.videos.length, 2);
+  mock.state.uploadMax = Infinity;
   // 資料庫還沒套用 step36（舊的 60 秒上限，這裡用 2 秒模擬）：分享後說清楚原因，檔案刪掉
   mock.state.noRopeVideo = true;
   mock.state.oldVideoMax = 2;
   const files0 = Object.keys(mock.db.vfiles).length;
-  await dd.locator("input[type=checkbox]").check();
   await dd.locator('button:text-is("分享影片")').click();
   await D.page.waitForFunction(() => document.body.textContent.includes("這支影片太長"), null, { timeout: 20000 });
   assert.ok((await D.page.locator("[role=status]").last().textContent()).includes("目前每支最長 60 秒（上攀 3 分鐘還沒開放）"), "說清楚原因");

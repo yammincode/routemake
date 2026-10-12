@@ -65,7 +65,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noRopeVideo: false, oldVideoMax: 60, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
+  const state = { offline: false, ascentsFail: null, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -591,6 +591,9 @@ export function createMock() {
       const recent = Object.values(db.vfiles).filter((f) => f.owner === uid && f.created_at > dayAgo).length;
       if (!videoPathOk(uid, routeId, path) || !canShare(uid, routeId) || recent >= 15)
         return J(route, 403, { statusCode: "403", error: "Unauthorized", message: "new row violates row-level security policy" });
+      // state.uploadMax：Supabase 專案的上傳上限（還沒改成 100 MB 時，超過就回 413）
+      if ((req.postDataBuffer()?.length ?? 0) > state.uploadMax)
+        return J(route, 413, { statusCode: "413", error: "Payload too large", message: "The object exceeded the maximum allowed size" });
       db.vfiles[path] = { buf: req.postDataBuffer() ?? Buffer.alloc(0), owner: uid, created_at: now() };
       return J(route, 200, { Key: "route-videos/" + path });
     }
