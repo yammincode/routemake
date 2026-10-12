@@ -17,7 +17,7 @@ declare const self: ServiceWorkerGlobalScope;
 // 各館、Spray Wall 的頁面從 lib/gyms 產生，之後新增館不會漏
 const OFFLINE_PAGES = [
   "/", "/gyms", ...GYMS.map((g) => `/gym/${g.id}`), ...SPRAY_WALLS.map((w) => sprayPath(w.id)),
-  "/card", "/me", "/admin", "/ops", "/resets", "/ops/usage", "/ops/resets",
+  "/new", "/card", "/me", "/admin", "/ops", "/resets", "/ops/usage", "/ops/resets",
   "/feedback", "/rules", "/privacy", "/welcome", "/login",
 ];
 // 區域頁 /zone?id=… 不管哪一區都是同一份頁面，快取時忽略網址參數

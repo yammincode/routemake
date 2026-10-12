@@ -8,6 +8,9 @@ export const ymd = (d: Date | string | number = new Date()) =>
 
 export const todayYmd = () => ymd();
 
+// 台北某天 00:00 的 UTC 時間（ISO，預設今天）；台灣沒有日光節約時間
+export const dayStartIso = (d: string = todayYmd()) => new Date(`${d}T00:00:00+08:00`).toISOString();
+
 const dayNumber = (s: string) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / DAY;
 
 // 距離某天還有幾天（今天 = 0，已過為負數）

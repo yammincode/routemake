@@ -14,6 +14,7 @@ export type VideoCard = {
   caption?: string | null;
   status?: Status | null;
   duration?: number | null; // 秒
+  place?: ReactNode; // New~：哪條路線（RouteTag「中和館・抱石 A 區・A-03」），標題下面一行
   feel?: string; // 型態「🤏 手指超痛・🧘 risky」（feelTagText），自己一行
   tags?: string; // 「身高 170–179cm・動態」（videoTagText）
   meta?: ReactNode; // 例如後台的「B 區 B-03」
@@ -77,6 +78,7 @@ export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) 
         </span>
         <span className="min-w-0 flex-1 pt-px">
           <b className="line-clamp-2 text-sub leading-snug font-bold break-words">{title}</b>
+          {v.place && <span className="mt-1 block text-meta text-ink">{v.place}</span>}
           <span className="mt-1 flex items-center justify-between gap-2 text-meta text-muted">
             {/* 沒寫說明時標題已經有名字，這行只寫時間 */}
             <span className="min-w-0 truncate">{v.caption ? `${v.name}・${v.ago}` : v.ago}</span>
@@ -248,6 +250,7 @@ export function VideoViewer({
           {v.status && <StatusBadge status={v.status} />}
         </div>
         {v.meta && <div className="mt-0.5 text-meta text-white/75">{v.meta}</div>}
+        {v.place && <div className="mt-1 text-meta text-white">{v.place}</div>}
         {v.feel && <div className="mt-0.5 text-meta text-white/75">{v.feel}</div>}
         {v.tags && <div className="mt-0.5 text-meta text-white/75">{v.tags}</div>}
         {v.caption && <p className="mt-1 mb-0 text-sub leading-normal break-words">{v.caption}</p>}

@@ -33,7 +33,7 @@ test("Spray Wall：岩友出路線、員工出岩館路線與下架", async () =
   await c.click('main button:has-text("明德 SPRAY WALL")');
   await c.waitForURL("**/spray/mingde-sw");
   await c.waitForTimeout(800);
-  assert.deepEqual(await c.locator("nav a").allTextContents(), ["館內路線", "人物卡", "我的紀錄"], "一般人看不到管理後台");
+  assert.deepEqual(await c.locator("nav a").allTextContents(), ["館內路線", "New~", "人物卡", "我的紀錄"], "一般人看不到管理後台");
   assert.ok((await c.textContent("main")).includes("教練還沒出岩館路線"));
   assert.equal(await c.locator('main button:has-text("新增岩館路線")').count(), 0, "岩友不能出岩館路線");
 

@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import Icon from "./Icon";
 
 // 留言（原型 .cmt）；likes／liked／onLike：👍 按讚（沒有 onLike 時只顯示讚數）；edited：顯示「已編輯」
+// place＋onOpen：New~ 用，下面多一行是哪條路線（RouteTag）和「看路線 ›」；clamp：長留言最多 3 行
 export function CommentItem({
   name,
   ago,
@@ -15,8 +16,14 @@ export function CommentItem({
   liked = false,
   onLike,
   onName,
+  place,
+  onOpen,
+  clamp = false,
 }: {
   onName?: () => void; // 點名字看人物卡
+  place?: ReactNode;
+  onOpen?: () => void;
+  clamp?: boolean;
   name: string;
   ago: string;
   body: string;
@@ -56,7 +63,7 @@ export function CommentItem({
           )}
         </span>
       </div>
-      <p className="mt-0.5 mb-0 text-sub leading-normal break-words">{body}</p>
+      <p className={`mt-0.5 mb-0 text-sub leading-normal break-words ${clamp ? "line-clamp-3" : ""}`}>{body}</p>
       {(onLike || likes > 0) && (
         <div className="mt-1.5 flex">
           <button
@@ -69,6 +76,16 @@ export function CommentItem({
             <span aria-hidden>👍</span>
             {likes > 0 ? <span className="font-num">{likes}</span> : "讚"}
           </button>
+        </div>
+      )}
+      {place && (
+        <div className="mt-2 flex items-center gap-2 border-t border-line pt-2 text-meta">
+          {place}
+          {onOpen && (
+            <button onClick={onOpen} className="ml-auto flex-none font-bold text-accent">
+              看路線 ›
+            </button>
+          )}
         </div>
       )}
     </div>

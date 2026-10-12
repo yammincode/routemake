@@ -91,6 +91,11 @@ export function createMock() {
     db.videos.push(v);
     return v;
   };
+  const addComment = (userId, route, body, extra = {}) => {
+    const c = { id: uuid(), route_id: route.id, user_id: userId, body, created_at: now(), edited_at: null, deleted_at: null, ...extra };
+    db.comments.push(c);
+    return c;
+  };
 
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const session = (email, u) => {
@@ -142,6 +147,16 @@ export function createMock() {
   };
   const isMgr = (uid, g) => isOwner(uid) || db.staff_roles.some((s) => s.user_id === uid && s.gym_id === g && s.role === "manager");
   const gymOfRoute = (id) => zoneOf(db.routes.find((r) => r.id === id).zone_id).gym_id;
+  // 影片、留言裡嵌的路線（New~ 用：路線全部欄位＋區域＋場館）
+  const routeEmbed = (routeId) => {
+    const r = db.routes.find((x) => x.id === routeId);
+    const z = zoneOf(r.zone_id);
+    const g = db.gyms.find((x) => x.id === z.gym_id);
+    return {
+      ...r,
+      zones: { id: z.id, gym_id: z.gym_id, code: z.code, name: z.name, kind: z.kind ?? "wall", grade_system: z.grade_system, photo_path: z.photo_path, gyms: { id: g.id, name: g.name, is_live: g.is_live, comments_enabled: g.comments_enabled } },
+    };
+  };
   // 路線下架時刪掉影片資料（資料庫觸發器）
   const dropVideos = (routeId) => (db.videos = db.videos.filter((v) => v.route_id !== routeId));
   // 同 0038 的 strip_invisible、link_free：網址（全形、「。」、短網址、夾看不見的字元也算；「V5. Top」這種一般句子不算）
@@ -187,7 +202,8 @@ export function createMock() {
     const [op, ...rest] = v.split(".");
     const val = rest.join(".");
     if (op === "not") return !cond(r, k, val);
-    const x = k.includes(".") ? (r[k.split(".")[0]] || {})[k.split(".")[1]] : r[k];
+    // 篩選可以往下好幾層（routes.zones.gyms.is_live）
+    const x = k.split(".").reduce((o, p) => (o == null ? o : o[p]), r);
     if (op === "eq") return String(x) === val;
     if (op === "is") return val === "null" ? x == null : true;
     if (op === "in") return val.replace(/[()]/g, "").split(",").map((s) => s.replace(/"/g, "")).includes(String(x));
@@ -792,8 +808,18 @@ export function createMock() {
     }
     if (t === "comments") {
       if (m === "GET") {
-        let rows = filt(db.comments.filter((c) => !c.deleted_at), sp).map((c) => ({ ...c, profiles: { nickname: prof(c.user_id)?.nickname }, comment_likes: db.likes.filter((l) => l.comment_id === c.id).map((l) => ({ user_id: l.user_id })) }));
-        rows.sort((a, b) => a.created_at.localeCompare(b.created_at));
+        let rows = db.comments
+          .filter((c) => !c.deleted_at)
+          .map((c) => ({
+            ...c,
+            profiles: { nickname: prof(c.user_id)?.nickname },
+            comment_likes: db.likes.filter((l) => l.comment_id === c.id).map((l) => ({ user_id: l.user_id })),
+            ...(sel.includes("routes") ? { routes: routeEmbed(c.route_id) } : {}),
+          }));
+        // 先照 order 排（New~ 新到舊），再篩選、取前幾筆
+        const desc = /created_at\.desc/.test(sp.get("order") || "");
+        rows.sort((a, b) => (desc ? b.created_at.localeCompare(a.created_at) : a.created_at.localeCompare(b.created_at)));
+        rows = filt(rows, sp);
         if (!sel.includes("profiles")) rows = rows.map(({ profiles, ...c }) => c);
         return out(rows);
       }
@@ -843,7 +869,7 @@ export function createMock() {
         let rows = db.videos.map((v) => {
           const r = db.routes.find((x) => x.id === v.route_id);
           const z = zoneOf(r.zone_id);
-          return { ...v, profiles: { nickname: prof(v.user_id)?.nickname }, routes: { code: r.code, zones: { gym_id: z.gym_id, name: z.name } } };
+          return { ...v, profiles: { nickname: prof(v.user_id)?.nickname }, routes: sel.includes("gyms") ? routeEmbed(r.id) : { code: r.code, zones: { gym_id: z.gym_id, name: z.name } } };
         });
         if (gym) rows = rows.filter((v) => v.routes.zones.gym_id === gym);
         if (state.noVideoTags) rows = rows.map(({ height_band, move, ...v }) => v); // 舊資料庫沒有這兩欄
@@ -884,6 +910,7 @@ export function createMock() {
       }
     }
     if (t === "route_likes") {
+      if (m === "GET") return out(filt(db.routeLikes, sp).map((l) => ({ route_id: l.route_id, user_id: l.user_id })));
       if (m === "POST") {
         if (!uid || !prof(uid)?.nickname) return J(route, 403, { code: "42501", message: "沒有權限" });
         db.routeLikes.push({ route_id: body.route_id, user_id: uid });
@@ -909,6 +936,7 @@ export function createMock() {
         return empty(route);
       }
     }
+    if (t === "profiles" && m === "GET") return out(filt(db.profiles, sp).map((p) => ({ id: p.id, nickname: p.nickname })));
     if (t === "profiles" && m === "PATCH") {
       // 同 0038 的 profiles_nickname_check：看不見的字元、網址；冒充館方的字（員工、老闆可以）
       const nick = body.nickname ?? "";
@@ -944,5 +972,5 @@ export function createMock() {
     syncZoneResets(zone_ids, null);
     return e;
   };
-  return { db, state, addUser, addRoute, addAscent, addVideo, addReset, handler };
+  return { db, state, addUser, addRoute, addAscent, addVideo, addComment, addReset, handler };
 }

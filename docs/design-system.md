@@ -102,17 +102,17 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Chip.tsx` | `ChipRow`（wrap：排不下就換行）、`Chip` |
 | `Sheet.tsx` | `Sheet`、`SheetTitle`、`SheetSub`、`SheetSection` |
 | `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`（disabled：處理中不能切）、`Segmented`（small：一排小膠囊）、`OptionGrid`（單選方塊、選填，再按一次取消；2 或 4 格一排，可加小字說明）、`MultiOptionGrid`（複選方塊、3 格一排，最多 max 個，選滿後其他格變淡按不了；影片型態用）、`Rating`（1–5 分）、`ColorPicker`、`GradePicker`、`TagPicker`、`Check` |
-| `Route.tsx` | `Points`、`Grade`、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`（compact：路線卡片一排小按鈕）、`RouteRow`（color 不給＝長耐力路線，不畫膠帶）、`RouteList`、`CommentCount`、`SetterNote` |
+| `Route.tsx` | `Points`、`Grade`、`RouteTag`（小一號的路線標示：難度色塊＋「店名・區域・路線」，New~ 用）、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`（compact：路線卡片一排小按鈕）、`RouteRow`（color 不給＝長耐力路線，不畫膠帶）、`RouteList`、`CommentCount`、`SetterNote` |
 | `Wall.tsx` | `WallPhoto`（`hideable`：左上角「隱藏路線／顯示路線」按鈕，只用在顧客區域頁；放大時加 `data-noswipe`，在照片上左右拖是拖照片、不換區）、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`（難度色帶版：小縮圖、完成數、`GradeStrip`、難度範圍或篩選結果、換線倒數；guest 只寫條數）、`ZoneList`、`GradeStrip`（區域難度色帶）、`GradeChart`（全館難度分布）、`BandPicker`（全部／入門 VB–V2／進階 V3–V5／挑戰 V6+；`missing`：這裡沒有路線的那段變淡、點不了）、`BandSwatch`（難度段的三段小色條）、`ZoneGradeCard`（區域頁照片下面的「○○ 區難度」色帶卡：共幾條、`GradeStrip` 拉滿整個寬度、難度範圍；選了難度寫「V3–V5 有 ○ 條」）、`BandHeading`（區域頁路線分段標題：色條＋「入門 VB–V2」＋幾條）、`GoalLine`（快換線提醒）、`NewRouteRow`、`NewRouteCard`（color 不給就不畫色點）、`GymRow`（lines：館名下面的換線小字；tag 給空字串不顯示右邊的字）、`SoonBox`、`dueText`；`ZoneCard` 的 due 是換線（7 天內 warn）；`ZoneNav`（區域頁標題下面的上一區／下一區：左右兩個一樣寬的方框，上面小字「‹ 上一區」「下一區 ›」、下面區名，跟「‹ 館名」返回不一樣；第一區沒有左邊、最後一區沒有右邊（空著）；長名字截短、報讀唸完整名字；`focus` 用按鈕換區後焦點留在同一邊，沒有那一邊就停在另一邊）、`SwipeHint`（左右滑動時螢幕邊緣的深色膠囊，寫要去的那一區） |
 | `Resets.tsx` | `ResetLines`（選館頁換線小字：換線中、剛換好 NEW、○ 天後換線）、`ResetMonth`（換線行事曆：一列一週，館的顏色長條，兩天跨兩格，點日期／色塊選日子）、`ResetDateRow`（日期＋名稱一列）、`GymDot`（館的顏色色票） |
 | `FloorPlan.tsx` | `FloorPlan`（guest：每區寫條數、統一底色；換線不畫在平面圖上（不寫字、不畫虛線框，報讀照樣唸「○ 天後換線」）；有好幾層的館（南港）同一張卡片由上到下畫，每層上方標 1F、2F；區域名字沒改過寫簡稱，店長改過名字就寫新名字，依旁邊的空間縮小、放不下截短加「…」，見 `lib/floorplan.ts` 的 `planLabel`、`planText`）。右上角「立體／平面」切換，記在這支手機（`usePlanMode`），館首頁和管理後台一起換；立體（預設）是 2.5D 斜俯視建築模型（幾何在 `lib/plan25d.ts`）：方塊越高路線越多（後面的小區頂面會被擋掉超過 4 成時整張圖自動壓低）、照真的前後位置畫、頂面依完成度上色、側面混 `--plan-shade`、後牆半透明（門口留空）、櫃台是矮方塊，牆、櫃台、地上的字不擋點擊；區名正立、固定 13.5px（照卡片寬度換算），放在平面圖同樣的位置（區名在區裡面的跟著頂面浮上去），蓋到別區的方塊就挪到旁邊，太擠自動推開，離原本位置遠了加指引線，改過的長名字超過 5 個字寬截短；按鈕（鍵盤、報讀）是區名、照區域順序，鍵盤移到時有深色外框，方塊也能點；後台選中的方塊浮起來、區名變深色膠囊（不移動）；只跟平面圖有關的計算每張圖記起來，量到卡片寬度才畫 |
-| `Comments.tsx` | `CommentItem`（含 👍 按讚；刪除要按兩次）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
+| `Comments.tsx` | `CommentItem`（含 👍 按讚；刪除要按兩次；New~ 用：place 路線一行＋onOpen「看路線 ›」、clamp 最多 3 行）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
 | `Spray.tsx` | `HoldMarks`（照片上的圈圈：起攀 S 綠、路線點 藍、完攀 T 紅；細框 1.5px＋外圈極細深色邊，兩指放大時框不變粗；S／T 標籤 15px）、`HoldLegend`、`HoldTools`（選種類與大小）、`SprayRow`、`RouteThumb`（列表縮圖，放大到路線範圍）、`HOLD_TYPES`、`HOLD_SIZES` |
 | `Profile.tsx` | `Avatar`（暱稱第一個字）、`HexChart`（六角形能力表）、`ProfileCardView`（人物卡） |
 | `Tabs.tsx` | `Tabs`（路線卡片的紀錄／影片／留言分頁） |
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |
-| `Video.tsx` | `VideoRow`、`VideoList`（路線卡片影片分頁：一支一列，方形縮圖＋片長、心得、誰・攀爬日（沒有紀錄時「○ 天前分享」，`videoWhen`）、`VideoResult` 分享者紀錄、型態一行（`feel`，`feelTagText`）、身高・動作一行（`tags`））、`VideoStrip`（橫向滑動縮圖，後台用）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`、`VideoTrim`（顧客分享影片；VideoTrim 剪輯長度：預覽、▶ 播放選的這段、時間軸、開始／結束拉桿＋－／＋ 0.5 秒，最長 max 秒，結束不超過影片長度；disabled：處理中不能改） |
+| `Video.tsx` | `VideoRow`、`VideoList`（路線卡片影片分頁：一支一列，方形縮圖＋片長、心得、誰・攀爬日（沒有紀錄時「○ 天前分享」，`videoWhen`）、`VideoResult` 分享者紀錄、New~ 的哪條路線（`place`）、型態一行（`feel`，`feelTagText`）、身高・動作一行（`tags`））、`VideoStrip`（橫向滑動縮圖，後台用）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`、`VideoTrim`（顧客分享影片；VideoTrim 剪輯長度：預覽、▶ 播放選的這段、時間軸、開始／結束拉桿＋－／＋ 0.5 秒，最長 max 秒，結束不超過影片長度；disabled：處理中不能改） |
 | `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`MonthGradeChart`（我的紀錄本月完攀直條圖：每個難度一根、黃色那段是 Flash、難度下面膠帶色；點一根選它其他變淡；上攀用主色；沒有完攀只有其他紀錄的那根畫虛線、沒紀錄的變淡點不了）、`TotalRow`、`SetBox` |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
 | `Endurance.tsx` | `NumberMarks`（長耐力路線照順序的點：細圈＋號碼，第 1 點綠、最後一點紅、中間藍；放大照片時線和號碼不變粗；reached 之後的點變淡；onTap 編輯時點圈圈刪點，號碼點不到＝點在照片上）、`HighpointPicker`（最高爬到第幾點：－／拉桿／＋，最多到倒數第 2 點，下面大字「30 ／ 38 點」） |
@@ -121,7 +121,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Toast.tsx` | `ToastProvider`、`useToast` |
 | `Icon.tsx` | `Icon`（flash、send、project、chat、lock、down、video、play） |
 
-頁面層級：`components/Header.tsx`（Logo＋場館切換；管理後台不給館，只有 Logo）、`components/TabBar.tsx`（底部分頁：館內路線、人物卡、我的紀錄，員工多「管理後台」，老闆和被授權的人多「營運」；五個分頁時間距縮小，360 寬也排得下一行）、`components/LoginGate.tsx`（要先登入的頁面：沒登入顯示說明和登入按鈕）、`components/ErrorScreen.tsx`（出錯、找不到頁面的中文畫面）。
+頁面層級：`components/Header.tsx`（Logo＋場館切換；管理後台不給館，只有 Logo）、`components/TabBar.tsx`（底部分頁：館內路線、New~、人物卡、我的紀錄，員工多「管理後台」，老闆和被授權的人多「營運」；五、六個分頁時間距縮小，360 寬也排得下一行；六個分頁時「管理後台」寫成「後台」）、`components/LoginGate.tsx`（要先登入的頁面：沒登入顯示說明和登入按鈕）、`components/ErrorScreen.tsx`（出錯、找不到頁面的中文畫面）。
 
 篩選鈕：頁面上的長篩選（難度、顏色）用 `ChipRow` 左右滑；面板裡選項不多（只出現有用到的，例如影片的身高、動作、型態）用 `ChipRow wrap` 換行排，不要左右滑（窄手機會把後面的選項整顆藏起來，看不出還有）。
 

@@ -17,6 +17,20 @@ export function Grade({ grade, className = "text-num-row w-[50px]" }: { grade: n
   );
 }
 
+// 小一號的路線標示（New~ 的影片、留言）：難度色塊＋「中和館・抱石 A 區・A-03」，太長截短；YDS 不縮小（本來就是小字）
+export function RouteTag({ grade, children }: { grade: number; children: ReactNode }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      {isYds(grade) ? (
+        <span className="flex-none font-num text-meta font-bold">{gradeLabel(grade)}</span>
+      ) : (
+        <Grade grade={grade} className="w-auto min-w-[28px] flex-none text-meta leading-[1.45]" />
+      )}
+      <span className="min-w-0 truncate">{children}</span>
+    </span>
+  );
+}
+
 // 岩點色圓點
 export function HoldDot({ color, className = "size-3.5" }: { color: HoldColor; className?: string }) {
   return <span className={`flex-none rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,.2)] ${className}`} style={{ background: HOLD_COLORS[color] }} />;

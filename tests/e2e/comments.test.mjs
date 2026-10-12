@@ -22,7 +22,8 @@ test("一則留言：留過後只能編輯或刪除再留；三則以上左右�
 
   await c.fill('[role=dialog] textarea[placeholder^="公開留言"]', "第一次留言");
   await c.click('[role=dialog] button:text-is("送出")');
-  await c.waitForTimeout(500);
+  // 等留言框收起來（電腦忙時半秒不一定夠）
+  await c.locator('[role=dialog] textarea[placeholder^="公開留言"]').waitFor({ state: "detached", timeout: 5000 }).catch(() => {});
   assert.equal(mock.db.comments.length, 1);
   assert.equal(await c.locator('[role=dialog] textarea[placeholder^="公開留言"]').count(), 0, "留過後不再顯示留言框");
   assert.ok((await c.textContent("[role=dialog]")).includes("每條路線只能留一則留言"));

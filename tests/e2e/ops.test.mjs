@@ -18,7 +18,7 @@ test("營運：老闆授權看萬華使用狀況、輸入換線日 → 對方多
   const o = O.page;
   await login(o, "owner1", "password1", "/admin");
   await o.waitForTimeout(1000);
-  assert.deepEqual(await tabs(o), ["館內路線", "人物卡", "我的紀錄", "管理後台", "營運"], "老闆有管理後台和營運");
+  assert.deepEqual(await tabs(o), ["館內路線", "New~", "人物卡", "我的紀錄", "後台", "營運"], "老闆有管理後台和營運");
   assert.equal(await o.locator('main button:has-text("使用狀況")').count(), 0, "管理後台不再放使用狀況");
   assert.equal(await o.locator('main button:text-is("📅 換線日")').count(), 0, "管理後台不再放換線日");
   await o.click('nav a:text-is("營運")');
@@ -32,7 +32,7 @@ test("營運：老闆授權看萬華使用狀況、輸入換線日 → 對方多
   const c = C.page;
   await login(c, "climber88", "password1", "/gyms");
   await c.waitForTimeout(800);
-  assert.deepEqual(await tabs(c), ["館內路線", "人物卡", "我的紀錄"], "顧客沒有管理後台、營運");
+  assert.deepEqual(await tabs(c), ["館內路線", "New~", "人物卡", "我的紀錄"], "顧客沒有管理後台、營運");
   await c.goto(BASE + "/ops", { waitUntil: "networkidle" });
   await c.waitForTimeout(800);
   assert.ok((await c.textContent("main")).includes("營運給老闆和老闆授權的人使用"), "直接打網址看到說明");
@@ -57,7 +57,7 @@ test("營運：老闆授權看萬華使用狀況、輸入換線日 → 對方多
   // 小安：多一個營運分頁（沒有管理後台），看得到兩個按鈕；進管理後台會被帶去營運
   await c.reload({ waitUntil: "networkidle" });
   await c.waitForTimeout(1000);
-  assert.deepEqual(await tabs(c), ["館內路線", "人物卡", "我的紀錄", "營運"]);
+  assert.deepEqual(await tabs(c), ["館內路線", "New~", "人物卡", "我的紀錄", "營運"]);
   assert.ok((await c.textContent("main")).includes("老闆授權你看萬華館的使用狀況、輸入各館的換線日"));
   assert.equal(await c.locator('main button:text-is("📊 使用狀況")').count(), 1);
   assert.equal(await c.locator('main button:text-is("📅 換線日")').count(), 1);
@@ -79,7 +79,7 @@ test("營運：老闆授權看萬華使用狀況、輸入換線日 → 對方多
   assert.ok(mock.db.audit.some((x) => x.action === "usage_viewer.revoke" && x.gym_id === "g2"));
   await c.reload({ waitUntil: "networkidle" });
   await c.waitForTimeout(1000);
-  assert.deepEqual(await tabs(c), ["館內路線", "人物卡", "我的紀錄"], "取消後沒有營運分頁");
+  assert.deepEqual(await tabs(c), ["館內路線", "New~", "人物卡", "我的紀錄"], "取消後沒有營運分頁");
   assert.ok((await c.textContent("main")).includes("營運給老闆和老闆授權的人使用"));
 
   // 重新進營運：權限都取消的人不會留在名單上
@@ -115,7 +115,7 @@ test("營運：訊號差時點了館名馬上再點一次，是取消（不會�
   assert.deepEqual(errors, []);
 });
 
-test("營運：360 寬的小手機，老闆的五個分頁排得下、字不換行", async () => {
+test("營運：360 寬的小手機，老闆的六個分頁（含 New~，管理後台寫成「後台」）排得下、字不換行", async () => {
   const mock = createMock();
   mock.addUser("owner1", "password1", { nickname: "老闆", is_owner: true });
   const { page, errors } = await phone(browser, mock, { viewport: { width: 360, height: 740 } });
@@ -132,7 +132,7 @@ test("營運：360 寬的小手機，老闆的五個分頁排得下、字不換�
       return { label: e.textContent, lines, inside: t.left >= b.left - 0.5 && t.right <= b.right + 0.5, right: b.right };
     })
   );
-  assert.equal(boxes.length, 5);
+  assert.equal(boxes.length, 6);
   assert.ok(boxes.every((b) => b.right <= 360), "沒有超出畫面");
   assert.ok(boxes.every((b) => b.lines === 1), `分頁名稱沒有換行：${JSON.stringify(boxes)}`);
   assert.ok(boxes.every((b) => b.inside), `分頁名稱沒有超出框：${JSON.stringify(boxes)}`);
@@ -170,7 +170,7 @@ test("還沒套用 step28：老闆照常用使用狀況、換線日，授權只�
   const M = await phone(browser, mock);
   await login(M.page, "manager1", "password1", "/admin");
   await M.page.waitForTimeout(1000);
-  assert.deepEqual(await tabs(M.page), ["館內路線", "人物卡", "我的紀錄", "管理後台"], "店長沒有營運分頁");
+  assert.deepEqual(await tabs(M.page), ["館內路線", "New~", "人物卡", "我的紀錄", "管理後台"], "店長沒有營運分頁");
   assert.equal(await M.page.locator('main button:has-text("使用狀況")').count(), 0);
   assert.deepEqual([...O.errors, ...M.errors], []);
 });

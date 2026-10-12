@@ -23,7 +23,7 @@ import { Check, ColorPicker, GradePicker, Label, MultiOptionGrid, OptionGrid, Ra
 import { BandHeading, BandPicker, GoalLine, GradeChart, GymRow, NewRouteCard, NewRouteRow, SoonBox, SwipeHint, ZoneCard, ZoneGradeCard, ZoneList, ZoneNav } from "@/components/ui/Gym";
 import { GymDot, ResetDateRow, ResetLines, ResetMonth } from "@/components/ui/Resets";
 import { newRoutesText, type ResetEvent } from "@/lib/resets";
-import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
+import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, RouteTag, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { CalendarHeat, DailyBars, Delta, GradeBars, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
@@ -676,6 +676,30 @@ export default function DesignShowcase() {
 
       <Block title="拖曳排序">
         <SortList items={order.map((n) => ({ id: n, label: n }))} onChange={setOrder} />
+      </Block>
+
+      <Block title="New~（大家最新的影片、留言）">
+        <p className="mt-0 mb-1.5 text-meta text-muted">影片一列多一行「哪條路線」（VideoCard place＋RouteTag）；留言下面多一行路線和「看路線 ›」（CommentItem place、onOpen），長留言最多 3 行（clamp）</p>
+        <VideoList>
+          <VideoRow
+            v={{ ...DEMO_VIDEOS[0], place: <RouteTag grade={4}>中和館・抱石 A 區・A-03</RouteTag> }}
+            onClick={() => toast("播放")}
+          />
+        </VideoList>
+        <div className="mt-2">
+          <CommentList>
+            <CommentItem
+              name="小安"
+              ago="今天"
+              body="第三手好遠，矮個子可以先踩右邊那顆小點再換手；最後一手要相信自己直接丟上去，不要猶豫，腳一定要踩穩才不會滑掉，這條真的很好玩"
+              likes={5}
+              onLike={() => toast("👍")}
+              clamp
+              place={<RouteTag grade={6}>明德館・B 區・B-07</RouteTag>}
+              onOpen={() => toast("打開路線卡片（留言分頁）")}
+            />
+          </CommentList>
+        </div>
       </Block>
 
       <Block title="顧客影片">

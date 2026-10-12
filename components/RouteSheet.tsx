@@ -41,7 +41,8 @@ import { ascentPoints, routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
 // 路線卡片（底部彈出）：上方路線資訊與一排「點一下就記錄」，下方分頁：紀錄（日期、感受、心得）、影片、留言
-// photo：區域照片（長耐力路線在卡片上畫出全部的點）
+// photo：區域照片（長耐力路線在卡片上畫出全部的點）；initialTab：打開時停在哪個分頁（New~ 點影片、留言進來）
+export type RouteTab = "log" | "video" | "comment";
 export default function RouteSheet({
   route,
   photo,
@@ -52,6 +53,7 @@ export default function RouteSheet({
   onClose,
   onSaved,
   spray,
+  initialTab,
 }: {
   route: Route | null;
   photo?: string | null;
@@ -62,6 +64,7 @@ export default function RouteSheet({
   onClose: () => void;
   onSaved: (a: Ascent | null) => void;
   spray?: SprayExtras;
+  initialTab?: RouteTab;
 }) {
   return (
     <Sheet open={!!route} onClose={onClose}>
@@ -77,6 +80,7 @@ export default function RouteSheet({
           onClose={onClose}
           onSaved={onSaved}
           spray={spray}
+          initialTab={initialTab}
         />
       )}
     </Sheet>
@@ -105,6 +109,7 @@ function RouteBody({
   onClose,
   onSaved,
   spray,
+  initialTab,
 }: {
   route: Route;
   photo: string | null;
@@ -115,6 +120,7 @@ function RouteBody({
   onClose: () => void;
   onSaved: (a: Ascent | null) => void;
   spray?: SprayExtras;
+  initialTab?: RouteTab;
 }) {
   const { session, access } = useAuth();
   const rules = useScoring();
@@ -134,7 +140,7 @@ function RouteBody({
   const [opened] = useState(() => ({ status: ascent?.status ?? null, date: ascent?.climbed_on ?? null, hp: ascent?.highpoint ?? null }));
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [draft, setDraft] = useState("");
-  const [tab, setTab] = useState<"log" | "video" | "comment" | null>(null);
+  const [tab, setTab] = useState<RouteTab | null>(initialTab ?? null);
   const [details, setDetails] = useState(!!(ascent && (ascent.feel != null || ascent.grade_feel != null || ascent.private_note)));
   const [videoCount, setVideoCount] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
