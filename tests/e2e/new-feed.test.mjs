@@ -151,6 +151,7 @@ test("New~ 打開自己記錄過的路線：卡片帶著原本的紀錄，再點
   mock.addAscent(me, r, "project", taipeiDay(-6), { private_note: "卡在最後一手" });
   mock.addVideo(other, r, { caption: "今天的", created_at: ago(within(1)) });
   mock.addComment(other, r, "先踩右邊那顆", { created_at: ago(within(2)) });
+  mock.addComment(me, mock.addRoute(mock.db.zones[0], 2, "綠"), "我自己的留言", { created_at: ago(within(3)) });
   const asc = () => mock.db.ascents.find((a) => a.route_id === r.id);
 
   const { page: c, errors } = await phone(browser, mock);
@@ -180,7 +181,7 @@ test("New~ 打開自己記錄過的路線：卡片帶著原本的紀錄，再點
   // 從留言再打開同一條：是剛剛存的「完攀」；在卡片裡按讚，關掉後 New~ 的列表也是按過的
   await c.click('[role=tab]:has-text("留言")');
   const panel = c.locator("[role=tabpanel]:not([hidden])");
-  await panel.locator('button:text-is("看路線 ›")').click();
+  await panel.locator("div.bg-sunk", { hasText: "先踩右邊那顆" }).locator('button:text-is("看路線 ›")').click();
   await dialog.waitFor();
   await c.waitForTimeout(400);
   assert.equal(await pressed("完攀").count(), 1, "記住剛剛存的");
@@ -190,6 +191,16 @@ test("New~ 打開自己記錄過的路線：卡片帶著原本的紀錄，再點
   await c.keyboard.press("Escape");
   await c.waitForTimeout(600);
   assert.equal(await panel.locator('button[aria-label="收回讚，目前 1 個讚"]').count(), 1, "列表也更新");
+
+  // 在卡片裡刪掉自己的留言，關掉後列表也拿掉
+  await panel.locator("div.bg-sunk", { hasText: "我自己的留言" }).locator('button:text-is("看路線 ›")').click();
+  await dialog.locator('button:text-is("刪除")').click();
+  await dialog.locator('button:text-is("確定刪除？再按一次")').click();
+  await c.waitForTimeout(400);
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(600);
+  assert.ok(!(await panel.textContent()).includes("我自己的留言"), "刪掉的留言從列表拿掉");
+  assert.ok((await panel.textContent()).includes("先踩右邊那顆"), "其他的還在");
   assert.deepEqual(errors, []);
 });
 
@@ -233,9 +244,11 @@ test("New~ 讀不到自己的紀錄：卡片寫讀不到、不能記錄，可以
   mock.state.routeLikesReadFail = true;
   await c.click('[role=tab]:has-text("影片")');
   await c.locator('[role=tabpanel]:not([hidden]) li button[aria-label^="播放"]', { hasText: "Spray 今天" }).click();
+  const failedLikes = c.waitForResponse((res) => res.url().includes("/rest/v1/route_likes") && res.status() === 500);
   await c.locator('[aria-label="影片播放"] button:has-text("看這條路線")').click();
   await dialog.waitFor();
-  await c.waitForTimeout(600);
+  await failedLikes;
+  await c.waitForTimeout(200);
   mock.state.routeLikesReadFail = false;
   const like = dialog.locator("button", { hasText: "👍" }).first();
   await like.click();
@@ -277,5 +290,80 @@ test("New~ 留言：按讚後換一批，再出現時還是按過的", async () 
   }
   assert.ok(back, `「${first}」換一批後有再出現`);
   assert.equal(await card().locator('button[aria-label="收回讚，目前 1 個讚"]').count(), 1, "還是按過的");
+  assert.deepEqual(errors, []);
+});
+
+test("New~ 訊號差：卡片馬上打開寫讀取中、不能記錄；關掉去看影片，讀到了也不會跳出卡片；上次讀不到、再打開是讀取中；Spray Wall 讚數還沒讀到時按讚提示讀取中", async () => {
+  const mock = createMock();
+  const me = mock.addUser("climber88", "password1", { nickname: "小安" });
+  const other = mock.addUser("other22", "password1", { nickname: "阿明" });
+  const r = mock.addRoute(mock.db.zones[0], 4, "藍");
+  mock.addAscent(me, r, "project", taipeiDay(-6), { private_note: "卡在最後一手" });
+  mock.addComment(other, r, "先踩右邊那顆", { created_at: ago(within(2)) });
+  mock.addVideo(other, r, { caption: "藍色今天", created_at: ago(within(1)) });
+  const sw = mock.db.zones.find((z) => z.gym_id === "mingde" && z.kind === "spray");
+  const sr = mock.addRoute(sw, 3, "白");
+  Object.assign(sr, { kind: "community", name: "阿明的路線", created_by: other, holds: [{ x: 20, y: 80, t: "s" }, { x: 60, y: 20, t: "t" }] });
+  mock.addVideo(other, sr, { caption: "Spray 今天", created_at: ago(within(3)) });
+
+  const { page: c, errors } = await phone(browser, mock);
+  await login(c, "climber88", "password1", "/new");
+  await c.waitForTimeout(600);
+  const dialog = c.locator("[role=dialog]");
+  const viewer = c.locator('[aria-label="影片播放"]');
+  const openComment = async () => {
+    await c.click('[role=tab]:has-text("留言")');
+    await c.locator('[role=tabpanel]:not([hidden]) button:text-is("看路線 ›")').click();
+    await dialog.waitFor();
+    await c.waitForTimeout(300);
+  };
+
+  // 讀紀錄很慢：卡片馬上打開、寫讀取中、沒有記錄按鈕
+  mock.state.readDelay = { ascents: 2000 };
+  await openComment();
+  assert.ok((await dialog.textContent()).includes("讀取中"), "馬上打開、寫讀取中");
+  assert.equal(await dialog.locator('button:text-is("完攀")').count(), 0, "還沒讀到不能記錄");
+  // 等不及關掉、去看影片：讀到了也不會跳出卡片、不會關掉影片
+  await c.keyboard.press("Escape");
+  await c.click('[role=tab]:has-text("影片")');
+  await c.locator('[role=tabpanel]:not([hidden]) li button[aria-label^="播放"]', { hasText: "藍色今天" }).click();
+  await viewer.waitFor();
+  await c.waitForTimeout(2500);
+  assert.equal(await viewer.count(), 1, "影片還在播");
+  assert.equal(await c.locator('[role=dialog]:not([aria-label="影片播放"])').count(), 0, "卡片沒有自己跳出來（播放畫面也是 dialog，不算）");
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(300);
+
+  // 上次讀不到，關掉再打開同一條：先寫讀取中（不是上次的讀不到），讀到就顯示記錄按鈕
+  mock.state.readDelay = {};
+  mock.state.ascentsReadFail = true;
+  await openComment();
+  await dialog.locator("text=讀不到你在這條路線的紀錄").waitFor({ timeout: 5000 });
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(300);
+  mock.state.ascentsReadFail = false;
+  mock.state.readDelay = { ascents: 1500 };
+  await openComment();
+  const t = await dialog.textContent();
+  assert.ok(t.includes("讀取中") && !t.includes("讀不到"), "再打開是讀取中：" + t.slice(0, 60));
+  await dialog.locator('button[aria-pressed="true"]', { hasText: "嘗試中" }).waitFor({ timeout: 5000 });
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(300);
+
+  // Spray Wall：讚數還沒讀到時按讚 → 提示讀取中、不會亂按；讀到了才按得到
+  mock.state.readDelay = { route_likes: 2500 };
+  await c.click('[role=tab]:has-text("影片")');
+  await c.locator('[role=tabpanel]:not([hidden]) li button[aria-label^="播放"]', { hasText: "Spray 今天" }).click();
+  await viewer.locator('button:has-text("看這條路線")').click();
+  await dialog.locator('button[aria-pressed="false"]', { hasText: "完攀" }).waitFor({ timeout: 5000 });
+  const like = dialog.locator("button", { hasText: "👍" }).first();
+  await like.click();
+  await c.waitForTimeout(300);
+  assert.match(await c.locator("[role=status]").last().textContent(), /讀取中，請稍後再按/);
+  assert.equal(mock.db.routeLikes.length, 0);
+  await dialog.locator("text=阿明 出的").waitFor({ timeout: 5000 });
+  await like.click();
+  await c.waitForTimeout(400);
+  assert.equal(mock.db.routeLikes.length, 1, "讀到了才按得到");
   assert.deepEqual(errors, []);
 });

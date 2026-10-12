@@ -65,7 +65,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -623,6 +623,8 @@ export function createMock() {
 
     const t = p.replace("/rest/v1/", "");
     const sel = sp.get("select") || "";
+    // state.readDelay：讀某張表要等幾毫秒（模擬訊號差），例如 { ascents: 1500 }
+    if (m === "GET" && state.readDelay[t]) await new Promise((r) => setTimeout(r, state.readDelay[t]));
     if (t === "gyms") {
       if (m === "GET") return out(filt([...db.gyms].sort((a, b) => a.sort - b.sort), sp));
       if (m === "PATCH") { filt(db.gyms, sp).filter((g) => isMgr(uid, g.id)).forEach((g) => Object.assign(g, body)); return empty(route); }

@@ -104,6 +104,7 @@ export default function NewView() {
   const [profile, setProfile] = useState<{ userId: string; gymId: string } | null>(null);
   const liking = useRef(new Set<string>()); // 正在送出讚的留言：重讀列表時保留手機上的讚
   const syncSeq = useRef<Record<string, number>>({}); // 每條路線最後一次重讀，舊的回來晚了不用
+  const staleOpen = useRef<string | null>(null); // 打開時離線紀錄送出了：這條關掉後要重讀
 
   useEffect(() => {
     let live = true;
@@ -139,9 +140,12 @@ export default function NewView() {
     };
   }, [routeId, uid, known, readKey]);
 
-  // 離線的紀錄送出（或被退回）後，記住的紀錄可能不對了：除了正打開的那條，其他下次打開再讀
+  // 離線的紀錄送出（或被退回）後，記住的紀錄可能不對了：下次打開再讀（正打開的那條等關掉）
   useEffect(() => {
-    const reset = () => setMine((m) => m && { ...m, map: routeId && routeId in m.map ? { [routeId]: m.map[routeId] } : {} });
+    const reset = () => {
+      staleOpen.current = routeId;
+      setMine((m) => m && { ...m, map: routeId && routeId in m.map ? { [routeId]: m.map[routeId] } : {} });
+    };
     window.addEventListener("routemake:synced", reset);
     return () => window.removeEventListener("routemake:synced", reset);
   }, [routeId]);
@@ -162,8 +166,11 @@ export default function NewView() {
 
   const toLogin = () => router.push(`/login?next=${encodeURIComponent(herePath())}`);
 
+  // 每次打開都重新開始：先寫讀取中（不顯示上次讀不到的訊息）；Spray Wall 的讚等讀到最新的才能按
   const openRoute = (p: FeedPlace, tab: RouteTab) => {
     setPlayingId(null);
+    setReadFailed(null);
+    setSpray(null);
     setOpen({ place: p, tab });
   };
 
@@ -171,6 +178,15 @@ export default function NewView() {
   const closeRoute = () => {
     setOpen(null);
     if (!routeId) return;
+    if (staleOpen.current === routeId) {
+      staleOpen.current = null;
+      setMine((m) => {
+        if (!m) return m;
+        const map = { ...m.map };
+        delete map[routeId];
+        return { ...m, map };
+      });
+    }
     const seq = (syncSeq.current[routeId] ?? 0) + 1;
     syncSeq.current[routeId] = seq;
     const latest = () => syncSeq.current[routeId] === seq;
@@ -248,14 +264,14 @@ export default function NewView() {
     if (!p.shown.length) return <Empty>還沒有人分享，去館內路線分享第一{unit}吧</Empty>;
     const today = p.shown.filter((x) => x.created_at >= since);
     const older = p.shown.filter((x) => x.created_at < since);
-    const more = p.feed.today.length > FEED_SIZE;
+    const more = p.feed.today.length > today.length; // 今天還有沒顯示的（在卡片裡刪掉一則後也一樣）
     return (
       <>
         {today.length > 0 && (
           <>
             <div className="mb-2 flex items-center justify-between gap-2">
               <Heading>
-                今天新{unit === "則" ? "留言" : "分享"}（{more ? `${p.feed.today.length} ${unit}裡隨機 ${FEED_SIZE} ${unit}` : `${today.length} ${unit}`}）
+                今天新{unit === "則" ? "留言" : "分享"}（{more ? `${p.feed.today.length} ${unit}裡隨機 ${today.length} ${unit}` : `${today.length} ${unit}`}）
               </Heading>
               {more && (
                 <LinkButton onClick={() => (kind === "video" ? setVideos((x) => x && next(x)) : setComments((x) => x && next(x)))}>↻ 換一批</LinkButton>
