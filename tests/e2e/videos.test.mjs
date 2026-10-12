@@ -227,6 +227,12 @@ test("影片上傳前先壓縮成 720p（顯示進度），檔案變小、記錄
   assert.ok(sent.length < original.length * 0.85, `壓縮後變小（${original.length} → ${sent.length}）`);
   assert.ok(v.path.endsWith(".webm") && v.path.startsWith(`mingde/${r1.id}/${me}/`));
   assert.ok(v.size_bytes < original.length * 0.85, "記錄的是壓縮後的大小");
+  // 壓縮時順便擷取縮圖：跟影片同名、WebP、快取一年
+  const t = mock.db.tfiles[v.thumb_path ?? ""];
+  assert.ok(t && v.thumb_path === v.path.replace(/\.webm$/, ".webp"), `壓縮時順便做縮圖（${v.thumb_path}）`);
+  assert.equal(t.type, "image/webp");
+  assert.equal(t.cache, "31536000", "縮圖快取一年");
+  assert.ok(t.buf.length > 500 && t.buf.length < 1048576, `縮圖大小合理（${t.buf.length}）`);
   assert.deepEqual(C.errors, []);
   await C.ctx.close();
 });
@@ -688,4 +694,211 @@ test("影片剪輯：太長的自動打開剪輯、只上傳選的那段，可�
   await D.ctx.close();
   void me;
   void r1;
+});
+
+// 做一支小的真影片（約 1.5 秒、320×240，不用壓縮）：分享時從原檔擷取縮圖
+async function smallClip() {
+  const maker = await browser.newPage();
+  const b64 = await maker.evaluate(async () => {
+    const c = document.createElement("canvas");
+    c.width = 320;
+    c.height = 240;
+    const g = c.getContext("2d");
+    const rec = new MediaRecorder(c.captureStream(30), { mimeType: "video/webm;codecs=vp8" });
+    const chunks = [];
+    rec.ondataavailable = (e) => chunks.push(e.data);
+    const stop = new Promise((r) => (rec.onstop = r));
+    rec.start(200);
+    const t0 = performance.now();
+    await new Promise((done) => {
+      const tick = () => {
+        const t = performance.now() - t0;
+        g.fillStyle = `hsl(${(t / 5) % 360},70%,50%)`;
+        g.fillRect(0, 0, 320, 240);
+        if (t < 1500) requestAnimationFrame(tick);
+        else done();
+      };
+      tick();
+    });
+    rec.stop();
+    await stop;
+    const buf = await new Blob(chunks).arrayBuffer();
+    let s = "";
+    new Uint8Array(buf).forEach((x) => (s += String.fromCharCode(x)));
+    return btoa(s);
+  });
+  await maker.close();
+  return Buffer.from(b64, "base64");
+}
+
+test("省流量：影片列表只放縮圖（沒有縮圖是灰色方塊）、按了才載入影片；滑到別支要再按 ▶；後台、New~ 也一樣", async () => {
+  const mock = createMock();
+  mock.addUser("climber88", "password1", { nickname: "小安" });
+  const other = mock.addUser("other22", "password1", { nickname: "阿明" });
+  const setter = mock.addUser("setterx", "password1", { nickname: "阿定" });
+  mock.db.staff_roles.push({ user_id: setter, gym_id: "mingde", role: "setter" });
+  const zone = mock.db.zones[0];
+  const r1 = mock.addRoute(zone, 4, "藍");
+  const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
+  const real = await smallClip(); // 真的影片：播放器才不會因為讀不了而改顯示錯誤訊息
+  for (const v of [mock.addVideo(other, r1, { caption: "有縮圖的", thumb: true, created_at: ago(1) }), mock.addVideo(other, r1, { caption: "舊影片沒縮圖", created_at: ago(2) })])
+    mock.db.vfiles[v.path].buf = real;
+
+  const C = await phone(browser, mock);
+  const c = C.page;
+  const videoReqs = [];
+  c.on("request", (q) => q.url().includes("/route-videos/") && videoReqs.push(q.url()));
+  await login(c, "climber88", "password1", `/zone?id=${zone.id}`);
+  await c.waitForTimeout(600);
+  await c.locator("main ul li button", { hasText: "A1-01" }).click();
+  await c.waitForTimeout(500);
+  const dialog = c.locator("[role=dialog]");
+  await dialog.locator('[role=tab]:has-text("影片")').click();
+  await c.waitForTimeout(600);
+  assert.equal(await dialog.locator("video").count(), 0, "影片分頁的列表沒有 <video>");
+  const withThumb = dialog.locator("li", { hasText: "有縮圖的" });
+  const img = withThumb.locator("img");
+  assert.equal(await img.count(), 1, "有縮圖的顯示縮圖");
+  assert.match(await img.getAttribute("src"), /\/storage\/v1\/object\/public\/video-thumbs\//);
+  assert.equal(await img.getAttribute("loading"), "lazy");
+  assert.ok(await img.evaluate((el) => el.complete && el.naturalWidth > 0), "縮圖畫得出來");
+  const old = dialog.locator("li", { hasText: "舊影片沒縮圖" });
+  assert.equal(await old.locator("img").count(), 0, "舊影片沒有縮圖");
+  assert.equal(await old.locator("span.bg-line").count(), 1, "舊影片是灰色方塊");
+  assert.deepEqual(videoReqs, [], "還沒按播放，一支影片都沒下載");
+
+  // 按了才建立 <video>、下載影片；縮圖當作封面
+  await withThumb.locator("button").click();
+  const viewer = c.locator('[aria-label="影片播放"]');
+  await viewer.waitFor();
+  const vid = viewer.locator("video");
+  assert.equal(await vid.count(), 1, "點開的那支直接播");
+  assert.match(await vid.getAttribute("poster"), /video-thumbs/, "縮圖當封面");
+  assert.equal(await vid.getAttribute("preload"), "none");
+  await c.waitForTimeout(400);
+  assert.ok(videoReqs.length >= 1, "按了才下載影片");
+  // 滑到下一支：先顯示縮圖和 ▶，按了才載入
+  await viewer.locator('button[aria-label="下一支"]').click();
+  await c.waitForTimeout(200);
+  assert.ok((await viewer.textContent()).includes("2 / 2"));
+  assert.equal(await viewer.locator("video").count(), 0, "滑到別支不會自動下載");
+  const n = videoReqs.length;
+  await viewer.locator('button[aria-label="播放這支影片"]').click();
+  assert.equal(await viewer.locator("video").count(), 1, "按 ▶ 才播放");
+  await c.waitForTimeout(400);
+  assert.ok(videoReqs.length > n, "按了才下載這支");
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(200);
+
+  // New~：影片、留言分頁都沒有 <video>
+  const before = videoReqs.length;
+  await c.goto(BASE + "/new", { waitUntil: "networkidle" });
+  await c.waitForTimeout(600);
+  assert.equal(await c.locator('main [role=tabpanel] li button[aria-label^="播放"]').count(), 2);
+  assert.equal(await c.locator("main video").count(), 0, "New~ 的影片列表沒有 <video>");
+  await c.click('[role=tab]:has-text("留言")');
+  await c.waitForTimeout(300);
+  assert.equal(await c.locator("video").count(), 0);
+  assert.equal(videoReqs.length, before, "New~ 沒有下載影片");
+
+  // 後台的影片區也一樣
+  const S = await phone(browser, mock);
+  const sReqs = [];
+  S.page.on("request", (q) => q.url().includes("/route-videos/") && sReqs.push(q.url()));
+  await login(S.page, "setterx", "password1", "/admin");
+  await S.page.waitForTimeout(1200);
+  assert.equal(await S.page.locator('main button[aria-label^="播放"]').count(), 2, "後台看得到 2 支");
+  assert.equal(await S.page.locator("main video").count(), 0, "後台影片區沒有 <video>");
+  assert.equal(await S.page.locator('main button[aria-label^="播放"] img').count(), 1, "後台有縮圖的顯示縮圖");
+  assert.deepEqual(sReqs, [], "後台沒有下載影片");
+  assert.deepEqual([...C.errors, ...S.errors], []);
+});
+
+test("分享影片時從原檔做縮圖（不用壓縮的小影片）；刪影片時縮圖一起刪；資料庫還沒套用 step38 照樣分享（灰色方塊）", async () => {
+  const mock = createMock();
+  mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zone = mock.db.zones[0];
+  mock.addRoute(zone, 4, "藍");
+  const original = await smallClip();
+
+  const C = await phone(browser, mock);
+  const c = C.page;
+  await login(c, "climber88", "password1", `/zone?id=${zone.id}`);
+  await c.waitForTimeout(600);
+  await c.locator("main ul li button", { hasText: "A1-01" }).click();
+  await c.waitForTimeout(500);
+  const dialog = c.locator("[role=dialog]");
+  await dialog.locator('[role=tab]:has-text("影片")').click().catch(() => {});
+  const share = async (caption) => {
+    await dialog.locator("input[type=file]").setInputFiles({ name: "short.webm", mimeType: "video/webm", buffer: original });
+    await c.waitForTimeout(600);
+    await c.fill("#vcap", caption);
+    await dialog.locator("input[type=checkbox]").check();
+    await dialog.locator('button:text-is("分享影片")').click();
+    await c.waitForFunction(() => document.body.textContent.includes("已分享影片"), null, { timeout: 20000 });
+    await c.waitForTimeout(400);
+  };
+
+  // 資料庫還沒套用 step38：照樣分享、沒有縮圖、列表是灰色方塊
+  mock.state.noVideoThumb = true;
+  await share("舊資料庫");
+  const v1 = mock.db.videos.find((v) => v.caption === "舊資料庫");
+  assert.ok(v1 && !v1.thumb_path, "照樣分享、沒有縮圖");
+  assert.equal(Object.keys(mock.db.tfiles).length, 0);
+  assert.equal(await dialog.locator("li", { hasText: "舊資料庫" }).locator("span.bg-line").count(), 1, "灰色方塊");
+
+  // 套用後（App 重新打開才會再試縮圖）：從原檔擷取縮圖
+  mock.state.noVideoThumb = false;
+  await c.reload({ waitUntil: "networkidle" });
+  await c.waitForTimeout(600);
+  await c.locator("main ul li button", { hasText: "A1-01" }).click();
+  await c.waitForTimeout(500);
+  await dialog.locator('[role=tab]:has-text("影片")').click().catch(() => {});
+  await share("新資料庫");
+  const v2 = mock.db.videos.find((v) => v.caption === "新資料庫");
+  const t = mock.db.tfiles[v2.thumb_path ?? ""];
+  assert.ok(t && v2.thumb_path === v2.path.replace(/\.webm$/, ".webp"), `從原檔做縮圖（${v2.thumb_path}）`);
+  assert.equal(t.type, "image/webp");
+  assert.equal(t.cache, "31536000");
+  assert.equal(await dialog.locator("li", { hasText: "新資料庫" }).locator("img").count(), 1, "列表顯示縮圖");
+
+  // 刪掉自己的影片：縮圖一起刪
+  await dialog.locator('button[aria-label^="播放"]', { hasText: "新資料庫" }).click();
+  const viewer = c.locator('[aria-label="影片播放"]');
+  await viewer.waitFor();
+  await viewer.locator('button:text-is("刪除這支影片")').click();
+  await viewer.locator('button:text-is("確定刪除？再按一次")').click();
+  await c.waitForTimeout(800);
+  assert.ok(!mock.db.videos.some((v) => v.caption === "新資料庫"), "影片刪掉");
+  assert.ok(!mock.db.vfiles[v2.path] && !mock.db.tfiles[v2.thumb_path], "影片檔和縮圖都刪掉");
+  assert.deepEqual(C.errors, []);
+  await C.ctx.close();
+});
+
+test("路線列：有影片、留言時在「幾天前」後面顯示影片數、留言數（沒有就不顯示）；資料庫還沒套用 step38 時只顯示留言數", async () => {
+  const mock = createMock();
+  const other = mock.addUser("other22", "password1", { nickname: "阿明" });
+  const zone = mock.db.zones[0];
+  const r1 = mock.addRoute(zone, 4, "藍");
+  const r2 = mock.addRoute(zone, 3, "紅");
+  mock.addVideo(other, r1);
+  mock.addVideo(other, r1);
+  mock.addComment(other, r1, "第三手好遠");
+
+  const { page: c, errors } = await phone(browser, mock);
+  await c.goto(`${BASE}/zone?id=${zone.id}`, { waitUntil: "networkidle" });
+  await c.waitForTimeout(600);
+  const row = (code) => c.locator("main ul li button", { hasText: code });
+  assert.equal(await row(r1.code).locator('[aria-label="2 支影片"]').count(), 1, "有影片：顯示影片數");
+  assert.match((await row(r1.code).textContent()).trim(), /今天\s*2\s*1$/, "影片數在前、留言數在後，跟在幾天前（今天）後面");
+  assert.equal(await row(r2.code).locator('[aria-label$="支影片"]').count(), 0, "沒有影片不顯示");
+  assert.match((await row(r2.code).textContent()).trim(), /今天$/, "沒有影片、留言就跟原本一樣");
+
+  // 資料庫還沒套用 step38：只有留言數
+  mock.state.noVideoThumb = true;
+  await c.reload({ waitUntil: "networkidle" });
+  await c.waitForTimeout(600);
+  assert.equal(await row(r1.code).locator('[aria-label$="支影片"]').count(), 0, "還沒套用時不顯示影片數");
+  assert.match((await row(r1.code).textContent()).trim(), /今天\s*1$/, "留言數照常顯示");
+  assert.deepEqual(errors, []);
 });

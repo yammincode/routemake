@@ -29,6 +29,7 @@ import {
   seqTotal,
   unlikeComment,
   unlikeRoute,
+  videoThumbUrl,
   videoUrl,
   type Ascent,
   type DbError,
@@ -246,6 +247,7 @@ export default function NewView() {
   const cards: VideoCard[] = (videos?.shown ?? []).map((v) => ({
     key: v.id,
     src: videoUrl(v.path),
+    thumb: v.thumb_path ? videoThumbUrl(v.thumb_path) : null,
     name: v.nickname,
     ago: videoWhen(v.climbed_on, v.created_at),
     caption: v.caption,

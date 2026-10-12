@@ -162,7 +162,8 @@ export async function getActiveRoutes(zoneId: string): Promise<Route[]> {
   );
 }
 // 區域頁需要的資料一次拿齊（區域、場館、路線、自己的紀錄、留言數），只問資料庫一次
-export type ZoneData = { z: Zone; g: Gym; rs: Route[]; as: Record<string, Ascent>; cs: Record<string, number> };
+// cs 留言數、vs 影片數（資料庫還沒套用 step38 時沒有 vs）
+export type ZoneData = { z: Zone; g: Gym; rs: Route[]; as: Record<string, Ascent>; cs: Record<string, number>; vs?: Record<string, number> };
 // 區域頁先讀好（滑向下一區時先讀那一區）：區域頁打開時直接拿這份，不再問一次；15 秒內有效
 // 每個帳號分開記（資料裡有自己的紀錄和私人心得，換帳號後不能拿到別人先讀的）
 const zoneAhead = new Map<string, { p: Promise<ZoneData>; t: number }>();
@@ -646,6 +647,7 @@ export type Video = {
   move?: ClimbMove | null;
   feel_tags?: FeelTag[]; // 型態（資料庫還沒套用 step35 時沒有）
   climbed_on?: string | null; // 分享者在這條的攀爬日（分享時由資料庫從本人紀錄帶入；沒有紀錄、或資料庫還沒套用 step34 時沒有）
+  thumb_path?: string | null; // 縮圖（video-thumbs）；舊影片還沒補、或資料庫還沒套用 step38 時沒有
   created_at: string;
   nickname: string;
 };
@@ -663,24 +665,36 @@ let videoDays = true;
 export const videoDaySupported = () => videoDays;
 // 資料庫有沒有影片型態（step35）：沒有時分享不送型態
 let videoFeel = true;
+// 資料庫有沒有影片縮圖（step38）：跟其他欄位分開判斷（step35 沒套用、step38 套用了也要讀得到縮圖）
+let videoThumbs = true;
+const missingCol = (e: { code?: string; message?: string } | null, col: string) => noTagCols(e) && (e?.message ?? "").includes(col);
 // 讀影片：缺型態（還沒套用 step35）先退回攀爬日；缺攀爬日（step34）退回身高、動作；再缺（step25）退回原本的欄位
+// 每一層都先帶縮圖讀；缺縮圖（還沒套用 step38）就之後都不帶
 async function selectVideos<T>(q: (cols: string) => PromiseLike<{ data: T | null; error: { message?: string; code?: string } | null }>): Promise<T> {
-  for (const cols of [VIDEO_COLS, VIDEO_DAYS, VIDEO_TAGS]) {
-    const r = await q(cols);
-    if (!noTagCols(r.error)) {
+  for (const cols of [VIDEO_COLS, VIDEO_DAYS, VIDEO_TAGS, VIDEO_BASE]) {
+    let r = await q(videoThumbs ? `${cols},thumb_path` : cols);
+    if (videoThumbs && missingCol(r.error, "thumb_path")) {
+      videoThumbs = false;
+      r = await q(cols);
+    }
+    if (cols === VIDEO_BASE || !noTagCols(r.error)) {
       if (!r.error) {
         videoFeel = cols === VIDEO_COLS;
-        videoDays = cols !== VIDEO_TAGS;
+        videoDays = cols === VIDEO_COLS || cols === VIDEO_DAYS;
       }
       return must(r);
     }
   }
-  const r = await q(VIDEO_BASE);
-  if (!r.error) videoFeel = videoDays = false;
-  return must(r);
+  throw new Error("讀不到影片"); // 不會到這裡（最後一層一定回傳）
 }
 
 export const videoUrl = (path: string) => supabase().storage.from("route-videos").getPublicUrl(path).data.publicUrl;
+// 縮圖：跟影片同名、副檔名 .webp 或 .jpg，放在 video-thumbs（路徑不會重複，可以快取一年）
+export const videoThumbUrl = (path: string) => supabase().storage.from("video-thumbs").getPublicUrl(path).data.publicUrl;
+const thumbNames = (videoPath: string) => {
+  const base = videoPath.replace(/\.[^./]+$/, "");
+  return [`${base}.webp`, `${base}.jpg`];
+};
 
 export async function getVideos(routeId: string): Promise<Video[]> {
   const rows = (await selectVideos((cols) =>
@@ -747,7 +761,8 @@ export async function uploadVideo(
   routeId: string,
   file: File,
   // climbed_on：本人紀錄的攀爬日，有送才表示要在影片上顯示（實際的日期、完成狀態由資料庫從本人紀錄帶入）
-  info: { caption: string | null; status: Status | null; climbed_on?: string | null; height_band?: HeightBand | null; move?: ClimbMove | null; feel_tags?: FeelTag[] },
+  // thumb：縮圖（WebP 或 JPEG）；沒有、或上傳失敗都照樣分享
+  info: { caption: string | null; status: Status | null; climbed_on?: string | null; height_band?: HeightBand | null; move?: ClimbMove | null; feel_tags?: FeelTag[]; thumb?: Blob | null },
   // 長度：剪輯過的直接給（剪下來的長度）；只壓縮的從壓縮前的原檔讀（壓縮後的檔有時讀不到長度）
   len?: { source?: File; duration?: number },
   lim: VideoLimit = VIDEO_LIMIT
@@ -771,6 +786,16 @@ export async function uploadVideo(
     if (m.toLowerCase().includes("mime")) throw new Error("只能分享 MP4、MOV 或 WebM 影片");
     throw new Error("影片上傳失敗，請確認網路後再試");
   }
+  // 縮圖：跟影片同名，快取一年（路徑不會重複）；失敗、資料庫還沒套用 step38 都不擋分享
+  let thumb_path: string | null = null;
+  const thumbExt = info.thumb?.type === "image/webp" ? "webp" : info.thumb?.type === "image/jpeg" ? "jpg" : null;
+  if (info.thumb && thumbExt && videoThumbs) {
+    const tp = thumbNames(path)[thumbExt === "webp" ? 0 : 1];
+    try {
+      const t = await supabase().storage.from("video-thumbs").upload(tp, info.thumb, { contentType: info.thumb.type, cacheControl: "31536000" });
+      if (!t.error) thumb_path = tp;
+    } catch {}
+  }
   const row = {
     route_id: routeId,
     path,
@@ -779,20 +804,24 @@ export async function uploadVideo(
     duration_s: duration == null ? null : Math.min(lim.seconds, Math.round(duration * 10) / 10),
     size_bytes: file.size,
   };
-  // 身高、動作、型態有選才送；攀爬日有紀錄才送；資料庫缺欄位時（還沒套用 step35、34、25）一層一層去掉再存（影片照樣分享出去）
+  // 身高、動作、型態有選才送；攀爬日有紀錄才送；有縮圖才送
+  // 資料庫缺欄位時（還沒套用 step38、35、34、25）去掉錯誤訊息說的那個欄位再存；看不出是哪個就從最新的去掉（影片照樣分享出去）
   const tags = { ...(info.height_band ? { height_band: info.height_band } : {}), ...(info.move ? { move: info.move } : {}) };
   const day = info.status && info.climbed_on && videoDays ? { climbed_on: info.climbed_on } : {};
   const feel = info.feel_tags?.length && videoFeel ? { feel_tags: info.feel_tags } : {};
-  const tries = [{ ...row, ...tags, ...day, ...feel }, { ...row, ...tags, ...day }, { ...row, ...tags }, row].filter(
-    (b, i, all) => i === 0 || Object.keys(b).length < Object.keys(all[i - 1]).length
-  );
-  let ins = await supabase().from("route_videos").insert(tries[0]);
-  for (const body of tries.slice(1)) {
-    if (!noTagCols(ins.error)) break;
+  let body: Record<string, unknown> = { ...row, ...tags, ...day, ...feel, ...(thumb_path ? { thumb_path } : {}) };
+  const groups = [["thumb_path"], ["feel_tags"], ["climbed_on"], ["height_band", "move"]];
+  let ins = await supabase().from("route_videos").insert(body);
+  for (let n = 0; n < groups.length && noTagCols(ins.error); n++) {
+    const present = groups.filter((g) => g.some((c) => c in body));
+    const drop = present.find((g) => g.some((c) => (ins.error?.message ?? "").includes(c))) ?? present[0];
+    if (!drop) break;
+    body = Object.fromEntries(Object.entries(body).filter(([k]) => !drop.includes(k)));
     ins = await supabase().from("route_videos").insert(body);
   }
   if (ins.error) {
     await supabase().storage.from("route-videos").remove([path]);
+    if (thumb_path) await supabase().storage.from("video-thumbs").remove([thumb_path]).catch(() => undefined);
     throw new Error(dbError(ins.error));
   }
 }
@@ -803,10 +832,15 @@ export async function deleteVideo(id: string) {
   await removeVideoFiles([path]);
 }
 
-// 刪 Storage 檔案；失敗不擋流程（之後用「清理」找出來）
+// 刪 Storage 檔案（影片和它的縮圖）；失敗不擋流程（之後用「清理」找出來）
 export async function removeVideoFiles(paths: string[]) {
   for (let i = 0; i < paths.length; i += 100) {
     await supabase().storage.from("route-videos").remove(paths.slice(i, i + 100));
+  }
+  // 縮圖可能是 .webp 或 .jpg，兩個都刪（沒有的不會出錯）；資料庫還沒套用 step38 時沒有這個 bucket，錯誤不理
+  const thumbs = paths.flatMap(thumbNames);
+  for (let i = 0; i < thumbs.length; i += 100) {
+    await supabase().storage.from("video-thumbs").remove(thumbs.slice(i, i + 100)).catch(() => undefined);
   }
 }
 async function videoPathsFor(routeIds: string[]): Promise<string[]> {
@@ -829,11 +863,16 @@ export async function getGymVideos(gym: string, limit = 20): Promise<GymVideo[]>
   )) as unknown as (VideoRow & { routes: { code: string; zones: { name: string } } })[];
   return rows.map(({ routes, ...v }) => ({ ...toVideo(v), route_code: routes.code, zone_name: routes.zones.name }));
 }
-// 清理漏刪的影片檔，回傳刪了幾個
+// 清理漏刪的影片檔和縮圖，回傳刪了幾個（資料庫還沒套用 step38 時只清影片）
 export async function cleanOrphanVideos(gym: string): Promise<number> {
   const paths = must(await supabase().rpc("orphan_video_paths", { p_gym: gym })) as string[];
   await removeVideoFiles(paths);
-  return paths.length;
+  const t = await supabase().rpc("orphan_video_thumb_paths", { p_gym: gym });
+  const thumbs = t.error ? [] : ((t.data ?? []) as string[]);
+  for (let i = 0; i < thumbs.length; i += 100) {
+    await supabase().storage.from("video-thumbs").remove(thumbs.slice(i, i + 100));
+  }
+  return paths.length + thumbs.length;
 }
 
 // ---------- New~：大家最新分享的影片、留言（所有開放的館） ----------

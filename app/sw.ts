@@ -101,6 +101,12 @@ const wallPhotos = {
   handler: new CacheFirst({ cacheName: "zone-photos", plugins: [new ExpirationPlugin({ maxEntries: 80, maxAgeSeconds: 60 * 86400 })] }),
 };
 
+// 影片縮圖：跟影片同名、路徑不會重複，存過就直接用手機裡的（影片列表只放縮圖、按了才載入影片，省流量）
+const videoThumbs = {
+  matcher: ({ url }: { url: URL }) => url.hostname.endsWith(".supabase.co") && url.pathname.startsWith("/storage/v1/object/public/video-thumbs/"),
+  handler: new CacheFirst({ cacheName: "video-thumbs", plugins: [new ExpirationPlugin({ maxEntries: 300, maxAgeSeconds: 60 * 86400 })] }),
+};
+
 // 字型：檔名含內容雜湊，存過就直接用；中文字型切成上百片，上限要夠大（預設的字型快取只存 4 個）
 const fonts = {
   matcher: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) => sameOrigin && url.pathname.startsWith("/_next/static/media/") && url.pathname.endsWith(".woff2"),
@@ -119,7 +125,7 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  runtimeCaching: [wallPhotos, supabaseData, zoneShell, fonts, ...pages],
+  runtimeCaching: [wallPhotos, videoThumbs, supabaseData, zoneShell, fonts, ...pages],
 });
 
 serwist.addEventListeners();

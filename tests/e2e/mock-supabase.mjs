@@ -3,9 +3,38 @@
 // 權限規則大致照資料庫的 RLS 寫（真正的權限測試在 supabase/tests，用真的 PostgreSQL 跑）
 // =====================================================================
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const SB = "https://ngvlymkevcqhlaphoost.supabase.co";
 const uuid = () => crypto.randomUUID();
+// 影片縮圖用的小圖（測試裡的縮圖內容不重要，只要瀏覽器畫得出來）
+const THUMB_IMG = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "wall.png"));
+// 拆 multipart 上傳（supabase-js 上傳 Blob 時用 FormData）：取出檔案內容、格式和 cacheControl
+function multipart(req) {
+  const ct = req.headers()["content-type"] || "";
+  const buf = req.postDataBuffer() ?? Buffer.alloc(0);
+  const m = ct.match(/boundary=(.+)$/);
+  if (!m) return { buf, type: ct.split(";")[0], cacheControl: (req.headers()["cache-control"] || "").replace("max-age=", "") || null };
+  const b = Buffer.from("--" + m[1]);
+  const out = { buf: Buffer.alloc(0), type: "", cacheControl: null };
+  for (let i = buf.indexOf(b); i >= 0; ) {
+    const j = buf.indexOf(b, i + b.length);
+    if (j < 0) break;
+    const part = buf.subarray(i + b.length + 2, j - 2);
+    const h = part.indexOf("\r\n\r\n");
+    const head = part.subarray(0, h).toString();
+    const body = part.subarray(h + 4);
+    if (/name="cacheControl"/.test(head)) out.cacheControl = body.toString();
+    else if (/filename=/.test(head) || /name=""/.test(head)) {
+      out.buf = body;
+      out.type = (head.match(/Content-Type:\s*([^\r\n]+)/i) || [])[1] || "";
+    }
+    i = j;
+  }
+  return out;
+}
 const now = () => new Date().toISOString();
 export const taipeiDay = (offsetDays = 0) =>
   new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date(Date.now() + offsetDays * 86400000));
@@ -56,6 +85,7 @@ export function createMock() {
     files: {},
     videos: [], // route_videos
     vfiles: {}, // route-videos 檔案：path -> { buf, owner, created_at }
+    tfiles: {}, // video-thumbs 縮圖（step38）：path -> { buf, type, cache, owner, created_at }
     scoring: {
       grade_points: [10, 15, 20, 30, 40, 55, 70, 90, 110, 135, 160],
       vb_points: 5,
@@ -65,7 +95,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -83,11 +113,14 @@ export function createMock() {
   const addAscent = (userId, route, status, climbedOn, extra = {}) =>
     db.ascents.push({ id: uuid(), user_id: userId, route_id: route.id, status, climbed_on: climbedOn, feel: null, grade_feel: null, private_note: null, updated_at: now(), ...extra });
 
-  const addVideo = (userId, route, extra = {}) => {
+  // extra.thumb = true：一起放一張縮圖（跟影片同名的 .webp）
+  const addVideo = (userId, route, { thumb, ...extra } = {}) => {
     const z = db.zones.find((x) => x.id === route.zone_id);
     const path = `${z.gym_id}/${route.id}/${userId}/${uuid()}.mp4`;
     db.vfiles[path] = { buf: Buffer.from("fake"), owner: userId, created_at: now() };
-    const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, height_band: null, move: null, feel_tags: [], climbed_on: null, created_at: now(), ...extra };
+    const thumb_path = thumb ? path.replace(/\.mp4$/, ".webp") : null;
+    if (thumb_path) db.tfiles[thumb_path] = { buf: THUMB_IMG, type: "image/png", cache: "31536000", owner: userId, created_at: now() };
+    const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, height_band: null, move: null, feel_tags: [], climbed_on: null, thumb_path, created_at: now(), ...extra };
     db.videos.push(v);
     return v;
   };
@@ -177,6 +210,16 @@ export function createMock() {
   const IMPERSONATE = /(原岩|官方|管理員|管理者|管理员|店長|店长|館長|馆长|館方|馆方|定線|定线|員工|员工|客服|老闆|老板|櫃檯|櫃台|柜台)/;
   const IMPERSONATE_EN = /(^|[^a-z])(admin|staff|official)([^a-z]|$)/i;
   // 同 0038 的 can_delete_video_file：員工；分享中的不行；自己的；岩友下架了自己出的路線
+  // 同 0043 can_delete_video_thumb
+  const canDeleteVideoThumb = (uid, k) => {
+    if (!uid) return false;
+    const [gym, routeId, owner] = k.split("/");
+    if (isStaff(uid, gym)) return true;
+    if (db.videos.some((v) => v.thumb_path === k)) return false;
+    if (owner === uid) return true;
+    const r = db.routes.find((x) => x.id === routeId);
+    return !!(r && r.kind === "community" && r.archived_at && r.created_by === uid);
+  };
   const canDeleteVideoFile = (uid, k) => {
     if (!uid) return false;
     const [gym, routeId, owner] = k.split("/");
@@ -313,6 +356,8 @@ export function createMock() {
         rs: rs.map((r) => ({ kind: "gym", name: null, description: null, holds: null, created_by: null, ...r })),
         as: Object.fromEntries(db.ascents.filter((x) => x.user_id === uid && ids.has(x.route_id)).map((x) => [x.route_id, pick(x, ["id", "route_id", "status", "climbed_on", "feel", "grade_feel", "private_note", "highpoint"])])),
         cs: db.comments.filter((c) => !c.deleted_at && ids.has(c.route_id)).reduce((m, c) => ((m[c.route_id] = (m[c.route_id] ?? 0) + 1), m), {}),
+        // 影片數（0044）；state.noVideoThumb 模擬還沒套用 step38（沒有 vs）
+        ...(state.noVideoThumb ? {} : { vs: db.videos.filter((v) => ids.has(v.route_id)).reduce((m, v) => ((m[v.route_id] = (m[v.route_id] ?? 0) + 1), m), {}) }),
       });
     }
     if (fn === "zone_progress")
@@ -393,6 +438,12 @@ export function createMock() {
       if (!isStaff(uid, a.p_gym)) return J(route, 200, []);
       const hourAgo = new Date(Date.now() - 3600000).toISOString();
       return J(route, 200, Object.entries(db.vfiles).filter(([k, f]) => k.startsWith(a.p_gym + "/") && f.created_at < hourAgo && !db.videos.some((v) => v.path === k)).map(([k]) => k));
+    }
+    if (fn === "orphan_video_thumb_paths") {
+      if (state.noVideoThumb) return J(route, 404, { code: "PGRST202", message: "Could not find the function public.orphan_video_thumb_paths" });
+      if (!isStaff(uid, a.p_gym)) return J(route, 200, []);
+      const hourAgo = new Date(Date.now() - 3600000).toISOString();
+      return J(route, 200, Object.entries(db.tfiles).filter(([k, f]) => k.startsWith(a.p_gym + "/") && f.created_at < hourAgo && !db.videos.some((v) => v.thumb_path === k)).map(([k]) => k));
     }
     if (fn === "reorder_zones") {
       if (!isMgr(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有店長可以調整區域順序" });
@@ -612,6 +663,35 @@ export function createMock() {
         return J(route, 413, { statusCode: "413", error: "Payload too large", message: "The object exceeded the maximum allowed size" });
       db.vfiles[path] = { buf: req.postDataBuffer() ?? Buffer.alloc(0), owner: uid, created_at: now() };
       return J(route, 200, { Key: "route-videos/" + path });
+    }
+    // 影片縮圖（step38 的 video-thumbs）：state.noVideoThumb 模擬資料庫還沒套用 step38（沒有這個 bucket）
+    const noBucket = () => J(route, 400, { statusCode: "404", error: "Bucket not found", message: "Bucket not found" });
+    if (p.startsWith("/storage/v1/object/public/video-thumbs/")) {
+      const f = db.tfiles[decodeURIComponent(p.replace("/storage/v1/object/public/video-thumbs/", ""))];
+      db.thumbGets = (db.thumbGets ?? 0) + 1;
+      return f ? route.fulfill({ status: 200, headers: { ...cors, "content-type": f.type, "cache-control": `max-age=${f.cache ?? 3600}` }, body: f.buf }) : route.fulfill({ status: 404 });
+    }
+    if (p.startsWith("/storage/v1/object/video-thumbs/") && m === "POST") {
+      if (state.noVideoThumb) return noBucket();
+      const path = decodeURIComponent(p.replace("/storage/v1/object/video-thumbs/", ""));
+      const routeId = path.split("/")[1];
+      const dayAgo = new Date(Date.now() - 86400000).toISOString();
+      const recent = Object.values(db.tfiles).filter((f) => f.owner === uid && f.created_at > dayAgo).length;
+      // 同 0043 can_upload_video_thumb
+      if (!/\.(webp|jpg)$/.test(path) || !videoPathOk(uid, routeId, path) || !canShare(uid, routeId) || recent >= 30)
+        return J(route, 403, { statusCode: "403", error: "Unauthorized", message: "new row violates row-level security policy" });
+      const f = multipart(req);
+      if (!["image/webp", "image/jpeg"].includes(f.type)) return J(route, 400, { statusCode: "415", error: "invalid_mime_type", message: `mime type ${f.type} is not supported` });
+      if (f.buf.length > 1048576) return J(route, 413, { statusCode: "413", error: "Payload too large", message: "The object exceeded the maximum allowed size" });
+      if (db.tfiles[path]) return J(route, 400, { statusCode: "409", error: "Duplicate", message: "The resource already exists" });
+      db.tfiles[path] = { buf: f.buf, type: f.type, cache: f.cacheControl, owner: uid, created_at: now() };
+      return J(route, 200, { Key: "video-thumbs/" + path });
+    }
+    if (p === "/storage/v1/object/video-thumbs" && m === "DELETE") {
+      if (state.noVideoThumb) return noBucket();
+      const removed = (body?.prefixes ?? []).filter((k) => db.tfiles[k] && canDeleteVideoThumb(uid, k));
+      removed.forEach((k) => delete db.tfiles[k]);
+      return J(route, 200, removed.map((name) => ({ name })));
     }
     if (p === "/storage/v1/object/route-videos" && m === "DELETE") {
       const removed = (body?.prefixes ?? []).filter((k) => db.vfiles[k] && canDeleteVideoFile(uid, k));
@@ -838,6 +918,15 @@ export function createMock() {
       }
     }
     if (t === "route_videos") {
+      // state.noVideoThumb：模擬資料庫還沒套用 step38（沒有縮圖欄位）
+      if (state.noVideoThumb && (m === "GET" || m === "HEAD") && /thumb_path/.test(sel)) {
+        state.tagFallbacks++;
+        return J(route, 400, { code: "42703", message: "column route_videos.thumb_path does not exist" });
+      }
+      if (state.noVideoThumb && m === "POST" && "thumb_path" in body) {
+        state.tagFallbacks++;
+        return J(route, 400, { code: "PGRST204", message: "Could not find the 'thumb_path' column of 'route_videos' in the schema cache" });
+      }
       // state.noVideoFeel：模擬資料庫還沒套用 step35（沒有型態欄位）；更舊的資料庫（step34、25 之前）也沒有
       const noFeel = state.noVideoFeel || state.noVideoClimb || state.noVideoTags;
       if (noFeel && (m === "GET" || m === "HEAD") && /feel_tags/.test(sel)) {
@@ -879,6 +968,7 @@ export function createMock() {
         if (state.noVideoTags) rows = rows.map(({ height_band, move, ...v }) => v); // 舊資料庫沒有這兩欄
         if (state.noVideoTags || state.noVideoClimb) rows = rows.map(({ climbed_on, ...v }) => v);
         if (noFeel) rows = rows.map(({ feel_tags, ...v }) => v);
+        if (state.noVideoThumb) rows = rows.map(({ thumb_path, ...v }) => v);
         rows.sort((x, y) => y.created_at.localeCompare(x.created_at));
         rows = filt(rows, q);
         if (m === "HEAD") return route.fulfill({ status: 200, headers: { ...cors, "content-range": `*/${rows.length}` } });
@@ -909,7 +999,10 @@ export function createMock() {
           return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_feel_tags_check"' });
         const mine = body.status && body.climbed_on ? db.ascents.find((x) => x.user_id === uid && x.route_id === body.route_id) : null;
         const fromAscent = { climbed_on: mine?.climbed_on ?? null, ...(mine ? { status: mine.status } : {}) };
-        db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, height_band: null, move: null, ...body, feel_tags: feel, climbed_on: null, ...fromAscent, user_id: uid, created_at: now() });
+        // 同 0043 route_videos_thumb：縮圖要跟影片同名、本人上傳的，不對就當作沒有縮圖
+        const base = body.path.replace(/\.[^./]+$/, "");
+        const thumb = body.thumb_path && [base + ".webp", base + ".jpg"].includes(body.thumb_path) && db.tfiles[body.thumb_path]?.owner === uid ? body.thumb_path : null;
+        db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, height_band: null, move: null, ...body, feel_tags: feel, climbed_on: null, ...fromAscent, thumb_path: thumb, user_id: uid, created_at: now() });
         return empty(route, 201);
       }
     }

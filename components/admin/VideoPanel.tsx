@@ -6,7 +6,7 @@ import { Empty, SectionTitle } from "@/components/ui/Card";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
-import { cleanOrphanVideos, deleteVideo, getGymVideos, getVideoUsage, videoUrl, type GymVideo } from "@/lib/data";
+import { cleanOrphanVideos, deleteVideo, getGymVideos, getVideoUsage, videoThumbUrl, videoUrl, type GymVideo } from "@/lib/data";
 import { ago } from "@/lib/date";
 import { feelTagText, videoTagText } from "@/lib/design";
 
@@ -43,6 +43,7 @@ export default function VideoPanel({ gymId, gymName }: { gymId: string; gymName:
   const cards: VideoCard[] = (videos ?? []).map((v) => ({
     key: v.id,
     src: videoUrl(v.path),
+    thumb: v.thumb_path ? videoThumbUrl(v.thumb_path) : null,
     name: v.nickname,
     ago: `${ago(v.created_at)}分享`,
     caption: v.caption,

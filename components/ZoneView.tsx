@@ -9,7 +9,7 @@ import { BackLink, Empty, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow, GradeChip } from "@/components/ui/Chip";
 import { HowTo } from "@/components/ui/HowTo";
 import { BandHeading, BandPicker, dueText, ZoneGradeCard } from "@/components/ui/Gym";
-import { CommentCount, Points, RouteList, RouteRow, Tags } from "@/components/ui/Route";
+import { CommentCount, Points, RouteList, RouteRow, Tags, VideoCount } from "@/components/ui/Route";
 import { NoPhoto, Pin, WallPhoto } from "@/components/ui/Wall";
 import {
   getZoneView,
@@ -66,6 +66,7 @@ export default function ZoneView({
   const [routes, setRoutes] = useState<Route[]>(init?.rs ?? []);
   const [ascents, setAscents] = useState<Record<string, Ascent>>(() => (init ? overlayPending(init.as, session?.user.id) : {}));
   const [counts, setCounts] = useState<Record<string, number>>(init?.cs ?? {});
+  const [videoCounts, setVideoCounts] = useState<Record<string, number>>(init?.vs ?? {});
   const [error, setError] = useState<string | null>(null);
   const [color, setColor] = useState<HoldColor | null>(null);
   const [tag, setTag] = useState<string | null>(null);
@@ -82,6 +83,7 @@ export default function ZoneView({
       setRoutes(data.rs);
       setAscents(overlayPending(data.as, uid));
       setCounts(data.cs);
+      setVideoCounts(data.vs ?? {});
     };
     try {
       // 滑向這一區時已經先讀了：直接用那一份（只有第一次）
@@ -186,6 +188,7 @@ export default function ZoneView({
         <>
           {progress(r) && <span className="mr-1.5">{progress(r)}</span>}
           <Tags tags={r.style_tags} /> {ago(r.created_at)}
+          {(videoCounts[r.id] ?? 0) > 0 && <VideoCount n={videoCounts[r.id]} />}
           {commentsOn && r.comments_enabled && (counts[r.id] ?? 0) > 0 && <CommentCount n={counts[r.id]} />}
         </>
       }

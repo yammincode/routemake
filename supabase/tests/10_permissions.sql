@@ -1456,6 +1456,69 @@ select tests.ok('影片：影片檔上限 100 MB', (select file_size_limit from 
 delete from public.route_videos where path in ('g3/rope/a.mp4', 'mingde/v/a.mp4');
 delete from public.routes where id = (select v from ids where k = 'rope');
 
+-- 影片縮圖（0043）：另外一個 bucket；新增影片資料時縮圖要同名、本人上傳的，不對就當作沒有縮圖（不擋分享）
+insert into hp select 'tv', format('mingde/%s/%s/t1.mp4', (select v from ids where k = 'h1'), :A);
+insert into hp select 'tw', format('mingde/%s/%s/t1.webp', (select v from ids where k = 'h1'), :A);
+insert into hp select 'tv2', format('mingde/%s/%s/t2.mp4', (select v from ids where k = 'h1'), :A);
+insert into hp select 'tv3', format('mingde/%s/%s/t3.mp4', (select v from ids where k = 'h1'), :A);
+insert into hp select 'tw3', format('mingde/%s/%s/t3.jpg', (select v from ids where k = 'h1'), :A);
+insert into hp select 'tlost', format('mingde/%s/%s/lost.webp', (select v from ids where k = 'h1'), :A);
+select tests.ok('縮圖：bucket 公開、每張最大 1 MB、只收 webp 和 jpeg',
+  (select public and file_size_limit = 1048576 and allowed_mime_types = array['image/webp', 'image/jpeg'] from storage.buckets where id = 'video-thumbs'));
+set role authenticated; select tests.login(:A);
+select tests.lives('縮圖：上傳到自己的資料夾', format('insert into storage.objects (bucket_id, name) values (''video-thumbs'', %L)', (select v from hp where k = 'tw')));
+select tests.throws('縮圖：副檔名要 .webp 或 .jpg', format('insert into storage.objects (bucket_id, name) values (''video-thumbs'', ''mingde/%s/%s/x.png'')', (select v from ids where k = 'h1'), :A));
+select tests.throws('縮圖：不能上傳到別人的資料夾', format('insert into storage.objects (bucket_id, name) values (''video-thumbs'', ''mingde/%s/%s/x.webp'')', (select v from ids where k = 'h1'), :B));
+select tests.throws('縮圖：路徑的場館要對', format('insert into storage.objects (bucket_id, name) values (''video-thumbs'', ''g2/%s/%s/x.webp'')', (select v from ids where k = 'h1'), :A));
+select tests.lives('縮圖：上傳影片檔', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from hp where k = 'tv')));
+select tests.lives('縮圖：分享影片時帶縮圖', format('insert into public.route_videos (route_id, path, thumb_path) values (%L, %L, %L)', (select v from ids where k = 'h1'), (select v from hp where k = 'tv'), (select v from hp where k = 'tw')));
+select tests.ok('縮圖：同名、本人上傳的縮圖記起來', (select thumb_path = (select v from hp where k = 'tw') from public.route_videos where path = (select v from hp where k = 'tv')));
+select tests.lives('縮圖：上傳第二支影片檔', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from hp where k = 'tv2')));
+select tests.lives('縮圖：檔名對不上照樣能分享', format('insert into public.route_videos (route_id, path, thumb_path) values (%L, %L, %L)', (select v from ids where k = 'h1'), (select v from hp where k = 'tv2'), (select v from hp where k = 'tw')));
+select tests.ok('縮圖：檔名對不上就當作沒有縮圖（不能拿別支影片的縮圖）', (select thumb_path is null from public.route_videos where path = (select v from hp where k = 'tv2')));
+select tests.ok('縮圖：自己的縮圖列得出來', (select count(*) from storage.objects where bucket_id = 'video-thumbs') = 1);
+select tests.ok('縮圖：分享中的縮圖本人不能直接刪（不能偷換，0 筆）', tests.rows(format('delete from storage.objects where name = %L', (select v from hp where k = 'tw'))) = 0);
+select tests.throws('縮圖：顧客不能直接改影片的縮圖', format('update public.route_videos set thumb_path = null where path = %L', (select v from hp where k = 'tv')));
+reset role;
+set role anon; select tests.login(null);
+select tests.ok('縮圖：未登入列不出縮圖檔', (select count(*) from storage.objects where bucket_id = 'video-thumbs') = 0);
+reset role;
+set role authenticated; select tests.login(:NN);
+select tests.ok('縮圖：顧客列不出別人的縮圖檔', (select count(*) from storage.objects where bucket_id = 'video-thumbs') = 0);
+select tests.ok('縮圖：顧客刪不了別人的縮圖（0 筆）', tests.rows(format('delete from storage.objects where name = %L', (select v from hp where k = 'tw'))) = 0);
+select tests.ok('縮圖：顧客叫不出清理清單', public.orphan_video_thumb_paths('mingde') = '{}');
+reset role;
+-- 別人上傳、放在自己資料夾的縮圖（例如管理者放的）：本人分享時不算（要本人上傳的）
+select tests.login(null);
+insert into storage.objects (bucket_id, name, owner) values ('video-thumbs', (select v from hp where k = 'tw3'), :B);
+set role authenticated; select tests.login(:A);
+select tests.lives('縮圖：上傳第三支影片檔', format('insert into storage.objects (bucket_id, name) values (''route-videos'', %L)', (select v from hp where k = 'tv3')));
+select tests.lives('縮圖：用別人上傳的縮圖照樣能分享', format('insert into public.route_videos (route_id, path, thumb_path) values (%L, %L, %L)', (select v from ids where k = 'h1'), (select v from hp where k = 'tv3'), (select v from hp where k = 'tw3')));
+select tests.ok('縮圖：不是本人上傳的縮圖不算', (select thumb_path is null from public.route_videos where path = (select v from hp where k = 'tv3')));
+-- 刪影片：delete_video 刪資料後，本人可以刪縮圖
+select tests.ok('縮圖：用 delete_video 刪資料後可以刪縮圖', public.delete_video((select id from public.route_videos where path = (select v from hp where k = 'tv'))) = (select v from hp where k = 'tv')
+  and tests.rows(format('delete from storage.objects where name = %L', (select v from hp where k = 'tw'))) = 1);
+reset role;
+-- 管理金鑰（補舊影片縮圖的腳本）可以直接寫 thumb_path
+select tests.login(null);
+select tests.ok('縮圖：管理金鑰可以補舊影片的縮圖', tests.rows(format('update public.route_videos set thumb_path = %L where path = %L', (select v from hp where k = 'tw3'), (select v from hp where k = 'tv3'))) = 1);
+-- 清理漏刪的縮圖：員工；上傳超過 1 小時、沒有影片資料用到的才算
+insert into storage.objects (bucket_id, name, owner, created_at) values
+  ('video-thumbs', (select v from hp where k = 'tlost'), :A, now() - interval '2 hours'),
+  ('video-thumbs', format('mingde/%s/%s/fresh.webp', (select v from ids where k = 'h1'), :A), :A, now());
+set role authenticated; select tests.login(:ST);
+select tests.ok('縮圖：員工的清理清單只有漏刪的舊縮圖（用到的、剛上傳的不算）',
+  public.orphan_video_thumb_paths('mingde') = array[(select v from hp where k = 'tlost')]);
+select tests.ok('縮圖：員工可以刪本館的縮圖', tests.rows(format('delete from storage.objects where bucket_id = ''video-thumbs'' and name = %L', (select v from hp where k = 'tlost'))) = 1);
+reset role;
+reset role;
+-- 路線列的影片數（0044）：區域頁一次讀資料時一起帶（未登入也看得到）
+set role anon; select tests.login(null);
+select tests.ok('影片數：區域頁的資料帶每條路線的影片數', (public.zone_view((select zone_id from public.routes where id = (select v from ids where k = 'h1'))) -> 'vs' ->> (select v from ids where k = 'h1')::text)::int = 2);
+reset role; select tests.login(null);
+delete from public.route_videos where path in (select v from hp where k in ('tv2', 'tv3'));
+delete from storage.objects where bucket_id in ('video-thumbs', 'route-videos');
+
 -- 3、4. Spray Wall 岩友路線
 set role authenticated; select tests.login(:NN);
 select tests.lives('Spray：圈圈多塞的資料會被拿掉、定線說明不存', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, setter_note, holds)

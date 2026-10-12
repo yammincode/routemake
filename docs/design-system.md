@@ -102,7 +102,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Chip.tsx` | `ChipRow`（wrap：排不下就換行）、`Chip` |
 | `Sheet.tsx` | `Sheet`、`SheetTitle`、`SheetSub`、`SheetSection` |
 | `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`（disabled：處理中不能切）、`Segmented`（small：一排小膠囊）、`OptionGrid`（單選方塊、選填，再按一次取消；2 或 4 格一排，可加小字說明）、`MultiOptionGrid`（複選方塊、3 格一排，最多 max 個，選滿後其他格變淡按不了；影片型態用）、`Rating`（1–5 分）、`ColorPicker`、`GradePicker`、`TagPicker`、`Check` |
-| `Route.tsx` | `Points`、`Grade`、`RouteTag`（小一號的路線標示：難度色塊＋「店名・區域・路線」，New~ 用）、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`（compact：路線卡片一排小按鈕）、`RouteRow`（color 不給＝長耐力路線，不畫膠帶）、`RouteList`、`CommentCount`、`SetterNote` |
+| `Route.tsx` | `Points`、`Grade`、`RouteTag`（小一號的路線標示：難度色塊＋「店名・區域・路線」，New~ 用）、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`（compact：路線卡片一排小按鈕）、`RouteRow`（color 不給＝長耐力路線，不畫膠帶）、`RouteList`、`VideoCount`、`CommentCount`（路線列「幾天前」後面依序放影片數、留言數，有才放）、`SetterNote` |
 | `Wall.tsx` | `WallPhoto`（`hideable`：左上角「隱藏路線／顯示路線」按鈕，只用在顧客區域頁；放大時加 `data-noswipe`，在照片上左右拖是拖照片、不換區）、`Pin`、`TempPin` |
 | `Gym.tsx` | `ZoneCard`（難度色帶版：小縮圖、完成數、`GradeStrip`、難度範圍或篩選結果、換線倒數；guest 只寫條數）、`ZoneList`、`GradeStrip`（區域難度色帶）、`GradeChart`（全館難度分布）、`BandPicker`（全部／入門 VB–V2／進階 V3–V5／挑戰 V6+；`missing`：這裡沒有路線的那段變淡、點不了）、`BandSwatch`（難度段的三段小色條）、`ZoneGradeCard`（區域頁照片下面的「○○ 區難度」色帶卡：共幾條、`GradeStrip` 拉滿整個寬度、難度範圍；選了難度寫「V3–V5 有 ○ 條」）、`BandHeading`（區域頁路線分段標題：色條＋「入門 VB–V2」＋幾條）、`GoalLine`（快換線提醒）、`NewRouteRow`、`NewRouteCard`（color 不給就不畫色點）、`GymRow`（lines：館名下面的換線小字；tag 給空字串不顯示右邊的字）、`SoonBox`、`dueText`；`ZoneCard` 的 due 是換線（7 天內 warn）；`ZoneNav`（區域頁標題下面的上一區／下一區：左右兩個一樣寬的方框，上面小字「‹ 上一區」「下一區 ›」、下面區名，跟「‹ 館名」返回不一樣；第一區沒有左邊、最後一區沒有右邊（空著）；長名字截短、報讀唸完整名字；`focus` 用按鈕換區後焦點留在同一邊，沒有那一邊就停在另一邊）、`SwipeHint`（左右滑動時螢幕邊緣的深色膠囊，寫要去的那一區） |
 | `Resets.tsx` | `ResetLines`（選館頁換線小字：換線中、剛換好 NEW、○ 天後換線）、`ResetMonth`（換線行事曆：一列一週，館的顏色長條，兩天跨兩格，點日期／色塊選日子）、`ResetDateRow`（日期＋名稱一列）、`GymDot`（館的顏色色票） |
@@ -112,7 +112,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Profile.tsx` | `Avatar`（暱稱第一個字）、`HexChart`（六角形能力表）、`ProfileCardView`（人物卡） |
 | `Tabs.tsx` | `Tabs`（路線卡片的紀錄／影片／留言分頁） |
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |
-| `Video.tsx` | `VideoRow`、`VideoList`（路線卡片影片分頁：一支一列，方形縮圖＋片長、心得、誰・攀爬日（沒有紀錄時「○ 天前分享」，`videoWhen`）、`VideoResult` 分享者紀錄、New~ 的哪條路線（`place`）、型態一行（`feel`，`feelTagText`）、身高・動作一行（`tags`））、`VideoStrip`（橫向滑動縮圖，後台用）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`、`VideoTrim`（顧客分享影片；VideoTrim 剪輯長度：預覽、▶ 播放選的這段、時間軸、開始／結束拉桿＋－／＋ 0.5 秒，最長 max 秒，結束不超過影片長度；disabled：處理中不能改） |
+| `Video.tsx` | 省流量：列表只放縮圖 `thumb`（`<img loading="lazy">`，沒有縮圖是 `bg-line` 灰色方塊＋▶），不放 `<video>`；`VideoViewer` 從列表點開的那支直接播，滑到別支先顯示縮圖和 ▶、按了才載入。`VideoRow`、`VideoList`（路線卡片影片分頁：一支一列，方形縮圖＋片長、心得、誰・攀爬日（沒有紀錄時「○ 天前分享」，`videoWhen`）、`VideoResult` 分享者紀錄、New~ 的哪條路線（`place`）、型態一行（`feel`，`feelTagText`）、身高・動作一行（`tags`））、`VideoStrip`（橫向滑動縮圖，後台用）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`、`VideoTrim`（顧客分享影片；VideoTrim 剪輯長度：預覽、▶ 播放選的這段、時間軸、開始／結束拉桿＋－／＋ 0.5 秒，最長 max 秒，結束不超過影片長度；disabled：處理中不能改） |
 | `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`MonthGradeChart`（我的紀錄本月完攀直條圖：每個難度一根、黃色那段是 Flash、難度下面膠帶色；點一根選它其他變淡；上攀用主色；沒有完攀只有其他紀錄的那根畫虛線、沒紀錄的變淡點不了）、`TotalRow`、`SetBox` |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
 | `Endurance.tsx` | `NumberMarks`（長耐力路線照順序的點：細圈＋號碼，第 1 點綠、最後一點紅、中間藍；放大照片時線和號碼不變粗；reached 之後的點變淡；onTap 編輯時點圈圈刪點，號碼點不到＝點在照片上）、`HighpointPicker`（最高爬到第幾點：－／拉桿／＋，最多到倒數第 2 點，下面大字「30 ／ 38 點」） |

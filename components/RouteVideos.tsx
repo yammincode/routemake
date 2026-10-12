@@ -9,8 +9,8 @@ import { Check, Label, MultiOptionGrid, OptionGrid, TextField, Toggle } from "@/
 import { ClosedNotice } from "@/components/ui/Comments";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
-import { compressMinBytes, compressType, compressVideo, type VideoEdit } from "@/lib/video";
-import { checkPickedVideo, deleteVideo, durText, getVideos, uploadVideo, videoDaySupported, videoLimit, videoMaxSeconds, videoUrl, type Route, type Video } from "@/lib/data";
+import { captureThumb, compressMinBytes, compressType, compressVideo, type VideoEdit } from "@/lib/video";
+import { checkPickedVideo, deleteVideo, durText, getVideos, uploadVideo, videoDaySupported, videoLimit, videoMaxSeconds, videoThumbUrl, videoUrl, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { videoWhen } from "@/lib/date";
 import { CLIMB_MOVES, FEEL_TAG_MAX, FEEL_TAGS, HEIGHT_BANDS, feelTagText, videoTagText, type ClimbMove, type FeelTag, type HeightBand, type Status } from "@/lib/design";
@@ -100,6 +100,7 @@ export default function RouteVideos({
   const cards: VideoCard[] = shown.map((v) => ({
     key: v.id,
     src: videoUrl(v.path),
+    thumb: v.thumb_path ? videoThumbUrl(v.thumb_path) : null,
     name: v.nickname,
     ago: videoWhen(v.climbed_on, v.created_at),
     caption: v.caption,
@@ -153,9 +154,12 @@ export default function RouteVideos({
       const willSqueeze = !!edit || (file.size >= compressMinBytes() && !!compressType());
       if (willSqueeze) setSqueeze(0);
       setEditing(!!edit);
-      const small = willSqueeze ? await compressVideo(file, setSqueeze, edit) : null;
+      // 縮圖（列表只放縮圖、按了才載入影片）：壓縮時順便擷取；沒壓縮或沒擷取到就從要上傳的檔案擷取；失敗照樣分享
+      let thumb: Blob | null = null;
+      const small = willSqueeze ? await compressVideo(file, setSqueeze, edit, (b) => (thumb = b)) : null;
       setSqueeze(null);
       if (edit && !small) throw new Error(trimmed ? "剪輯沒有成功，請再試一次，或先在手機相簿剪短再分享" : "靜音沒有成功，請再試一次");
+      thumb ??= await captureThumb(small ?? file).catch(() => null);
       await uploadVideo(
         session.user.id,
         gymId,
@@ -168,6 +172,7 @@ export default function RouteVideos({
           height_band: height,
           move,
           feel_tags: feel,
+          thumb,
         },
         edit ? { duration: edit.end - edit.start } : small ? { source: file } : undefined,
         lim,

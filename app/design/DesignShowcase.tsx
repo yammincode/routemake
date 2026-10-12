@@ -23,7 +23,7 @@ import { Check, ColorPicker, GradePicker, Label, MultiOptionGrid, OptionGrid, Ra
 import { BandHeading, BandPicker, GoalLine, GradeChart, GymRow, NewRouteCard, NewRouteRow, SoonBox, SwipeHint, ZoneCard, ZoneGradeCard, ZoneList, ZoneNav } from "@/components/ui/Gym";
 import { GymDot, ResetDateRow, ResetLines, ResetMonth } from "@/components/ui/Resets";
 import { newRoutesText, type ResetEvent } from "@/lib/resets";
-import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, RouteTag, SetterNote, StatusBadge, StatusPicker, Tags, Tape } from "@/components/ui/Route";
+import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, RouteTag, SetterNote, StatusBadge, StatusPicker, Tags, Tape, VideoCount } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { CalendarHeat, DailyBars, Delta, GradeBars, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
@@ -51,7 +51,7 @@ import {
 import { MINGDE_PLAN } from "@/lib/floorplan";
 import { GYMS, LIVE_GYM } from "@/lib/gyms";
 
-type DemoRoute = { code: string; grade: number; color: HoldColor; tags: string[]; x: number; y: number; status: Status | null; isNew: boolean; comments: number };
+type DemoRoute = { code: string; grade: number; color: HoldColor; tags: string[]; x: number; y: number; status: Status | null; isNew: boolean; comments: number; videos: number };
 
 const ZONES = [
   { code: "A", name: "A 區", done: 9, total: 20, resetDays: 5, seed: 100 },
@@ -135,6 +135,7 @@ export default function DesignShowcase() {
         status: STATUSES[i],
         isNew: i < 3,
         comments: [2, 0, 1, 0, 3, 0, 0, 1, 0, 0][i],
+        videos: [1, 0, 0, 2, 4, 0, 0, 0, 1, 0][i],
       })),
     [wall]
   );
@@ -429,7 +430,9 @@ export default function DesignShowcase() {
                       status={r.status}
                       meta={
                         <>
-                          <Tags tags={r.tags} /> 3 天前{r.comments > 0 && <CommentCount n={r.comments} />}
+                          <Tags tags={r.tags} /> 3 天前
+                          {r.videos > 0 && <VideoCount n={r.videos} />}
+                          {r.comments > 0 && <CommentCount n={r.comments} />}
                         </>
                       }
                       onClick={() => openRoute(r)}

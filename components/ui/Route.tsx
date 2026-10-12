@@ -153,6 +153,16 @@ export function RouteList({ children }: { children: ReactNode }) {
   return <ul className="m-0 grid list-none gap-2 p-0">{children}</ul>;
 }
 
+// 影片數（路線列：有影片才顯示，放在留言數前面）
+export function VideoCount({ n }: { n: number }) {
+  return (
+    <span className="ml-1.5 inline-flex items-center gap-[3px]" aria-label={`${n} 支影片`}>
+      <Icon name="video" />
+      {n}
+    </span>
+  );
+}
+
 // 留言數
 export function CommentCount({ n }: { n: number }) {
   return (

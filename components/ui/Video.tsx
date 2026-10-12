@@ -6,9 +6,11 @@ import { STATUS_LABEL, type Status } from "@/lib/design";
 import Icon from "./Icon";
 import { StatusBadge } from "./Route";
 
+// 省流量：列表只放縮圖（<img>），不放 <video>；按了才在全螢幕播放時建立 <video> 載入影片
 export type VideoCard = {
   key: string;
-  src?: string; // 沒有網址時顯示黑色預留框（展示頁用）
+  src?: string; // 影片網址：只在全螢幕播放時用；沒有網址時顯示「影片預覽」（展示頁用）
+  thumb?: string | null; // 縮圖網址；沒有（舊影片、縮圖做失敗）就顯示灰色方塊＋▶
   name: string;
   ago: string; // 攀爬日（今天、10/05）；沒有紀錄時是分享時間（3 天前分享），見 videoWhen
   caption?: string | null;
@@ -44,10 +46,30 @@ export function VideoResult({ status }: { status: Status }) {
   );
 }
 
+// 縮圖：有就放圖（lazy，捲到才載入），沒有或載入失敗就是灰色方塊；上面疊 ▶（不載入影片）
+// 先用 crossOrigin 讀（Service Worker 才能存進手機，下次不用再下載）；失敗再用一般方式讀一次，再失敗才是灰色方塊
+function ThumbImage({ src }: { src?: string | null }) {
+  const [step, setStep] = useState(0);
+  return src && step < 2 ? (
+    // eslint-disable-next-line @next/next/no-img-element -- Supabase 的縮圖，已經是小圖
+    <img
+      key={step}
+      src={src}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      crossOrigin={step === 0 ? "anonymous" : undefined}
+      onError={() => setStep((n) => n + 1)}
+      className="pointer-events-none absolute inset-0 size-full object-cover"
+    />
+  ) : (
+    <span aria-hidden className="absolute inset-0 bg-line" />
+  );
+}
+
 // 影片一列（像 Spray Wall 路線列）：方形縮圖（第一格畫面、▶、片長）｜標題（心得，沒寫就是「某某的攀爬」）、誰・攀爬日（或分享時間）＋紀錄、型態、身高・動作
 // 整列點了就播放
 export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) {
-  const [bad, setBad] = useState(false);
   const title = v.caption || `${v.name}的攀爬`;
   return (
     <li>
@@ -57,16 +79,7 @@ export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) 
         className="flex w-full items-start gap-3 rounded-tile bg-sunk p-2.5 text-left"
       >
         <span className="relative block size-[72px] flex-none overflow-hidden rounded-field bg-black">
-          {v.src && !bad && (
-            <video
-              muted
-              playsInline
-              preload="metadata"
-              src={`${v.src}#t=0.1`}
-              onError={() => setBad(true)}
-              className="pointer-events-none absolute inset-0 size-full object-cover"
-            />
-          )}
+          <ThumbImage key={v.thumb ?? ""} src={v.thumb} />
           <span className="absolute inset-0 grid place-items-center">
             <span className="grid size-[26px] place-items-center rounded-full bg-black/45 text-white">
               <Icon name="play" className="size-3.5" />
@@ -97,25 +110,15 @@ export function VideoList({ children }: { children: ReactNode }) {
   return <ul className="m-0 grid list-none gap-2 p-0">{children}</ul>;
 }
 
-// 影片縮圖：直式，顯示第一格畫面（網址加 #t=0.1 讓手機載入第一格）、上傳者、完成狀態
+// 影片縮圖：直式，顯示縮圖（沒有就是灰色方塊）、上傳者、完成狀態
 export function VideoThumb({ v, onClick }: { v: VideoCard; onClick: () => void }) {
-  const [bad, setBad] = useState(false);
   return (
     <button
       onClick={onClick}
       aria-label={`播放 ${v.name} 的影片${v.caption ? "：" + v.caption : ""}`}
       className="relative aspect-[9/16] w-[112px] flex-none snap-start overflow-hidden rounded-btn bg-black text-left"
     >
-      {v.src && !bad && (
-        <video
-          muted
-          playsInline
-          preload="metadata"
-          src={`${v.src}#t=0.1`}
-          onError={() => setBad(true)}
-          className="pointer-events-none absolute inset-0 size-full object-cover"
-        />
-      )}
+      <ThumbImage key={v.thumb ?? ""} src={v.thumb} />
       <span className="absolute inset-0 grid place-items-center text-white/85">
         <span className="grid size-10 place-items-center rounded-full bg-black/45">
           <Icon name="play" className="size-5" />
@@ -146,6 +149,7 @@ export function VideoStrip({ items, onOpen }: { items: VideoCard[]; onOpen: (i: 
 }
 
 // 全螢幕播放：左右滑動或按 ‹ › 換上一支／下一支；按 ✕、點背景或 Esc 關閉
+// 省流量：點列表打開的那支直接播；滑到別支先顯示縮圖和 ▶，按了才載入、播放
 // actions：放在說明下方的按鈕（例如刪除）
 export function VideoViewer({
   items,
@@ -161,6 +165,13 @@ export function VideoViewer({
   const [failed, setFailed] = useState<string | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
   const open = index != null && index >= 0 && index < items.length;
+  // 要播的那支：從列表點開時就是點的那支（在這次畫面更新裡決定，iPhone 才允許有聲音自動播放）；滑到別支要再按 ▶
+  const [playKey, setPlayKey] = useState<string | null>(null);
+  const [prevIndex, setPrevIndex] = useState<number | null>(null);
+  if (index !== prevIndex) {
+    setPrevIndex(index);
+    setPlayKey(prevIndex == null && open ? items[index].key : null);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -215,16 +226,28 @@ export function VideoViewer({
           <p className="max-w-[260px] text-center text-sub leading-normal text-white/80">
             {v.src ? "這支影片無法在你的手機播放（可能是 iPhone 的 HEVC 格式），可以換一支手機或電腦試試看。" : "影片預覽"}
           </p>
-        ) : (
+        ) : playKey === v.key ? (
           <video
             key={v.key}
             controls
             autoPlay
             playsInline
+            preload="none"
+            poster={v.thumb ?? undefined}
             src={v.src}
             onError={() => setFailed(v.key)}
             className="max-h-full w-full object-contain"
           />
+        ) : (
+          <button aria-label="播放這支影片" onClick={() => setPlayKey(v.key)} className="relative grid h-full w-full place-items-center">
+            {v.thumb && (
+              // eslint-disable-next-line @next/next/no-img-element -- Supabase 的縮圖，已經是小圖
+              <img src={v.thumb} alt="" className="pointer-events-none absolute inset-0 size-full object-contain opacity-80" />
+            )}
+            <span className="relative grid size-16 place-items-center rounded-full bg-black/55 text-white">
+              <Icon name="play" className="size-7" />
+            </span>
+          </button>
         )}
         {index > 0 && (
           <button aria-label="上一支" onClick={() => go(-1)} className="absolute left-1 grid size-11 place-items-center rounded-full bg-black/40 text-[28px] leading-none">
