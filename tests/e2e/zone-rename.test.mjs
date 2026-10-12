@@ -156,3 +156,25 @@ test("中和 A 區：A1、A2 合併後平面圖畫一個 A 區，點了進得去
   assert.ok((await page.textContent("main h1")).includes("A 區"));
   assert.deepEqual(errors, []);
 });
+
+test("新店抱石 A 區：A1、A2 合併後平面圖畫一個 A 區，點了進得去；還沒執行 step37（還是 A1、A2）時照舊畫兩區", async () => {
+  const mock = createMock();
+  const { page, errors } = await phone(browser, mock);
+  await page.goto(`${BASE}/gym/g5`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(600);
+  let labels = (await planTexts(page)).sort();
+  assert.deepEqual(labels, ["A", "B1", "B2", "C1", "C2", "D", "E"].sort(), labels.join("、"));
+  await page.locator('main svg g[role=button][aria-label^="抱石 A 區"] text').first().click();
+  await page.waitForURL(/\/zone\?id=/);
+  assert.ok((await page.textContent("main h1")).includes("抱石 A 區"));
+
+  // 正式資料庫還沒執行 step37：還是 A1、A2 兩區
+  const za = mock.db.zones.find((z) => z.gym_id === "g5" && z.code === "A");
+  Object.assign(za, { code: "A1", name: "抱石 A1 區" });
+  mock.db.zones.push({ ...za, id: "00000000-0000-4000-8000-0000000000a2", code: "A2", name: "抱石 A2 區", sort: 2 });
+  await page.goto(`${BASE}/gym/g5`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(600);
+  labels = (await planTexts(page)).sort();
+  assert.deepEqual(labels, ["A1", "A2", "B1", "B2", "C1", "C2", "D", "E"].sort(), "還沒合併時照舊畫兩區：" + labels.join("、"));
+  assert.deepEqual(errors, []);
+});
