@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
@@ -42,6 +42,7 @@ import { useScoring } from "@/lib/useScoring";
 
 // 路線卡片（底部彈出）：上方路線資訊與一排「點一下就記錄」，下方分頁：紀錄（日期、感受、心得）、影片、留言
 // photo：區域照片（長耐力路線在卡片上畫出全部的點）；initialTab：打開時停在哪個分頁（New~ 點影片、留言進來）
+// pending：還沒讀到自己的紀錄時先顯示這個（讀到才顯示記錄按鈕，不然再點一次狀態會蓋掉原本的心得和日期）
 export type RouteTab = "log" | "video" | "comment";
 export default function RouteSheet({
   route,
@@ -54,6 +55,7 @@ export default function RouteSheet({
   onSaved,
   spray,
   initialTab,
+  pending,
 }: {
   route: Route | null;
   photo?: string | null;
@@ -65,10 +67,12 @@ export default function RouteSheet({
   onSaved: (a: Ascent | null) => void;
   spray?: SprayExtras;
   initialTab?: RouteTab;
+  pending?: ReactNode;
 }) {
   return (
     <Sheet open={!!route} onClose={onClose}>
-      {route && (
+      {route && pending}
+      {route && !pending && (
         <RouteBody
           key={route.id}
           route={route}

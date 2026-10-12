@@ -65,7 +65,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -713,6 +713,8 @@ export function createMock() {
       if (state.noHighpoint && m === "POST" && body && "highpoint" in body)
         return J(route, 400, { code: "PGRST204", message: "Could not find the 'highpoint' column of 'ascents' in the schema cache" });
       if (m === "GET") {
+        // state.ascentsReadFail：讀紀錄時伺服器暫時出錯
+        if (state.ascentsReadFail) return J(route, 500, { message: "Internal Server Error" }); // 503 套件會自動重試約 7 秒，這裡用 500 直接失敗
         let rows = filt(mine, sp);
         if (sel.includes("routes(")) rows = rows.map((x) => { const r = db.routes.find((y) => y.id === x.route_id); const z = zoneOf(r.zone_id); return { ...x, routes: { ...r, zones: { name: z.name, gym_id: z.gym_id, photo_path: z.photo_path } } }; }).sort((p1, p2) => p2.climbed_on.localeCompare(p1.climbed_on));
         return out(rows);
@@ -910,7 +912,10 @@ export function createMock() {
       }
     }
     if (t === "route_likes") {
-      if (m === "GET") return out(filt(db.routeLikes, sp).map((l) => ({ route_id: l.route_id, user_id: l.user_id })));
+      if (m === "GET") {
+        if (state.routeLikesReadFail) return J(route, 500, { message: "Internal Server Error" }); // 讀讚數時伺服器出錯
+        return out(filt(db.routeLikes, sp).map((l) => ({ route_id: l.route_id, user_id: l.user_id })));
+      }
       if (m === "POST") {
         if (!uid || !prof(uid)?.nickname) return J(route, 403, { code: "42501", message: "沒有權限" });
         db.routeLikes.push({ route_id: body.route_id, user_id: uid });
