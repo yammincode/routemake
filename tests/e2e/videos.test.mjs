@@ -313,7 +313,10 @@ test("影片標籤：一支一列、用身高、動作或型態篩選；分享�
   assert.ok((await rows.first().textContent()).includes("小安的攀爬"), "新的在最上面");
   assert.equal(mine.climbed_on ?? null, null, "沒有紀錄不記攀爬日");
   assert.ok((await rows.first().textContent()).includes("今天分享"), "沒有紀錄的寫分享時間");
-  assert.ok((await rows.first().textContent()).includes("身高 160–169cm・動態・🤏 手指超痛・🧘 risky"), "列上有型態：" + (await rows.first().textContent()));
+  const lines = await rows.first().locator("span.block").allTextContents();
+  assert.ok(lines.includes("🤏 手指超痛・🧘 risky") && lines.includes("身高 160–169cm・動態"), "型態自己一行、身高・動作一行：" + lines.join("｜"));
+  const feelLine = rows.first().locator("span.block", { hasText: "🤏 手指超痛" });
+  assert.ok(await feelLine.evaluate((el) => el.scrollWidth <= el.clientWidth), "型態那一行沒有被切掉");
   // 用型態篩選
   await chip("🤏 手指超痛").click();
   await c.waitForTimeout(200);
