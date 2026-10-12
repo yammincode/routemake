@@ -227,11 +227,11 @@ test("影片上傳前先壓縮成 720p（顯示進度），檔案變小、記錄
   assert.ok(sent.length < original.length * 0.85, `壓縮後變小（${original.length} → ${sent.length}）`);
   assert.ok(v.path.endsWith(".webm") && v.path.startsWith(`mingde/${r1.id}/${me}/`));
   assert.ok(v.size_bytes < original.length * 0.85, "記錄的是壓縮後的大小");
-  // 壓縮時順便擷取縮圖：跟影片同名、WebP、快取一年
+  // 壓縮時順便擷取縮圖：跟影片同名、WebP、快取跟影片一樣 1 小時
   const t = mock.db.tfiles[v.thumb_path ?? ""];
   assert.ok(t && v.thumb_path === v.path.replace(/\.webm$/, ".webp"), `壓縮時順便做縮圖（${v.thumb_path}）`);
   assert.equal(t.type, "image/webp");
-  assert.equal(t.cache, "31536000", "縮圖快取一年");
+  assert.equal(t.cache, "3600", "縮圖快取 1 小時（跟影片一樣，刪掉後不留太久）");
   assert.ok(t.buf.length > 500 && t.buf.length < 1048576, `縮圖大小合理（${t.buf.length}）`);
   assert.deepEqual(C.errors, []);
   await C.ctx.close();
@@ -859,7 +859,7 @@ test("分享影片時從原檔做縮圖（不用壓縮的小影片）；刪影�
   const t = mock.db.tfiles[v2.thumb_path ?? ""];
   assert.ok(t && v2.thumb_path === v2.path.replace(/\.webm$/, ".webp"), `從原檔做縮圖（${v2.thumb_path}）`);
   assert.equal(t.type, "image/webp");
-  assert.equal(t.cache, "31536000");
+  assert.equal(t.cache, "3600");
   assert.equal(await dialog.locator("li", { hasText: "新資料庫" }).locator("img").count(), 1, "列表顯示縮圖");
 
   // 刪掉自己的影片：縮圖一起刪

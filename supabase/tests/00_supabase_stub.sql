@@ -38,6 +38,8 @@ create table if not exists storage.objects (
   metadata jsonb,                      -- Supabase Storage 會填入 size、mimetype
   created_at timestamptz default now()
 );
+-- 同一個 bucket 裡檔名不能重複（跟真的 Supabase 一樣，覆蓋要用 upsert＝更新）
+create unique index if not exists objects_bucketid_name on storage.objects (bucket_id, name);
 alter table storage.objects enable row level security;
 grant all on storage.objects to anon, authenticated, service_role;
 

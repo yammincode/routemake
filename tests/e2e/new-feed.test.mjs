@@ -44,6 +44,7 @@ test("New~ 影片：今天的隨機排、不到 10 支用之前的補滿；寫�
   assert.equal(await c.getAttribute('nav a:has-text("New~")', "aria-current"), "page");
   const rows = c.locator('[role=tabpanel]:not([hidden]) li button[aria-label^="播放"]');
   assert.equal(await rows.count(), 10, "最多 10 支");
+  assert.equal(await c.locator("main video").count(), 0, "省流量：列表只放縮圖，沒有 <video>（按了才下載影片）");
   const texts = await rows.allTextContents();
   assert.deepEqual(texts.slice(0, 3).map((t) => t.match(/今天(明德|中和|新店)/)?.[0]).sort(), ["今天中和", "今天新店", "今天明德"], "今天的 3 支在前面");
   assert.deepEqual(texts.slice(3).map((t) => t.match(/之前 \d+/)?.[0]), ["之前 1", "之前 2", "之前 3", "之前 4", "之前 5", "之前 6", "之前 7"], "不到 10 支用之前最新的補滿");

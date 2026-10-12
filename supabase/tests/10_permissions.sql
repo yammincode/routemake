@@ -1518,6 +1518,47 @@ select tests.ok('影片數：區域頁的資料帶每條路線的影片數', (pu
 reset role; select tests.login(null);
 delete from public.route_videos where path in (select v from hp where k in ('tv2', 'tv3'));
 delete from storage.objects where bucket_id in ('video-thumbs', 'route-videos');
+-- 縮圖上傳的其他限制（跟影片一樣：要有暱稱、路線能分享、24 小時上限）
+update public.profiles set nickname = null where id = :NN;
+set role authenticated; select tests.login(:NN);
+select tests.throws('縮圖：沒有暱稱不能上傳', format('insert into storage.objects (bucket_id, name) values (''video-thumbs'', ''mingde/%s/%s/n.webp'')', (select v from ids where k = 'h1'), :NN));
+reset role; select tests.login(null);
+update public.profiles set nickname = '洗版' where id = :NN;
+update public.routes set comments_enabled = false where id = (select v from ids where k = 'h1');
+set role authenticated; select tests.login(:A);
+select tests.throws('縮圖：路線關閉留言時不能上傳', format('insert into storage.objects (bucket_id, name) values (''video-thumbs'', ''mingde/%s/%s/c.webp'')', (select v from ids where k = 'h1'), :A));
+select tests.throws('縮圖：已下架的路線不能上傳', format('insert into storage.objects (bucket_id, name) values (''video-thumbs'', ''mingde/%s/%s/late.webp'')', (select v from ids where k = 'v70'), :A));
+reset role; select tests.login(null);
+update public.routes set comments_enabled = true where id = (select v from ids where k = 'h1');
+insert into storage.objects (bucket_id, name, owner)
+select 'video-thumbs', format('mingde/%s/%s/old%s.webp', (select v from ids where k = 'h1'), :A, i), :A from generate_series(1, 29) i;
+set role authenticated; select tests.login(:A);
+select tests.lives('縮圖：24 小時內第 30 張可以', format('insert into storage.objects (bucket_id, name) values (''video-thumbs'', ''mingde/%s/%s/n30.webp'')', (select v from ids where k = 'h1'), :A));
+select tests.throws('縮圖：24 小時內第 31 張被擋', format('insert into storage.objects (bucket_id, name) values (''video-thumbs'', ''mingde/%s/%s/n31.webp'')', (select v from ids where k = 'h1'), :A));
+select tests.ok('縮圖：不能改檔案（沒有改的權限，0 筆）', tests.rows($q$update storage.objects set name = name || '.x' where bucket_id = 'video-thumbs'$q$) = 0);
+reset role;
+set role anon; select tests.login(null);
+select tests.throws('縮圖：未登入不能上傳', format('insert into storage.objects (bucket_id, name) values (''video-thumbs'', ''mingde/%s/%s/anon.webp'')', (select v from ids where k = 'h1'), :A));
+select tests.throws('縮圖：未登入叫不出清理清單', $q$select public.orphan_video_thumb_paths('mingde')$q$);
+reset role;
+set role authenticated; select tests.login(:ST2);
+select tests.ok('縮圖：別館員工列不出這館的縮圖', (select count(*) from storage.objects where bucket_id = 'video-thumbs') = 0);
+select tests.ok('縮圖：別館員工刪不了這館的縮圖（0 筆）', tests.rows($q$delete from storage.objects where bucket_id = 'video-thumbs'$q$) = 0);
+select tests.ok('縮圖：別館員工的清理清單是空的', public.orphan_video_thumb_paths('mingde') = '{}');
+reset role; select tests.login(null);
+delete from storage.objects where bucket_id = 'video-thumbs';
+-- 岩友路線下架後，出題者（一般顧客）可以清掉別人分享在這條的縮圖（下架前不行）
+insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, kind, name, created_by, holds)
+  values ((select v from ids where k = 'sw'), 3, '白', 1, 1, 'community', '縮圖測試', :NN, '[{"x":1,"y":1,"t":"s"},{"x":2,"y":2,"t":"t"}]'::jsonb);
+insert into ids select 'swr', id from public.routes where name = '縮圖測試';
+insert into storage.objects (bucket_id, name, owner) values ('video-thumbs', format('mingde/%s/%s/sw.webp', (select v from ids where k = 'swr'), :A), :A);
+set role authenticated; select tests.login(:NN);
+select tests.ok('縮圖：岩友路線還在牆上時，出題者刪不了別人的縮圖（0 筆）', tests.rows($q$delete from storage.objects where bucket_id = 'video-thumbs'$q$) = 0);
+reset role; select tests.login(null);
+update public.routes set archived_at = now() where id = (select v from ids where k = 'swr');
+set role authenticated; select tests.login(:NN);
+select tests.ok('縮圖：岩友路線下架後，出題者可以清掉別人的縮圖', tests.rows($q$delete from storage.objects where bucket_id = 'video-thumbs'$q$) = 1);
+reset role; select tests.login(null);
 
 -- 3、4. Spray Wall 岩友路線
 set role authenticated; select tests.login(:NN);

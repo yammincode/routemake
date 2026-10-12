@@ -672,8 +672,10 @@ const missingCol = (e: { code?: string; message?: string } | null, col: string) 
 // 每一層都先帶縮圖讀；缺縮圖（還沒套用 step38）就之後都不帶
 async function selectVideos<T>(q: (cols: string) => PromiseLike<{ data: T | null; error: { message?: string; code?: string } | null }>): Promise<T> {
   for (const cols of [VIDEO_COLS, VIDEO_DAYS, VIDEO_TAGS, VIDEO_BASE]) {
-    let r = await q(videoThumbs ? `${cols},thumb_path` : cols);
-    if (videoThumbs && missingCol(r.error, "thumb_path")) {
+    // 看這次有沒有帶縮圖（同時有兩個讀取時，另一個可能已經把旗標改掉）
+    const withThumb = videoThumbs;
+    let r = await q(withThumb ? `${cols},thumb_path` : cols);
+    if (withThumb && missingCol(r.error, "thumb_path")) {
       videoThumbs = false;
       r = await q(cols);
     }
@@ -689,7 +691,7 @@ async function selectVideos<T>(q: (cols: string) => PromiseLike<{ data: T | null
 }
 
 export const videoUrl = (path: string) => supabase().storage.from("route-videos").getPublicUrl(path).data.publicUrl;
-// 縮圖：跟影片同名、副檔名 .webp 或 .jpg，放在 video-thumbs（路徑不會重複，可以快取一年）
+// 縮圖：跟影片同名、副檔名 .webp 或 .jpg，放在 video-thumbs
 export const videoThumbUrl = (path: string) => supabase().storage.from("video-thumbs").getPublicUrl(path).data.publicUrl;
 const thumbNames = (videoPath: string) => {
   const base = videoPath.replace(/\.[^./]+$/, "");
@@ -786,13 +788,14 @@ export async function uploadVideo(
     if (m.toLowerCase().includes("mime")) throw new Error("只能分享 MP4、MOV 或 WebM 影片");
     throw new Error("影片上傳失敗，請確認網路後再試");
   }
-  // 縮圖：跟影片同名，快取一年（路徑不會重複）；失敗、資料庫還沒套用 step38 都不擋分享
+  // 縮圖：跟影片同名；快取跟影片一樣 1 小時（是影片的畫面，刪掉後不留太久；手機的 Service Worker 會另外存起來，重複看不會再下載）
+  // 失敗、資料庫還沒套用 step38 都不擋分享
   let thumb_path: string | null = null;
   const thumbExt = info.thumb?.type === "image/webp" ? "webp" : info.thumb?.type === "image/jpeg" ? "jpg" : null;
   if (info.thumb && thumbExt && videoThumbs) {
     const tp = thumbNames(path)[thumbExt === "webp" ? 0 : 1];
     try {
-      const t = await supabase().storage.from("video-thumbs").upload(tp, info.thumb, { contentType: info.thumb.type, cacheControl: "31536000" });
+      const t = await supabase().storage.from("video-thumbs").upload(tp, info.thumb, { contentType: info.thumb.type, cacheControl: "3600" });
       if (!t.error) thumb_path = tp;
     } catch {}
   }

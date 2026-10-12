@@ -166,11 +166,13 @@ export function VideoViewer({
   const start = useRef<{ x: number; y: number } | null>(null);
   const open = index != null && index >= 0 && index < items.length;
   // 要播的那支：從列表點開時就是點的那支（在這次畫面更新裡決定，iPhone 才允許有聲音自動播放）；滑到別支要再按 ▶
+  // 用影片的 key 判斷（列表更新、同一支換了位置時不會停掉正在播的）
+  const curKey = open ? items[index].key : null;
   const [playKey, setPlayKey] = useState<string | null>(null);
-  const [prevIndex, setPrevIndex] = useState<number | null>(null);
-  if (index !== prevIndex) {
-    setPrevIndex(index);
-    setPlayKey(prevIndex == null && open ? items[index].key : null);
+  const [prevKey, setPrevKey] = useState<string | null>(null);
+  if (curKey !== prevKey) {
+    setPrevKey(curKey);
+    setPlayKey(prevKey == null && curKey != null ? curKey : null);
   }
 
   useEffect(() => {

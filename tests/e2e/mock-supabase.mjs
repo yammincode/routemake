@@ -119,7 +119,7 @@ export function createMock() {
     const path = `${z.gym_id}/${route.id}/${userId}/${uuid()}.mp4`;
     db.vfiles[path] = { buf: Buffer.from("fake"), owner: userId, created_at: now() };
     const thumb_path = thumb ? path.replace(/\.mp4$/, ".webp") : null;
-    if (thumb_path) db.tfiles[thumb_path] = { buf: THUMB_IMG, type: "image/png", cache: "31536000", owner: userId, created_at: now() };
+    if (thumb_path) db.tfiles[thumb_path] = { buf: THUMB_IMG, type: "image/png", cache: "3600", owner: userId, created_at: now() };
     const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, height_band: null, move: null, feel_tags: [], climbed_on: null, thumb_path, created_at: now(), ...extra };
     db.videos.push(v);
     return v;
