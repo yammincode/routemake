@@ -76,14 +76,13 @@ export const FEEL_TAGS: readonly { v: FeelTag; label: string }[] = [
   { v: "flexible", label: "🤸 柔軟大師" },
 ];
 export const FEEL_TAG_MAX = 2;
-// 影片列、播放畫面上的灰字，例如「身高 170–179cm・動態・🤏 手指超痛」；都沒選回傳空字串
-export const videoTagText = (h: HeightBand | null | undefined, m: ClimbMove | null | undefined, f?: readonly FeelTag[] | null) =>
-  [
-    h && `身高 ${HEIGHT_BANDS.find((x) => x.v === h)?.cm}`,
-    m && CLIMB_MOVES.find((x) => x.v === m)?.label,
-    ...FEEL_TAGS.filter((x) => f?.includes(x.v)).map((x) => x.label),
-  ]
-    .filter(Boolean)
+// 影片列、播放畫面上的灰字，例如「身高 170–179cm・動態」；都沒選回傳空字串
+export const videoTagText = (h: HeightBand | null | undefined, m: ClimbMove | null | undefined) =>
+  [h && `身高 ${HEIGHT_BANDS.find((x) => x.v === h)?.cm}`, m && CLIMB_MOVES.find((x) => x.v === m)?.label].filter(Boolean).join("・");
+// 型態另外一行（跟身高、動作擠一行在 360 寬的手機會被切掉），例如「🤏 手指超痛・🧘 risky」；沒選回傳空字串
+export const feelTagText = (f: readonly FeelTag[] | null | undefined) =>
+  FEEL_TAGS.filter((x) => f?.includes(x.v))
+    .map((x) => x.label)
     .join("・");
 
 export const FEEL = [

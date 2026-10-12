@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { VideoStrip, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { cleanOrphanVideos, deleteVideo, getGymVideos, getVideoUsage, videoUrl, type GymVideo } from "@/lib/data";
 import { ago } from "@/lib/date";
-import { videoTagText } from "@/lib/design";
+import { feelTagText, videoTagText } from "@/lib/design";
 
 const mb = (bytes: number) => (bytes >= 1073741824 ? `${(bytes / 1073741824).toFixed(2)} GB` : `${(bytes / 1048576).toFixed(1)} MB`);
 
@@ -47,7 +47,8 @@ export default function VideoPanel({ gymId, gymName }: { gymId: string; gymName:
     ago: `${ago(v.created_at)}分享`,
     caption: v.caption,
     status: v.status,
-    tags: videoTagText(v.height_band, v.move, v.feel_tags),
+    feel: feelTagText(v.feel_tags),
+    tags: videoTagText(v.height_band, v.move),
     meta: `${v.zone_name} ${v.route_code}`,
   }));
 

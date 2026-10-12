@@ -13,7 +13,7 @@ import { compressMinBytes, compressType, compressVideo, type VideoEdit } from "@
 import { checkPickedVideo, deleteVideo, getVideos, uploadVideo, videoDaySupported, videoMaxSeconds, videoUrl, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { videoWhen } from "@/lib/date";
-import { CLIMB_MOVES, FEEL_TAG_MAX, FEEL_TAGS, HEIGHT_BANDS, videoTagText, type ClimbMove, type FeelTag, type HeightBand, type Status } from "@/lib/design";
+import { CLIMB_MOVES, FEEL_TAG_MAX, FEEL_TAGS, HEIGHT_BANDS, feelTagText, videoTagText, type ClimbMove, type FeelTag, type HeightBand, type Status } from "@/lib/design";
 
 // 身高記在這支手機、分帳號記，下次分享不用再選；登出時清掉（lib/offline clearCache）；隱私模式等讀寫失敗就當沒記
 const heightKey = (uid: string) => `${HEIGHT_KEY_PREFIX}${uid}`;
@@ -105,7 +105,8 @@ export default function RouteVideos({
     caption: v.caption,
     status: v.status,
     duration: v.duration_s,
-    tags: videoTagText(v.height_band, v.move, v.feel_tags),
+    feel: feelTagText(v.feel_tags),
+    tags: videoTagText(v.height_band, v.move),
     onName: onProfile ? () => (setPlaying(null), onProfile(v.user_id)) : undefined,
   }));
   if (!canShare && videos && !videos.length) return <ClosedNotice>這條路線目前不開放分享影片</ClosedNotice>;

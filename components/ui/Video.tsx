@@ -14,6 +14,7 @@ export type VideoCard = {
   caption?: string | null;
   status?: Status | null;
   duration?: number | null; // 秒
+  feel?: string; // 型態「🤏 手指超痛・🧘 risky」（feelTagText），自己一行
   tags?: string; // 「身高 170–179cm・動態」（videoTagText）
   meta?: ReactNode; // 例如後台的「B 區 B-03」
   onName?: () => void; // 點名字看人物卡
@@ -42,7 +43,7 @@ export function VideoResult({ status }: { status: Status }) {
   );
 }
 
-// 影片一列（像 Spray Wall 路線列）：方形縮圖（第一格畫面、▶、片長）｜標題（說明，沒寫就是「某某的攀爬」）、誰・攀爬日（或分享時間）＋紀錄、身高・動作
+// 影片一列（像 Spray Wall 路線列）：方形縮圖（第一格畫面、▶、片長）｜標題（心得，沒寫就是「某某的攀爬」）、誰・攀爬日（或分享時間）＋紀錄、型態、身高・動作
 // 整列點了就播放
 export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) {
   const [bad, setBad] = useState(false);
@@ -50,7 +51,7 @@ export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) 
   return (
     <li>
       <button
-        aria-label={[`播放 ${v.name} 的影片：${title}`, v.duration != null && clock(v.duration), v.status && STATUS_LABEL[v.status], v.tags].filter(Boolean).join("，")}
+        aria-label={[`播放 ${v.name} 的影片：${title}`, v.duration != null && clock(v.duration), v.status && STATUS_LABEL[v.status], v.feel, v.tags].filter(Boolean).join("，")}
         onClick={onClick}
         className="flex w-full items-start gap-3 rounded-tile bg-sunk p-2.5 text-left"
       >
@@ -82,6 +83,7 @@ export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) 
             {v.status && <VideoResult status={v.status} />}
           </span>
           {v.meta && <span className="mt-0.5 block truncate text-tiny text-muted">{v.meta}</span>}
+          {v.feel && <span className="mt-0.5 block truncate text-tiny text-muted">{v.feel}</span>}
           {v.tags && <span className="mt-0.5 block truncate text-tiny text-muted">{v.tags}</span>}
         </span>
       </button>
@@ -246,6 +248,7 @@ export function VideoViewer({
           {v.status && <StatusBadge status={v.status} />}
         </div>
         {v.meta && <div className="mt-0.5 text-meta text-white/75">{v.meta}</div>}
+        {v.feel && <div className="mt-0.5 text-meta text-white/75">{v.feel}</div>}
         {v.tags && <div className="mt-0.5 text-meta text-white/75">{v.tags}</div>}
         {v.caption && <p className="mt-1 mb-0 text-sub leading-normal break-words">{v.caption}</p>}
         {actions && <div className="mt-2">{actions(index)}</div>}
