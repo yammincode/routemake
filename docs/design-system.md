@@ -89,6 +89,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 
 - 底部面板往上滑 0.22 秒（`animate-sheet`）
 - 新增標記彈出 0.25 秒（`animate-pop`）
+- 大滿貫兌換卡的條紋一直往右走 1.2 秒一輪（`animate-slam-stripe`；截圖的話不會動）
 - 區域頁換區：新的區從滑的方向滑進來 0.2 秒（`animate-zone-next` 從右邊、`animate-zone-prev` 從左邊）；滑的時候內容跟著手指移、彈回 0.18 秒（`lib/swipe.ts`）
 - 手機設定「減少動態效果」時以上都不播（`globals.css` 最下面），換區也不跟著手指移動
 - 手機設定「減少動態」時關閉
@@ -114,7 +115,8 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |
 | `Video.tsx` | 省流量：列表只放縮圖 `thumb`（`<img loading="lazy">`，沒有縮圖是 `bg-line` 灰色方塊＋▶），不放 `<video>`；`VideoViewer` 從列表點開的那支直接播，滑到別支先顯示縮圖和 ▶、按了才載入。`VideoRow`、`VideoList`（路線卡片影片分頁：一支一列，方形縮圖＋片長、心得、誰・攀爬日（沒有紀錄時「○ 天前分享」，`videoWhen`）、`VideoResult` 分享者紀錄、New~ 的哪條路線（`place`）、型態一行（`feel`，`feelTagText`）、身高・動作一行（`tags`））、`VideoStrip`（橫向滑動縮圖，後台用）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`、`VideoTrim`（顧客分享影片；VideoTrim 剪輯長度：預覽、▶ 播放選的這段、時間軸、開始／結束拉桿＋－／＋ 0.5 秒，最長 max 秒，結束不超過影片長度；disabled：處理中不能改） |
 | `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`MonthGradeChart`（我的紀錄本月完攀直條圖：每個難度一根、黃色那段是 Flash、難度下面膠帶色；點一根選它其他變淡；上攀用主色；沒有完攀只有其他紀錄的那根畫虛線、沒紀錄的變淡點不了）、`TotalRow`、`SetBox` |
-| `Progress.tsx` | 我的紀錄「路線進度」：`GymLegend`（各館色點＋館名）、`GymBar`（依館分段的長條，各店標準色；`of` 是滿格幾條，`track` 灰底：牆上進度有、我的進度沒有）、`ProgressCard`（抱石／上攀一張卡片，標題用 h4；`mode="wall"` 牆上進度：右上「你完成 幾 / 幾 條」、下一行「★ 大滿貫 ○ 個難度」或「還沒有大滿貫」，每行「完成/總數」，全部完成寫「★ 大滿貫」；`mode="mine"` 我的進度：右上「累計完攀 幾 條」，每行「幾 條」，最多的難度畫滿；點一行展開各館數字，某館那個難度全部完成也加 ★）、`SlamStar`（大滿貫星星，Flash 黃） |
+| `Progress.tsx` | 我的紀錄「路線進度」：`GymLegend`（各館色點＋館名）、`GymBar`（依館分段的長條，各店標準色；`of` 是滿格幾條，`track` 灰底：牆上進度有、我的進度沒有）、`ProgressCard`（抱石／上攀一張卡片，標題用 h4；`mode="wall"` 牆上進度：右上「你完成 幾 / 幾 條」、下一行「★ 大滿貫 ○ 個難度」或「還沒有大滿貫」，每行「完成/總數」，全部完成寫「★ 大滿貫」；`mode="mine"` 我的進度：右上「累計完攀 幾 條」，每行「幾 條」，最多的難度畫滿；點一行展開各館數字，某館那個難度全部完成也加 ★；`slam`／`onSlam`：大滿貫兌換，那一行右邊換成「★ 兌換 ›」或「★ 已兌換」，展開和兌換是兩個按鈕）、`SlamStar`（大滿貫星星，Flash 黃） |
+| `Slam.tsx` | 大滿貫兌換：`SlamTicket`（兌換卡＝B 案票券＋C 案動態條紋和時間：上半段膠帶顏色＋大難度（沒有膠帶顏色用主色）、`LiveStripe`、QR code、兌換碼、`LiveClock`、撕線、暱稱／獎品／期限；`redeemed` 已兌換：上半段變灰、條紋停住、QR code 淡掉蓋章）、`QrCode`（SVG，白底，深色模式也是）、`LiveStripe`（膠帶色＋Flash 黃斜條紋一直往右走，`animate-slam-stripe`，減少動態時不動；`stopped` 灰色不動）、`LiveClock`（台北時間，秒在跳）、`SlamRedeemTag`（牆上進度那一行的「★ 兌換 ›」黃色膠囊／「★ 已兌換」） |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
 | `Endurance.tsx` | `NumberMarks`（長耐力路線照順序的點：細圈＋號碼，第 1 點綠、最後一點紅、中間藍；放大照片時線和號碼不變粗；reached 之後的點變淡；onTap 編輯時點圈圈刪點，號碼點不到＝點在照片上）、`HighpointPicker`（最高爬到第幾點：－／拉桿／＋，最多到倒數第 2 點，下面大字「30 ／ 38 點」） |
 | `Grant.tsx` | `GrantList`、`GrantRow`（授權名單的一個人：暱稱、帳號）、`GrantGroup`（一組權限：小標＋膠囊，按下去＝有權限，再按一次取消；營運分頁老闆用） |

@@ -77,6 +77,7 @@ export function createMock() {
     routeLikes: [], // route_likes
     opens: [], // app_opens
     feedback: [],
+    slamClaims: [], // 大滿貫兌換碼（step40）
     resetEvents: [], // 換線公告
     resetEditors: [], // 老闆授權輸入換線日的人（user_id）
     usageViewers: [], // 老闆授權看使用狀況的人和館（{ user_id, gym_id }）
@@ -95,7 +96,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -593,6 +594,78 @@ export function createMock() {
     if (fn === "remove_staff") {
       db.staff_roles = db.staff_roles.filter((s) => !(s.user_id === a.p_user && s.gym_id === a.p_gym));
       return J(route, 200, null);
+    }
+    // 大滿貫兌換（step40）；state.noSlam 模擬資料庫還沒套用（沒有這些函式）
+    if (["slam_info", "claim_slam", "slam_lookup", "redeem_slam", "set_slam_settings", "slam_claim_list"].includes(fn)) {
+      if (state.noSlam) return J(route, 404, { code: "PGRST202", message: `Could not find the function public.${fn}` });
+      const err = (msg, code = "P0001") => J(route, code === "42501" ? 403 : 400, { code, message: msg });
+      // 開放的館現在牆上的岩館路線（Spray Wall、下架、岩友路線不算），完成＝Flash 或完攀
+      const progress = (user, grade) => {
+        const rs = db.routes.filter((r) => {
+          const z = zoneOf(r.zone_id);
+          return r.grade === grade && !r.archived_at && r.kind !== "community" && z && z.kind !== "spray" && db.gyms.find((g) => g.id === z.gym_id)?.is_live;
+        });
+        const done = rs.map((r) => db.ascents.find((x) => x.user_id === user && x.route_id === r.id && ["flash", "send"].includes(x.status))).filter(Boolean);
+        return { total: rs.length, done: done.length, achieved_on: done.map((x) => x.climbed_on).sort().pop() ?? null };
+      };
+      const pub = ({ code, grade, total, achieved_on, created_at, expires_at, redeemed_at, redeemed_gym }) => ({ code, grade, total, achieved_on, created_at, expires_at, redeemed_at, redeemed_gym });
+      const live = (c) => !c.redeemed_at && Date.parse(c.expires_at) > Date.now();
+      const norm = (c) => String(c ?? "").replace(/[^a-z0-9]/gi, "").toUpperCase();
+      if (fn === "slam_info") {
+        if (!uid) return err("請先登入", "42501");
+        const mine = db.slamClaims.filter((c) => c.user_id === uid);
+        const grades = [...new Set(mine.map((c) => c.grade))].sort((a, b) => a - b);
+        const claims = grades.map((g) => mine.filter((c) => c.grade === g).sort((a, b) => !!b.redeemed_at - !!a.redeemed_at || b.created_at.localeCompare(a.created_at))[0]);
+        return J(route, 200, { ...state.slam, claims: claims.map(pub) });
+      }
+      if (fn === "claim_slam") {
+        if (!uid) return err("請先登入", "42501");
+        if (!state.slam.enabled && !isOwner(uid)) return err("大滿貫兌換活動還沒開始");
+        const mine = db.slamClaims.filter((c) => c.user_id === uid && c.grade === a.p_grade);
+        if (mine.some((c) => c.redeemed_at)) return err("這個難度已經兌換過了");
+        const p = progress(uid, a.p_grade);
+        if (p.total < state.slam.min_routes) return err(`這個難度牆上要有 ${state.slam.min_routes} 條以上才能兌換（現在 ${p.total} 條）`);
+        if (p.done < p.total) return err(`這個難度牆上還有 ${p.total - p.done} 條沒完成（${p.done} / ${p.total}）`);
+        let c = mine.find(live);
+        if (!c) {
+          const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+          const code = Array.from(crypto.randomBytes(8), (b) => abc[b % 32]).join("");
+          c = { code, user_id: uid, grade: a.p_grade, total: p.total, achieved_on: p.achieved_on, created_at: now(), expires_at: new Date(Date.now() + state.slam.valid_days * 86400000).toISOString(), redeemed_at: null, redeemed_gym: null, redeemed_by: null };
+          db.slamClaims.push(c);
+        }
+        return J(route, 200, pub(c));
+      }
+      if (fn === "slam_lookup") {
+        if (!isOwner(uid) && !db.staff_roles.some((x) => x.user_id === uid)) return err("只有員工可以查兌換碼", "42501");
+        const c = db.slamClaims.find((x) => x.code === norm(a.p_code));
+        if (!c) return J(route, 200, null);
+        const p = progress(c.user_id, c.grade);
+        return J(route, 200, { ...pub(c), nickname: prof(c.user_id)?.nickname ?? null, redeemed_by: prof(c.redeemed_by)?.nickname ?? null, now_total: p.total, now_done: p.done, min_routes: state.slam.min_routes, enabled: state.slam.enabled });
+      }
+      if (fn === "redeem_slam") {
+        if (!isOwner(uid) && !db.staff_roles.some((x) => x.user_id === uid && x.gym_id === a.p_gym)) return err("只有這間館的員工可以兌換", "42501");
+        if (!state.slam.enabled && !isOwner(uid)) return err("大滿貫兌換活動還沒開始");
+        const c = db.slamClaims.find((x) => x.code === norm(a.p_code));
+        if (!c) return err("找不到這組兌換碼", "P0002");
+        if (c.redeemed_at) return err("這組兌換碼已經兌換過了");
+        if (Date.parse(c.expires_at) <= Date.now()) return err("兌換碼過期了，請顧客重新打開兌換卡拿新的碼");
+        if (c.user_id === uid && !isOwner(uid)) return err("不能兌換自己的兌換碼，請找其他員工", "42501");
+        const p = progress(c.user_id, c.grade);
+        if (p.total < state.slam.min_routes || p.done < p.total) return err(`牆上這個難度現在沒有全部完成（${p.done} / ${p.total} 條），不能兌換`);
+        Object.assign(c, { redeemed_at: now(), redeemed_by: uid, redeemed_gym: a.p_gym });
+        audit(uid, a.p_gym, "slam.redeem", null, { nickname: prof(c.user_id)?.nickname, grade: c.grade, code: c.code });
+        return J(route, 200, pub(c));
+      }
+      if (fn === "set_slam_settings") {
+        if (!isOwner(uid)) return err("只有老闆可以改大滿貫兌換設定", "42501");
+        state.slam = { enabled: a.p_enabled, min_routes: a.p_min_routes, valid_days: a.p_valid_days, prize: (a.p_prize ?? "").trim() || null };
+        return empty(route);
+      }
+      if (fn === "slam_claim_list") {
+        if (!isOwner(uid)) return err("只有老闆可以看兌換紀錄", "42501");
+        const list = [...db.slamClaims].sort((x, y) => (y.redeemed_at ?? y.created_at).localeCompare(x.redeemed_at ?? x.created_at));
+        return J(route, 200, list.map((c) => ({ ...pub(c), nickname: prof(c.user_id)?.nickname ?? null, redeemed_by: prof(c.redeemed_by)?.nickname ?? null })));
+      }
     }
     return J(route, 404, { message: "mock: 沒有這個 rpc " + fn });
   }

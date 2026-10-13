@@ -144,6 +144,7 @@
   --animate-pop: pin-pop 0.25s ease-out;
   --animate-zone-next: zone-next 0.2s ease-out;
   --animate-zone-prev: zone-prev 0.2s ease-out;
+  --animate-slam-stripe: slam-stripe 1.2s linear infinite;
 
   @keyframes sheet-up {
     from {
@@ -167,6 +168,12 @@
     from {
       transform: translateX(-28px);
       opacity: 0.4;
+    }
+  }
+  /* 大滿貫兌換卡的條紋一直往右走：截圖的話不會動，櫃檯一眼看得出來 */
+  @keyframes slam-stripe {
+    to {
+      background-position: 34px 0;
     }
   }
 }
@@ -214,7 +221,8 @@
   .animate-sheet,
   .animate-pop,
   .animate-zone-next,
-  .animate-zone-prev {
+  .animate-zone-prev,
+  .animate-slam-stripe {
     animation: none;
   }
 }

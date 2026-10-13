@@ -26,6 +26,7 @@ import { newRoutesText, type ResetEvent } from "@/lib/resets";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, RouteTag, SetterNote, StatusBadge, StatusPicker, Tags, Tape, VideoCount } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { GymLegend, ProgressCard } from "@/components/ui/Progress";
+import { SlamTicket } from "@/components/ui/Slam";
 import { CalendarHeat, DailyBars, Delta, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
@@ -552,7 +553,41 @@ export default function DesignShowcase() {
             { grade: 6, done: 0, total: 6, gyms: [{ gym: "mingde", done: 0, total: 4 }, { gym: "g4", done: 0, total: 2 }] },
           ]}
         />
-        <p className="mt-0 mb-1.5 text-meta text-muted">我的進度：累積完攀幾條，沒有總數所以不畫灰底，最多的那個難度畫滿</p>
+        <p className="mt-0 mb-1.5 text-meta text-muted">大滿貫兌換（活動開著，或老闆）：大滿貫那一行右邊是「★ 兌換 ›」，兌換過寫「★ 已兌換」；點一行其他地方照舊展開</p>
+        <ProgressCard
+          title="抱石"
+          mode="wall"
+          slam={(r) => (r.grade === 5 ? "claim" : r.grade === 4 ? "redeemed" : null)}
+          onSlam={() => undefined}
+          rows={[
+            { grade: 4, done: 12, total: 12, gyms: [{ gym: "mingde", done: 7, total: 7 }, { gym: "g2", done: 5, total: 5 }] },
+            { grade: 5, done: 21, total: 21, gyms: [{ gym: "mingde", done: 9, total: 9 }, { gym: "g3", done: 6, total: 6 }, { gym: "g5", done: 6, total: 6 }] },
+          ]}
+        />
+        <p className="mt-0 mb-1.5 text-meta text-muted">大滿貫兌換卡（SlamTicket）：膠帶顏色＋大難度、會動的條紋、QR code、兌換碼、現在時間（秒在跳）；截圖的話條紋和時間不會動</p>
+        <SlamTicket
+          grade={5}
+          total={21}
+          achievedOn="2026/10/12"
+          nickname="小岩"
+          code="K7Q4-82MD"
+          qr="https://example.com/redeem?c=K7Q482MD"
+          prize={null}
+          expires="2026/11/11"
+        />
+        <p className="mt-3 mb-1.5 text-meta text-muted">已兌換：上半段變灰、條紋停住、QR code 蓋章</p>
+        <SlamTicket
+          grade={9}
+          total={10}
+          achievedOn="2026/10/12"
+          nickname="小岩"
+          code="K7Q4-82MD"
+          qr="https://example.com/redeem?c=K7Q482MD"
+          prize="原岩毛巾"
+          expires="2026/11/11"
+          redeemed={{ when: "10/14 19:42", gym: "明德館" }}
+        />
+        <p className="mt-3 mb-1.5 text-meta text-muted">我的進度：累積完攀幾條，沒有總數所以不畫灰底，最多的那個難度畫滿</p>
         <ProgressCard
           title="上攀"
           mode="mine"

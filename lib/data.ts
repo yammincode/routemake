@@ -1110,3 +1110,67 @@ export async function getFeedbackList(status: FeedbackStatus | null): Promise<Fe
 export async function setFeedbackStatus(id: string, status: FeedbackStatus) {
   must(await supabase().from("feedback").update({ status }).eq("id", id));
 }
+
+// ---------- 大滿貫兌換（step40） ----------
+// 資料庫還沒套用 step40 時 getSlamInfo 回 null：App 不顯示兌換按鈕，其他照常
+export type SlamClaim = {
+  code: string;
+  grade: number;
+  total: number; // 拿碼時這個難度牆上幾條
+  achieved_on: string;
+  created_at: string;
+  expires_at: string;
+  redeemed_at: string | null;
+  redeemed_gym: string | null;
+};
+export type SlamInfo = {
+  enabled: boolean;
+  min_routes: number;
+  valid_days: number;
+  prize: string | null;
+  claims: SlamClaim[];
+};
+export type SlamLookup = SlamClaim & {
+  nickname: string | null;
+  redeemed_by: string | null;
+  now_total: number;
+  now_done: number;
+  min_routes: number;
+  enabled: boolean;
+};
+export type SlamListItem = SlamClaim & {
+  nickname: string | null;
+  redeemed_by: string | null;
+};
+const NO_SLAM = "資料庫還沒套用大滿貫兌換（step40），請先請老闆在 Supabase 執行 step40";
+function mustSlam<T>(r: { data: T | null; error: { message?: string; code?: string } | null }): T {
+  if (r.error?.code === "PGRST202") throw new Error(NO_SLAM);
+  return must(r);
+}
+export async function getSlamInfo(): Promise<SlamInfo | null> {
+  const r = await supabase().rpc("slam_info");
+  if (r.error?.code === "PGRST202") return null;
+  return must(r) as SlamInfo | null;
+}
+export async function claimSlam(grade: number): Promise<SlamClaim> {
+  return mustSlam(await supabase().rpc("claim_slam", { p_grade: grade })) as SlamClaim;
+}
+export async function lookupSlam(code: string): Promise<SlamLookup | null> {
+  return mustSlam(await supabase().rpc("slam_lookup", { p_code: code })) as SlamLookup | null;
+}
+export async function redeemSlam(code: string, gym: string): Promise<SlamClaim> {
+  return mustSlam(await supabase().rpc("redeem_slam", { p_code: code, p_gym: gym })) as SlamClaim;
+}
+export async function setSlamSettings(s: { enabled: boolean; min_routes: number; valid_days: number; prize: string | null }) {
+  mustSlam(
+    await supabase().rpc("set_slam_settings", {
+      p_enabled: s.enabled,
+      p_min_routes: s.min_routes,
+      p_valid_days: s.valid_days,
+      p_prize: s.prize,
+    }),
+  );
+}
+export async function getSlamClaims(): Promise<SlamListItem[]> {
+  return (mustSlam(await supabase().rpc("slam_claim_list", { p_limit: 100 })) as SlamListItem[] | null) ?? [];
+}

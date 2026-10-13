@@ -4,9 +4,11 @@
 // 顏色一律用各店標準色（lib/gyms.ts 的 GYM_COLORS）；大滿貫的星星用 Flash 黃
 import { useState } from "react";
 import { GymDot } from "@/components/ui/Resets";
+import { SlamRedeemTag } from "@/components/ui/Slam";
 import { gradeLabel } from "@/lib/design";
 import { findGym, GYM_COLORS, gymShort } from "@/lib/gyms";
 import { isGrandSlam, type GymCount, type ProgressRow } from "@/lib/progress";
+import type { SlamAction } from "@/lib/slam";
 
 const gymName = (id: string) => gymShort(findGym(id)?.name ?? id);
 
@@ -49,7 +51,20 @@ export function GymBar({ gyms, of, track = true }: { gyms: GymCount[]; of: numbe
 // 抱石或上攀一張卡片
 // wall（牆上進度）：右上「你完成 幾 / 幾 條」、大滿貫幾個難度；每行「完成/總數」，全部完成寫「★ 大滿貫」
 // mine（我的進度）：右上「累計完攀 幾 條」；每行完攀幾條，長條以最多的那個難度為滿格
-export function ProgressCard({ title, rows, mode }: { title: string; rows: ProgressRow[]; mode: "wall" | "mine" }) {
+// slam（大滿貫兌換，只有牆上進度）：這一行右邊改成「★ 兌換 ›」或「★ 已兌換」，點了打開兌換卡（onSlam）；點這一行其他地方照舊展開各館
+export function ProgressCard({
+  title,
+  rows,
+  mode,
+  slam,
+  onSlam,
+}: {
+  title: string;
+  rows: ProgressRow[];
+  mode: "wall" | "mine";
+  slam?: (r: ProgressRow) => SlamAction | null;
+  onSlam?: (grade: number) => void;
+}) {
   const [open, setOpen] = useState<number | null>(null);
   const wall = mode === "wall";
   const done = rows.reduce((s, r) => s + r.done, 0);
@@ -79,33 +94,61 @@ export function ProgressCard({ title, rows, mode }: { title: string; rows: Progr
       <div className={`grid gap-2.5 ${wall ? "" : "mt-3"}`}>
         {rows.map((r) => {
           const isOpen = open === r.grade;
+          const act = wall && onSlam ? (slam?.(r) ?? null) : null;
+          const head = (
+            <>
+              <span className="font-num text-num-bar font-bold">{gradeLabel(r.grade)}</span>
+              <GymBar gyms={r.gyms} of={wall ? r.total : most} track={wall} />
+            </>
+          );
           return (
             <div key={r.grade}>
-              <button
-                type="button"
-                aria-expanded={isOpen}
-                onClick={() => setOpen(isOpen ? null : r.grade)}
-                className="grid w-full grid-cols-[52px_1fr_76px] items-center gap-2.5 text-left"
-              >
-                <span className="font-num text-num-bar font-bold">{gradeLabel(r.grade)}</span>
-                <GymBar gyms={r.gyms} of={wall ? r.total : most} track={wall} />
-                {wall && isGrandSlam(r) ? (
-                  <span className="text-right text-meta leading-none font-bold whitespace-nowrap">
-                    <SlamStar /> 大滿貫
-                  </span>
-                ) : (
-                  <span className="text-right font-num text-num-chip leading-none font-semibold text-muted">
-                    {wall ? (
-                      `${r.done}/${r.total}`
-                    ) : (
-                      <>
-                        {r.done}
-                        <small className="ml-0.5 font-sans text-meta font-normal">條</small>
-                      </>
-                    )}
-                  </span>
-                )}
-              </button>
+              {act ? (
+                // 有兌換：展開和兌換分成兩個按鈕（按鈕裡不能再放按鈕），排起來跟一般的行一樣
+                <div className="grid grid-cols-[1fr_76px] items-center gap-2.5">
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    onClick={() => setOpen(isOpen ? null : r.grade)}
+                    className="grid w-full grid-cols-[52px_1fr] items-center gap-2.5 text-left"
+                  >
+                    {head}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`${gradeLabel(r.grade)} 大滿貫${act === "redeemed" ? "，已兌換，看兌換卡" : "，打開兌換卡"}`}
+                    onClick={() => onSlam!(r.grade)}
+                    className="justify-self-end"
+                  >
+                    <SlamRedeemTag redeemed={act === "redeemed"} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => setOpen(isOpen ? null : r.grade)}
+                  className="grid w-full grid-cols-[52px_1fr_76px] items-center gap-2.5 text-left"
+                >
+                  {head}
+                  {wall && isGrandSlam(r) ? (
+                    <span className="text-right text-meta leading-none font-bold whitespace-nowrap">
+                      <SlamStar /> 大滿貫
+                    </span>
+                  ) : (
+                    <span className="text-right font-num text-num-chip leading-none font-semibold text-muted">
+                      {wall ? (
+                        `${r.done}/${r.total}`
+                      ) : (
+                        <>
+                          {r.done}
+                          <small className="ml-0.5 font-sans text-meta font-normal">條</small>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </button>
+              )}
               {isOpen && (
                 <div className="mt-2 mb-1 ml-[62px] grid grid-cols-2 gap-x-3 gap-y-1 rounded-tile bg-bg px-3 py-2 text-meta">
                   {r.gyms.map((g) => (

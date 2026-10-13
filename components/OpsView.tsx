@@ -41,6 +41,11 @@ export default function OpsView() {
           📅 換線日
         </Button>
       )}
+      {access.is_owner && (
+        <Button className="mt-2" onClick={() => router.push("/ops/slam")}>
+          🏆 大滿貫兌換
+        </Button>
+      )}
       {!access.is_owner && (
         <Tip>
           老闆授權你{usage ? `看${mine.join("、")}的使用狀況` : ""}

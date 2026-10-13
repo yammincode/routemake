@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import PointsPanel from "@/components/PointsPanel";
@@ -17,6 +18,7 @@ import {
   getMonthlyStats,
   getMySends,
   getPointsSummary,
+  getSlamInfo,
   seqPhotoUrl,
   seqTotal,
   type Gym,
@@ -24,13 +26,15 @@ import {
   type MonthStats,
   type MySend,
   type PointsSummary,
+  type SlamInfo,
   type WallRoute,
 } from "@/lib/data";
 import { todayYmd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, GRADES, gradeLabel } from "@/lib/design";
 import { overlayPending, withCache } from "@/lib/offline";
-import { myProgress, progressGyms, wallProgress } from "@/lib/progress";
+import { myProgress, progressGyms, wallProgress, type ProgressRow } from "@/lib/progress";
 import { ascentPoints } from "@/lib/scoring";
+import { slamAction, slamPath } from "@/lib/slam";
 import { useScoring } from "@/lib/useScoring";
 
 // 路線進度的兩個分頁；選哪一個記在手機
@@ -55,7 +59,8 @@ const thisMonth = () => {
 
 // 我的紀錄：月份切換、四格統計、攀爬日月曆、本月完攀直條圖（點一根才列出那個難度的路線和心得）、累計、路線進度（牆上進度／我的進度）
 export default function MeView({ gymId }: { gymId: string }) {
-  const { session, ready } = useAuth();
+  const { session, ready, access } = useAuth();
+  const router = useRouter();
   const now = thisMonth();
   const [ym, setYm] = useState({ y: now.y, m: now.m });
   const [stats, setStats] = useState<MonthStats | null>(null);
@@ -67,6 +72,8 @@ export default function MeView({ gymId }: { gymId: string }) {
   // 路線進度：開放的館現在牆上的路線、自己完攀過的岩館路線（done＝牆上進度算完成的路線，含還沒送出的紀錄）
   const [progress, setProgress] = useState<{ routes: WallRoute[]; sends: MySend[]; done: Set<string> } | null>(null);
   const [progressError, setProgressError] = useState<string | null>(null);
+  // 大滿貫兌換（step40）：活動設定和自己的兌換碼；讀不到（沒網路、資料庫還沒套用）就不顯示兌換
+  const [slamInfo, setSlamInfo] = useState<SlamInfo | null>(null);
   const [tab, setTab] = useState<ProgressTab>("wall");
   // 路線卡片：各館有沒有開放留言（打開哪一館的路線就查哪一館；存在手機，離線也查得到）
   const [gymComments, setGymComments] = useState<Record<string, boolean> | null>(null);
@@ -142,6 +149,16 @@ export default function MeView({ gymId }: { gymId: string }) {
     return () => window.removeEventListener("routemake:synced", loadMonth);
   }, [ready, loadMonth]);
   useEffect(() => {
+    if (!ready || !uid) return;
+    let alive = true;
+    getSlamInfo()
+      .then((i) => alive && setSlamInfo(i))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [ready, uid]);
+  useEffect(() => {
     if (!ready) return;
     void Promise.resolve().then(loadProgress);
     // 紀錄送出後、網路恢復時重讀（離線第一次打開讀不到時，有訊號就自己補上）
@@ -182,6 +199,8 @@ export default function MeView({ gymId }: { gymId: string }) {
 
   const counts = stats ? Object.fromEntries(Object.entries(stats.by_day).map(([d, n]) => [+d, n])) : {};
 
+  const slam = (r: ProgressRow) => slamAction(slamInfo, !!access?.is_owner, r);
+  const openSlam = (grade: number) => router.push(slamPath(grade));
   const prog = progress && (tab === "wall" ? wallProgress(progress.routes, (id) => progress.done.has(id)) : myProgress(progress.sends));
 
   // 本月完攀直條圖：抱石 VB–V10 每級一根；上攀 5.6–5.9 每級一根、5.10 以上 a–d 合成一根（20 根手機放不下）
@@ -293,8 +312,8 @@ export default function MeView({ gymId }: { gymId: string }) {
               ? "現在牆上的路線，開放的館全部一起算（Spray Wall 不算）；一個難度全部完成就是 ★ 大滿貫。點一行看各館。"
               : "你到現在完攀過的路線，換線拆掉的也算（跟上面的累計完攀一樣）；顏色是在哪一館爬的。點一行看各館。"}
           </Tip>
-          {prog.boulder.length > 0 && <ProgressCard key={`${tab}-b`} title="抱石" rows={prog.boulder} mode={tab} />}
-          {prog.rope.length > 0 && <ProgressCard key={`${tab}-r`} title="上攀" rows={prog.rope} mode={tab} />}
+          {prog.boulder.length > 0 && <ProgressCard key={`${tab}-b`} title="抱石" rows={prog.boulder} mode={tab} slam={slam} onSlam={openSlam} />}
+          {prog.rope.length > 0 && <ProgressCard key={`${tab}-r`} title="上攀" rows={prog.rope} mode={tab} slam={slam} onSlam={openSlam} />}
         </>
       ) : (
         <Empty>{tab === "wall" ? "牆上目前沒有路線。" : "還沒有完攀紀錄：路線按「完攀」或「Flash」就會算進來。"}</Empty>

@@ -1787,6 +1787,105 @@ select tests.ok('未登入：暱稱照樣讀得到', (select nickname from publi
 reset role; select tests.login(null);
 select tests.ok('區域照片不收 SVG', (select not ('image/svg+xml' = any (allowed_mime_types)) from storage.buckets where id = 'zone-photos'));
 
+-- ---------------------------------------------------------------------
+-- 大滿貫兌換（step40）：用 V10 測（先把別的測試留下的 V10 下架）
+-- ---------------------------------------------------------------------
+reset role; select tests.login(null);
+update public.routes set archived_at = now() where grade = 10 and archived_at is null;
+select tests.ok('大滿貫：活動預設關、最少 10 條、30 天', (select not enabled and min_routes = 10 and valid_days = 30 from public.slam_settings));
+set role authenticated; select tests.login(:ST);
+select tests.lives('大滿貫：定線員新增兩條 V10', format($q$insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%1$L, 10, '黑', 10, 10), (%1$L, 10, '白', 20, 20)$q$, (select v from ids where k = 'zoneA')));
+reset role;
+insert into ids select 'slamR' || row_number() over (order by code), id from public.routes where grade = 10 and archived_at is null;
+set role authenticated; select tests.login(:A);
+select tests.lives('大滿貫：甲完攀第一條', format($q$insert into public.ascents (route_id, status) values (%L, 'send')$q$, (select v from ids where k = 'slamR1')));
+select tests.throws('大滿貫：活動還沒開始，顧客拿不到碼', 'select public.claim_slam(10)', '還沒開始');
+select tests.throws('大滿貫：顧客不能改設定', 'select public.set_slam_settings(true, 1, 30, null)', '只有老闆');
+select tests.throws('大滿貫：顧客不能直接改設定表', 'update public.slam_settings set enabled = true');
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.throws('大滿貫：店長不能改設定', 'select public.set_slam_settings(true, 1, 30, null)', '只有老闆');
+select tests.throws('大滿貫：店長看不到兌換紀錄', 'select public.slam_claim_list()', '只有老闆');
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.lives('大滿貫：老闆打開活動、最少 2 條、獎品', $q$select public.set_slam_settings(true, 2, 30, ' 岩館毛巾 ')$q$);
+reset role;
+select tests.ok('大滿貫：設定存好（獎品去掉空白）、有操作紀錄', (select enabled and min_routes = 2 and prize = '岩館毛巾' from public.slam_settings)
+  and exists (select 1 from public.audit_log where action = 'slam.settings'));
+set role anon; select tests.login(null);
+select tests.throws('大滿貫：未登入不能拿碼', 'select public.claim_slam(10)');
+select tests.throws('大滿貫：未登入讀不到兌換碼', 'select * from public.slam_claims');
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.throws('大滿貫：還有沒完成的拿不到碼', 'select public.claim_slam(10)', '還有 1 條沒完成');
+select tests.lives('大滿貫：甲完攀第二條', format($q$insert into public.ascents (route_id, status) values (%L, 'flash')$q$, (select v from ids where k = 'slamR2')));
+select tests.lives('大滿貫：全部完成拿到碼', 'select public.claim_slam(10)');
+select tests.ok('大滿貫：碼是 8 碼、記下 2 條和期限', (select code ~ '^[A-HJ-NP-Z2-9]{8}$' and total = 2 and expires_at > now() + interval '29 days' from public.slam_claims where user_id = auth.uid()));
+select tests.ok('大滿貫：再拿一次是同一組', (public.claim_slam(10) ->> 'code') = (select code from public.slam_claims where user_id = auth.uid())
+  and (select count(*) from public.slam_claims where user_id = auth.uid()) = 1);
+select tests.ok('大滿貫：slam_info 有設定和自己的碼', (public.slam_info() ->> 'enabled')::boolean and (public.slam_info() ->> 'prize') = '岩館毛巾'
+  and jsonb_array_length(public.slam_info() -> 'claims') = 1);
+select tests.throws('大滿貫：顧客不能自己新增兌換碼', $q$insert into public.slam_claims (code, user_id, grade, total, achieved_on, expires_at) values ('ABCDEFGH', auth.uid(), 9, 1, current_date, now() + interval '1 day')$q$);
+select tests.throws('大滿貫：顧客不能自己改成已兌換', $q$update public.slam_claims set redeemed_at = now(), redeemed_gym = 'mingde'$q$);
+select tests.throws('大滿貫：顧客不能查碼', format('select public.slam_lookup(%L)', (select code from public.slam_claims limit 1)), '只有員工');
+select tests.throws('大滿貫：顧客不能兌換', format('select public.redeem_slam(%L, ''mingde'')', (select code from public.slam_claims limit 1)), '只有這間館');
+reset role;
+create temp table slam_codes as select user_id, code from public.slam_claims; grant select on slam_codes to authenticated;
+set role authenticated; select tests.login(:B);
+select tests.ok('大滿貫：乙看不到甲的碼', (select count(*) from public.slam_claims) = 0);
+select tests.ok('大滿貫：乙的 slam_info 沒有碼', jsonb_array_length(public.slam_info() -> 'claims') = 0);
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.ok('大滿貫：員工查碼（小寫、加連字號也可以）：暱稱、牆上 2/2',
+  (select (j ->> 'nickname') = (select nickname from public.profiles where id = :A) and (j ->> 'now_done')::int = 2 and (j ->> 'now_total')::int = 2 and j ->> 'redeemed_at' is null
+     from (select public.slam_lookup(lower(substr(code, 1, 4) || '-' || substr(code, 5))) j from slam_codes where user_id = :A) x));
+select tests.ok('大滿貫：查不到的碼回 null', public.slam_lookup('ZZZZZZZZ') is null);
+select tests.lives('大滿貫：牆上多一條 V10', format($q$insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values (%L, 10, '紅', 30, 30)$q$, (select v from ids where k = 'zoneA')));
+select tests.throws('大滿貫：牆上多了沒完成的，員工按兌換會擋下', format('select public.redeem_slam(%L, ''mingde'')', (select code from slam_codes where user_id = :A)), '沒有全部完成');
+select tests.ok('大滿貫：員工下架那條', tests.rows($q$update public.routes set archived_at = now() where grade = 10 and hold_color = '紅' and archived_at is null$q$) = 1);
+reset role;
+set role authenticated; select tests.login(:ST2);
+select tests.throws('大滿貫：別館員工不能用明德館兌換', format('select public.redeem_slam(%L, ''mingde'')', (select code from slam_codes where user_id = :A)), '只有這間館');
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.lives('大滿貫：明德員工確認兌換', format('select public.redeem_slam(%L, ''mingde'')', (select code from slam_codes where user_id = :A)));
+select tests.throws('大滿貫：同一組碼不能再兌換', format('select public.redeem_slam(%L, ''mingde'')', (select code from slam_codes where user_id = :A)), '已經兌換過');
+select tests.throws('大滿貫：找不到的碼', $q$select public.redeem_slam('ZZZZZZZZ', 'mingde')$q$, '找不到');
+reset role;
+select tests.ok('大滿貫：記下哪館、哪位員工、操作紀錄', (select redeemed_gym = 'mingde' and redeemed_by = :ST from public.slam_claims where user_id = :A)
+  and exists (select 1 from public.audit_log where action = 'slam.redeem' and gym_id = 'mingde' and detail ->> 'nickname' = (select nickname from public.profiles where id = :A)));
+set role authenticated; select tests.login(:A);
+select tests.throws('大滿貫：兌換過的難度不能再拿碼', 'select public.claim_slam(10)', '已經兌換過了');
+select tests.ok('大滿貫：顧客看到已兌換', (public.slam_info() -> 'claims' -> 0 ->> 'redeemed_gym') = 'mingde');
+reset role;
+-- 過期：乙也全部完成，拿到碼後改成已經過期
+set role authenticated; select tests.login(:B);
+select tests.lives('大滿貫：乙完攀兩條', format($q$insert into public.ascents (route_id, status) values (%L, 'send'), (%L, 'send')$q$, (select v from ids where k = 'slamR1'), (select v from ids where k = 'slamR2')));
+select tests.lives('大滿貫：乙拿到碼', 'select public.claim_slam(10)');
+reset role;
+update public.slam_claims set expires_at = now() - interval '1 minute' where user_id = :B;
+insert into slam_codes select user_id, code from public.slam_claims where user_id = :B;
+set role authenticated; select tests.login(:ST);
+select tests.throws('大滿貫：過期的碼不能兌換', format('select public.redeem_slam(%L, ''mingde'')', (select code from slam_codes where user_id = :B)), '過期');
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.ok('大滿貫：過期後再打開拿到新的碼', (public.claim_slam(10) ->> 'code') <> (select code from slam_codes where user_id = :B));
+reset role;
+delete from slam_codes where user_id = :B;
+insert into slam_codes select user_id, code from public.slam_claims where user_id = :B and expires_at > now();
+-- 活動關掉：員工不能兌換，老闆照樣可以試
+update public.slam_settings set enabled = false;
+set role authenticated; select tests.login(:ST);
+select tests.throws('大滿貫：活動關掉時員工不能兌換', format('select public.redeem_slam(%L, ''mingde'')', (select code from slam_codes where user_id = :B)), '還沒開始');
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.lives('大滿貫：活動關掉時老闆照樣可以兌換（先試）', format('select public.redeem_slam(%L, ''mingde'')', (select code from slam_codes where user_id = :B)));
+select tests.ok('大滿貫：老闆看得到全部兌換紀錄（有暱稱）', (select count(*) from jsonb_array_elements(public.slam_claim_list())) = 3
+  and (public.slam_claim_list() -> 0 ->> 'nickname') = (select nickname from public.profiles where id = :B));
+reset role;
+select tests.throws('大滿貫：內部函式不能直接呼叫', format('set role authenticated; select public.slam_progress(%L, 10)', :A));
+reset role;
+
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));
 
