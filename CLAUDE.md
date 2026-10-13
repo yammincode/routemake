@@ -59,12 +59,12 @@
 
 ## e2e 測試列表（tests/e2e）
 - 跑全部：先 `npm run build`，再 `npm run test:e2e`；只跑一個檔：`npm run test:e2e -- tests/e2e/檔名`（改功能時先單跑相關的檔，push 前還是跑全部）
-- 全部跑時分兩段（scripts/test-e2e.mjs）：一般的檔同時跑 3 個，SOLO 的檔（videos、speed）最後一個一個跑，全部約 9 分；電腦忙、常超時可以設 E2E_CONCURRENCY=1 改回一次一個
+- 全部跑時分兩段（scripts/test-e2e.mjs）：一般的檔同時跑 3 個，SOLO 的檔（videos、speed、offline-sync）最後一個一個跑，全部約 10 分；電腦忙、常超時可以設 E2E_CONCURRENCY=1 改回一次一個
 - 測試檔會同時跑，不能共用東西：假 Supabase 用 createMock()（每個檔自己建）、暫存檔用 mkdtemp、要開伺服器用 port 0（不要寫死 port、檔名）
 - 新增、刪除、改名測試檔，或檔案測的範圍變了，同一個 commit 更新這張表
 - 改底部分頁（名稱、順序、個數）要一起改 navigation、new-feed、ops、spray 四個檔
 - 新增頁面要加進 app/sw.ts 的 OFFLINE_PAGES（pwa-offline 會抽查幾頁）
-- 比較慢、電腦忙時容易超時：offline-sync（登入換新要等約 30 秒）、videos（真的錄影片、壓縮）、speed（有計時）；videos、speed 放在 SOLO 單獨跑，新增會真的錄影片或判斷時間快慢的測試檔，也要加進 SOLO
+- 比較慢、電腦忙時容易超時：offline-sync（登入換新要等約 30 秒）、videos（真的錄影片、壓縮）、speed（有計時）；這三個都放在 SOLO 單獨跑，新增會真的錄影片、判斷時間快慢、或要等登入換新的測試檔，也要加進 SOLO
 - 改到影片列表、播放器時，確認沒有放回 `<video>`：videos、new-feed 會檢查列表沒有 `<video>`、按播放前沒有下載影片
 
 | 檔案 | 測什麼 | 驗收清單 |

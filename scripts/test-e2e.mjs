@@ -2,7 +2,7 @@
 // 用法：npm run test:e2e（全部）、npm run test:e2e -- tests/e2e/檔名（只跑指定的檔，一次一個）
 // 全部跑時分兩段，省時間：
 //   1. 一般的測試檔同時跑 3 個（每個檔有自己的瀏覽器和假資料庫，互不干擾；只共用網站伺服器，伺服器不存資料）
-//   2. 電腦忙時容易超時的（SOLO：真的錄影片、有計時）最後一個一個跑
+//   2. 電腦忙時容易超時的（SOLO：真的錄影片、有計時、要等登入換新和送出重試）最後一個一個跑
 // 環境變數 E2E_CONCURRENCY 可以改同時跑幾個（電腦慢、常超時就設 1，跟以前一樣一次一個）
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -13,10 +13,10 @@ import { setTimeout as wait } from "node:timers/promises";
 const PORT = process.env.E2E_PORT ?? "3100";
 const BASE = `http://localhost:${PORT}`;
 const DIR = "tests/e2e";
-// 單獨跑：videos（真的錄影片、壓縮，跟影片一樣久）、speed（有計時）
-const SOLO = ["videos", "speed"];
+// 單獨跑：videos（真的錄影片、壓縮，跟影片一樣久）、speed（有計時）、offline-sync（要等登入換新、送出失敗重試；電腦忙時「登出」那項曾經超時）
+const SOLO = ["videos", "speed", "offline-sync"];
 // 比較久的先開始跑，最後才不會剩一個大的在等
-const FIRST = ["offline-sync", "zone-rename", "auth", "plan3d", "zone-swipe", "admin-and-customer", "pwa-offline"];
+const FIRST = ["zone-rename", "auth", "plan3d", "zone-swipe", "admin-and-customer", "pwa-offline"];
 const CONCURRENCY = Number(process.env.E2E_CONCURRENCY) || Math.max(1, Math.min(3, os.availableParallelism() - 1));
 
 const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", PORT], { stdio: ["ignore", "ignore", "inherit"] });
@@ -44,7 +44,7 @@ if (args.length) {
   const solo = all.filter((f) => SOLO.includes(name(f)));
   phases = [
     { label: `同時跑 ${CONCURRENCY} 個`, files: together, concurrency: CONCURRENCY },
-    { label: "單獨跑（錄影片、有計時）", files: solo, concurrency: 1 },
+    { label: "單獨跑（錄影片、有計時、離線送出）", files: solo, concurrency: 1 },
   ].filter((p) => p.files.length);
 }
 
