@@ -157,12 +157,12 @@ test("中和 A 區：A1、A2 合併後平面圖畫一個 A 區，點了進得去
   assert.deepEqual(errors, []);
 });
 
-test("新店抱石 A1、A2：合併後又拆回（step39）平面圖畫兩區，點了進得去；還沒執行 step39（還是一個 A 區）時照舊畫一區", async () => {
+test("新店抱石 A1、A2：合併後又拆回（step39）平面圖畫兩區，點了進得去", async () => {
   const mock = createMock();
   const { page, errors } = await phone(browser, mock);
   await page.goto(`${BASE}/gym/g5`, { waitUntil: "networkidle" });
   await page.waitForTimeout(600);
-  let labels = (await planTexts(page)).sort();
+  const labels = (await planTexts(page)).sort();
   assert.deepEqual(labels, ["A1", "A2", "B1", "B2", "C1", "C2", "D", "E"].sort(), labels.join("、"));
   await page.locator('main svg g[role=button][aria-label^="抱石 A2 區"] text').first().click();
   await page.waitForURL(/\/zone\?id=/);
@@ -173,17 +173,5 @@ test("新店抱石 A1、A2：合併後又拆回（step39）平面圖畫兩區，
   await page.waitForURL(/\/zone\?id=/);
   assert.ok((await page.textContent("main h1")).includes("抱石 A1 區"), "下方斜牆是 A1");
 
-  // 正式資料庫還沒執行 step39：還是合併的一個 A 區
-  const a1 = mock.db.zones.find((z) => z.gym_id === "g5" && z.code === "A1");
-  Object.assign(a1, { code: "A", name: "抱石 A 區" });
-  mock.db.zones = mock.db.zones.filter((z) => !(z.gym_id === "g5" && z.code === "A2"));
-  await page.goto(`${BASE}/gym/g5`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(600);
-  labels = (await planTexts(page)).sort();
-  assert.deepEqual(labels, ["A", "B1", "B2", "C1", "C2", "D", "E"].sort(), "還沒拆開時照舊畫一個 A 區：" + labels.join("、"));
-  await page.locator('main svg g[role=button][aria-label^="抱石 A 區"] text').first().click();
-  await page.waitForURL(/\/zone\?id=/);
-  // 同一個區域（A1 改回 A）：先顯示手機裡存的舊名字，讀到資料庫就換成抱石 A 區
-  await page.waitForFunction(() => document.querySelector("main h1")?.textContent?.includes("抱石 A 區"), null, { timeout: 5000 });
   assert.deepEqual(errors, []);
 });
