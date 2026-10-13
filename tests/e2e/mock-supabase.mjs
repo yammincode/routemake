@@ -626,7 +626,7 @@ export function createMock() {
         const p = progress(uid, a.p_grade);
         if (p.total < state.slam.min_routes) return err(`這個難度牆上要有 ${state.slam.min_routes} 條以上才能兌換（現在 ${p.total} 條）`);
         if (p.done < p.total) return err(`這個難度牆上還有 ${p.total - p.done} 條沒完成（${p.done} / ${p.total}）`);
-        let c = mine.find(live);
+        let c = mine.filter((x) => !x.redeemed_at && Date.parse(x.expires_at) > Date.now() + 3600000).sort((x, y) => y.created_at.localeCompare(x.created_at))[0];
         if (!c) {
           const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
           const code = Array.from(crypto.randomBytes(8), (b) => abc[b % 32]).join("");
@@ -644,6 +644,7 @@ export function createMock() {
       }
       if (fn === "redeem_slam") {
         if (!isOwner(uid) && !db.staff_roles.some((x) => x.user_id === uid && x.gym_id === a.p_gym)) return err("只有這間館的員工可以兌換", "42501");
+        if (!db.gyms.some((g) => g.id === a.p_gym && g.is_live)) return err("找不到這間館", "P0002");
         if (!state.slam.enabled && !isOwner(uid)) return err("大滿貫兌換活動還沒開始");
         const c = db.slamClaims.find((x) => x.code === norm(a.p_code));
         if (!c) return err("找不到這組兌換碼", "P0002");

@@ -13,13 +13,14 @@ export const slamPath = (grade: number) => `/slam?g=${grade}`;
 // 這個難度最新的一組碼（兌換過的優先）
 export const claimOf = (info: SlamInfo | null, grade: number): SlamClaim | null => info?.claims.find((c) => c.grade === grade) ?? null;
 
-// 牆上進度這一行要不要放兌換：活動開著（老闆可以先試）、大滿貫、牆上至少 min_routes 條；兌換過的寫「已兌換」
+// 牆上進度這一行要不要放兌換：大滿貫、活動開著（老闆可以先試）、牆上至少 min_routes 條；兌換過的寫「已兌換」
 export type SlamAction = "claim" | "redeemed";
 export function slamAction(info: SlamInfo | null, isOwner: boolean, r: ProgressRow): SlamAction | null {
-  if (!info) return null;
+  if (!info || !isGrandSlam(r)) return null;
+  // 兌換過的難度：換線後新路線上牆就照一般的「完成/總數」，重新集滿才寫已兌換
   if (claimOf(info, r.grade)?.redeemed_at) return "redeemed";
   if (!info.enabled && !isOwner) return null;
-  return isGrandSlam(r) && r.total >= info.min_routes ? "claim" : null;
+  return r.total >= info.min_routes ? "claim" : null;
 }
 
 // 期限、兌換時間（台北時間）：2026/11/12 或 10/14 19:42

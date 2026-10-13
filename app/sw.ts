@@ -95,6 +95,19 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// 兌換卡 /slam?g=、員工兌換頁 /redeem?c=：網址帶難度、兌換碼，整頁只存一份不帶參數的空殼（跟安裝時存的同一份），
+// 不會每掃一組碼就在手機裡多存一份帶碼的網址；換頁時的資料請求（RSC）也不存
+const queryPage = (url: URL) => url.pathname === "/slam" || url.pathname === "/redeem";
+const plainKey = { cacheKeyWillBeUsed: async ({ request }: { request: Request }) => new URL(new URL(request.url).pathname, self.location.origin).href };
+const slamShell = {
+  matcher: ({ url, sameOrigin, request }: { url: URL; sameOrigin: boolean; request: Request }) => sameOrigin && queryPage(url) && request.mode === "navigate",
+  handler: new NetworkFirst({ cacheName: "others", plugins: [plainKey], networkTimeoutSeconds: PAGE_TIMEOUT }),
+};
+const slamData = {
+  matcher: ({ url, sameOrigin, request }: { url: URL; sameOrigin: boolean; request: Request }) => sameOrigin && queryPage(url) && request.mode !== "navigate",
+  handler: new NetworkOnly(),
+};
+
 // 岩牆照片：每次上傳都是新檔名（含時間），舊網址的內容不會變，存過就直接用手機裡的，不再重新下載
 const wallPhotos = {
   matcher: ({ url }: { url: URL }) => url.hostname.endsWith(".supabase.co") && url.pathname.startsWith("/storage/v1/object/public/zone-photos/"),
@@ -125,7 +138,7 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  runtimeCaching: [wallPhotos, videoThumbs, supabaseData, zoneShell, fonts, ...pages],
+  runtimeCaching: [wallPhotos, videoThumbs, supabaseData, zoneShell, slamShell, slamData, fonts, ...pages],
 });
 
 serwist.addEventListeners();

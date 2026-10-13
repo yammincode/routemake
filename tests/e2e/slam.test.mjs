@@ -97,7 +97,10 @@ test("兌換卡：膠帶顏色、QR code、兌換碼、條紋在動、時間在�
   await staff.page.locator("[data-slam-lookup]").waitFor();
   const info = await staff.page.textContent("[data-slam-lookup]");
   for (const w of ["小安", "V5", "✓ 完成 3 / 3 條"]) assert.ok(info.includes(w), `兌換頁有「${w}」：${info}`);
+  // 要按兩次（兌換後不能復原）
   await staff.page.locator("main button", { hasText: "確認兌換（明德館）" }).click();
+  assert.equal(mock.db.slamClaims[0].redeemed_at, null, "按一次還沒兌換");
+  await staff.page.locator("main button", { hasText: "確定兌換？再按一次（明德館）" }).click();
   await staff.page.locator('main [role="status"]', { hasText: "已兌換" }).waitFor();
   assert.equal(mock.db.slamClaims[0].redeemed_gym, "mingde");
   assert.ok(mock.db.audit.some((a) => a.action === "slam.redeem" && a.detail.nickname === "小安"), "操作紀錄");
@@ -117,6 +120,13 @@ test("兌換卡：膠帶顏色、QR code、兌換碼、條紋在動、時間在�
   await page.waitForURL(/\/slam\?g=5/);
   await page.locator('main section[data-redeemed="1"]').waitFor();
   assert.equal(mock.db.slamClaims.length, 1, "看已兌換的卡不會再拿碼");
+
+  // 換線後 V5 多一條新路線：那一行照一般寫「3/4」（不是已兌換）
+  mock.addRoute(mock.db.zones.find((z) => z.gym_id === "g4" && z.code === "A1"), 5, "紅");
+  await page.goto(`${BASE}/me`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1500);
+  assert.equal(await slamBtn(page, "V5", true).count(), 0, "沒有全部完成就不寫已兌換");
+  assert.ok((await page.locator('main section[aria-label="抱石"]').textContent()).includes("3/4"));
   assert.deepEqual(errors, []);
   assert.deepEqual(staff.errors, []);
 });
@@ -160,6 +170,7 @@ test("員工兌換頁：顧客和沒登入只看到說明；牆上這個難度�
   assert.ok((await staff.page.textContent("[data-slam-lookup]")).includes("小安"));
   assert.deepEqual(await staff.page.locator("main button[aria-pressed]").allTextContents(), ["萬華館"], "只有自己館");
   await staff.page.locator("main button", { hasText: "確認兌換（萬華館）" }).click();
+  await staff.page.locator("main button", { hasText: "再按一次（萬華館）" }).click();
   await staff.page.locator('main [role="status"]', { hasText: "已兌換" }).waitFor();
   assert.equal(mock.db.slamClaims[0].redeemed_gym, "g2");
   assert.deepEqual(guest.errors, []);
@@ -212,8 +223,8 @@ test("營運：老闆打開活動、改最少條數、期限、獎品；兌換�
   await ticket(cust.page, "V5").waitFor();
   assert.ok((await ticket(cust.page, "V5").textContent()).includes("原岩毛巾"));
   await page.reload({ waitUntil: "networkidle" });
-  await page.locator('main ul[aria-label="兌換紀錄"] li').first().waitFor();
-  const row = await page.textContent('main ul[aria-label="兌換紀錄"] li');
+  await page.locator('main [aria-label="兌換紀錄"] [role="listitem"]').first().waitFor();
+  const row = await page.textContent('main [aria-label="兌換紀錄"] [role="listitem"]');
   assert.ok(row.includes("小安") && row.includes("V5") && row.includes("還沒兌換"), row);
 
   // 員工（不是老闆）：營運沒有這顆、打開設定頁只看到說明

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/Button";
-import { Empty, SectionTitle, Tip } from "@/components/ui/Card";
+import { Card, Empty, SectionTitle, Tip } from "@/components/ui/Card";
 import { Label, TextField, Toggle } from "@/components/ui/Form";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
@@ -98,9 +98,9 @@ export default function SlamOpsView() {
       ) : list.length === 0 ? (
         <Empty>還沒有人拿兌換碼。</Empty>
       ) : (
-        <ul className="m-0 grid list-none gap-2 p-0" aria-label="兌換紀錄">
+        <div role="list" className="grid gap-2" aria-label="兌換紀錄">
           {list.map((c) => (
-            <li key={c.code} className="rounded-tile bg-surface px-3.5 py-2.5 text-note shadow-card">
+            <Card key={c.code} role="listitem" className="px-3.5 py-2.5 text-note">
               <div className="flex items-baseline justify-between gap-2">
                 <b className="truncate">
                   {c.nickname ?? "（沒有暱稱）"} <span className="font-num text-sub">{gradeLabel(c.grade)}</span>
@@ -115,9 +115,9 @@ export default function SlamOpsView() {
                   ? `${slamTime(c.redeemed_at)} ${findGym(c.redeemed_gym ?? "")?.name ?? ""}${c.redeemed_by ? `・${c.redeemed_by}` : ""}`
                   : `${slamDate(c.created_at)} 拿到碼，${slamDate(c.expires_at)} 前`}
               </p>
-            </li>
+            </Card>
           ))}
-        </ul>
+        </div>
       )}
     </>
   );

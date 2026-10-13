@@ -3,11 +3,12 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import LoginGate from "@/components/LoginGate";
 import { Button } from "@/components/ui/Button";
 import { Card, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { Label, TextField } from "@/components/ui/Form";
-import { tapeLook } from "@/components/ui/Gym";
+import { Grade } from "@/components/ui/Route";
 import { useToast } from "@/components/ui/Toast";
 import { isStaff, staffGyms } from "@/lib/auth";
 import { lookupSlam, redeemSlam, type SlamLookup } from "@/lib/data";
@@ -33,7 +34,13 @@ export default function RedeemView() {
   const code = normCode(useSearchParams().get("c") ?? "");
   const next = `/redeem${code ? `?c=${code}` : ""}`;
 
-  if (!ready || (session && !access)) return <Empty>讀取中…</Empty>;
+  // 讀取中、帳號資料一直讀不到：照登入頁面的說明（幾秒後提示檢查網路）
+  if (!ready || (session && !access))
+    return (
+      <LoginGate next={encodeURIComponent(next)} intro="大滿貫兌換">
+        {null}
+      </LoginGate>
+    );
   if (!session || !isStaff(access))
     return (
       <>
@@ -57,6 +64,8 @@ function StaffRedeem({ code }: { code: string }) {
   const [error, setError] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
+  // 確認兌換要按兩次（兌換後不能復原）：第一次按變成「再按一次確認」
+  const [armed, setArmed] = useState(false);
   // 查到的時間（判斷過期用）
   const [readAt, setReadAt] = useState(0);
   // 可以選的館：老闆是全部開放的館，員工是自己有權限的館
@@ -83,6 +92,7 @@ function StaffRedeem({ code }: { code: string }) {
 
   const pickGym = (id: string) => {
     setGym(id);
+    setArmed(false);
     try {
       localStorage.setItem(GYM_KEY, id);
     } catch {}
@@ -90,7 +100,9 @@ function StaffRedeem({ code }: { code: string }) {
 
   const redeem = async () => {
     if (!c || !gym || busy) return;
+    if (!armed) return setArmed(true);
     setBusy(true);
+    setArmed(false);
     try {
       const r = await redeemSlam(c.code, gym);
       setC({ ...c, ...r, redeemed_by: access?.nickname ?? null });
@@ -133,7 +145,7 @@ function StaffRedeem({ code }: { code: string }) {
     return (
       <>
         {head}
-        <Tip>用手機相機掃顧客兌換卡上的 QR code，會直接打開這一頁。</Tip>
+        <Tip>用手機相機掃顧客兌換卡上的 QR code，會直接打開這一頁。iPhone 的相機會用 Safari 打開（跟主畫面的 App 分開登入），第一次要在 Safari 登入員工帳號。</Tip>
         {manual}
       </>
     );
@@ -176,15 +188,12 @@ function StaffRedeem({ code }: { code: string }) {
         : notDone
           ? `牆上的 ${gradeLabel(c.grade)} 現在沒有全部完成（${c.now_done} / ${c.now_total} 條），不能兌換。`
           : null;
-  const t = tapeLook(c.grade);
   return (
     <>
       {head}
       <Card className="px-4 pt-3.5 pb-4" data-slam-lookup>
         <div className="flex items-center gap-3">
-          <span className={`inline-flex h-10 min-w-14 items-center justify-center rounded-cell px-2 font-num text-num-card font-bold ${t.cls}`} style={t.style}>
-            {gradeLabel(c.grade)}
-          </span>
+          <Grade grade={c.grade} className="text-num-card min-w-14 flex-none" />
           <div className="min-w-0">
             <p className="m-0 text-tiny text-muted">暱稱（請核對顧客的兌換卡）</p>
             <p className="m-0 truncate text-sheet font-bold">{c.nickname ?? "（沒有暱稱）"}</p>
@@ -222,9 +231,9 @@ function StaffRedeem({ code }: { code: string }) {
         <p className="mt-3 mb-0 rounded-tile bg-accent-soft p-4 text-sub font-bold" role="status">
           ★ 已兌換，請把獎品交給顧客。同一組碼不能再用。
         </p>
-      ) : problem ? (
+      ) : problem || gyms.length === 0 ? (
         <p className="mt-3 mb-0 rounded-tile bg-surface p-4 text-sub font-bold text-warn" role="alert">
-          {problem}
+          {problem ?? "你沒有開放中的館可以兌換，請找其他館的員工。"}
         </p>
       ) : (
         <>
@@ -238,10 +247,10 @@ function StaffRedeem({ code }: { code: string }) {
           </ChipRow>
           <div className="mt-4">
             <Button variant="primary" disabled={!gym || busy} onClick={() => void redeem()}>
-              {busy ? "兌換中…" : gym ? `確認兌換（${findGym(gym)?.name}）` : "先選館"}
+              {busy ? "兌換中…" : !gym ? "先選館" : armed ? `確定兌換？再按一次（${findGym(gym)?.name}）` : `確認兌換（${findGym(gym)?.name}）`}
             </Button>
           </div>
-          <Tip>按下去就記成已兌換（哪一館、哪位員工、什麼時候），顧客的兌換卡會自動蓋上「已兌換」。</Tip>
+          <Tip>按兩次就記成已兌換（哪一館、哪位員工、什麼時候），不能復原；顧客的兌換卡會自動蓋上「已兌換」。</Tip>
         </>
       )}
       {manual}

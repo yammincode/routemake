@@ -149,13 +149,22 @@ export default function MeView({ gymId }: { gymId: string }) {
     return () => window.removeEventListener("routemake:synced", loadMonth);
   }, [ready, loadMonth]);
   useEffect(() => {
+    // 換人登入、登出：先清掉上一個人的兌換狀態
+    queueMicrotask(() => setSlamInfo(null));
     if (!ready || !uid) return;
     let alive = true;
-    getSlamInfo()
-      .then((i) => alive && setSlamInfo(i))
-      .catch(() => undefined);
+    const load = () =>
+      void getSlamInfo()
+        .then((i) => alive && setSlamInfo(i))
+        .catch(() => undefined);
+    load();
+    // 跟路線進度一樣：網路恢復、紀錄送出後重讀
+    window.addEventListener("routemake:synced", load);
+    window.addEventListener("online", load);
     return () => {
       alive = false;
+      window.removeEventListener("routemake:synced", load);
+      window.removeEventListener("online", load);
     };
   }, [ready, uid]);
   useEffect(() => {

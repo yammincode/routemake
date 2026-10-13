@@ -118,7 +118,7 @@ revoke execute on function public.slam_info() from public, anon;
 grant execute on function public.slam_info() to authenticated;
 
 -- 顧客拿兌換碼：活動要開著（老闆可以先試）、這個難度牆上至少 min_routes 條而且全部完成、還沒兌換過
--- 有還沒過期的碼就回同一組，沒有才發新的
+-- 有還沒過期的碼就回同一組（剩不到 1 小時的不算，免得走到櫃檯剛好過期），沒有才發新的
 create or replace function public.claim_slam(p_grade int) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -147,7 +147,7 @@ begin
     raise exception '這個難度牆上還有 % 條沒完成（% / %）', v_p.total - v_p.done, v_p.done, v_p.total using errcode = 'P0001';
   end if;
   select * into v_c from public.slam_claims
-   where user_id = v_uid and grade = p_grade and redeemed_at is null and expires_at > now()
+   where user_id = v_uid and grade = p_grade and redeemed_at is null and expires_at > now() + interval '1 hour'
    order by created_at desc limit 1;
   if not found then
     loop
