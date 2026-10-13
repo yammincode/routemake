@@ -29,7 +29,7 @@ test("New~ 影片：今天的隨機排、不到 10 支用之前的補滿；寫�
   const r1 = mock.addRoute(mingde, 4, "藍");
   const zh = mock.db.zones.find((z) => z.gym_id === "g3" && z.code === "A");
   const r2 = mock.addRoute(zh, 108, "紅");
-  const xd = mock.db.zones.find((z) => z.gym_id === "g5" && z.code === "A");
+  const xd = mock.db.zones.find((z) => z.gym_id === "g5" && z.code === "A1");
   const r3 = mock.addRoute(xd, 2, "黃");
   mock.addVideo(other, r1, { caption: "今天明德", created_at: ago(within(1)) });
   mock.addVideo(other, r2, { caption: "今天中和", created_at: ago(within(2)) });

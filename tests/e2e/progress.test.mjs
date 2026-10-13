@@ -27,7 +27,7 @@ function setup() {
     // VB：明德 2、萬華 1、南港 1，全部完成 → 抱石 VB 大滿貫
     vb: [route(zone("mingde", "A1"), -1), route(zone("mingde", "A2"), -1), route(zone("g2", "A"), -1), route(zone("g4", "A1"), -1)],
     // V3：明德 1（完成）、萬華 1、新店 2 → 1/4，明德那館全部完成
-    v3: [route(zone("mingde", "B1"), 3), route(zone("g2", "B1"), 3), route(zone("g5", "A"), 3), route(zone("g5", "B1"), 3)],
+    v3: [route(zone("mingde", "B1"), 3), route(zone("g2", "B1"), 3), route(zone("g5", "A1"), 3), route(zone("g5", "B1"), 3)],
     // 上攀（中和）：5.8 兩條都完成 → 大滿貫；5.10a 一條沒爬
     y58: [route(zone("g3", "A"), 102), route(zone("g3", "B"), 102)],
     y510: route(zone("g3", "C"), 104),

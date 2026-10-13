@@ -91,8 +91,8 @@ select tests.ok('初始資料：六間店、明德館 17 區（細分＋Spray Wa
   and (select count(*) from public.zones where gym_id = 'mingde' and plan_shape is not null) = 5);
 select tests.ok('開放館：明德、萬華、中和、南港、新店（中壢還沒）',
   (select array_agg(id order by id) from public.gyms where is_live) = '{g2,g3,g4,g5,mingde}');
-select tests.ok('各館區域數：萬華 9、中和 8（A1、A2 合併回 A）、南港 11（＋Spray Wall）、新店 7（A1、A2 合併成 A）',
-  (select array_agg(n order by gym_id) from (select gym_id, count(*) n from public.zones where gym_id <> 'mingde' group by gym_id) x) = '{9,8,12,7}');
+select tests.ok('各館區域數：萬華 9、中和 8（A1、A2 合併回 A）、南港 11（＋Spray Wall）、新店 8（A 又拆回 A1、A2）',
+  (select array_agg(n order by gym_id) from (select gym_id, count(*) n from public.zones where gym_id <> 'mingde' group by gym_id) x) = '{9,8,12,8}');
 select tests.ok('明德館區域順序：A1–A4、比賽牆 1–4、B1–B3、C1–C3、D1–D2、Spray Wall',
   (select string_agg(name, '、' order by sort) from public.zones where gym_id = 'mingde') = 'A1 區、A2 區、A3 區、A4 區、比賽牆 1、比賽牆 2、比賽牆 3、比賽牆 4、B1 區、B2 區、B3 區、C1 區、C2 區、C3 區、D1 區、D2 區、Spray Wall');
 select tests.ok('換線日：比賽牆四段都是 10/6、新店上攀 E 區 10/18',
@@ -106,7 +106,7 @@ select tests.ok('新使用者自動建立 profiles 並存帳號名稱（轉小�
 -- 未登入的人
 -- ---------------------------------------------------------------------
 set role anon; select tests.login(null);
-select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 53);
+select tests.ok('未登入：可以看場館和區域', (select count(*) from public.gyms) = 6 and (select count(*) from public.zones) = 54);
 select tests.ok('未登入：可以看暱稱', (select nickname from public.profiles where id = :A) = '甲');
 select tests.throws('未登入：讀不到手機號碼', 'select phone from public.profiles');
 select tests.throws('未登入：讀不到帳號名稱', 'select username from public.profiles');
@@ -375,8 +375,8 @@ reset role;
 select tests.ok('明德細分：A1–A4、W1–W4、B1–B3、C1–C3、D1–D2',
   (select array_agg(code order by sort) from public.zones where gym_id = 'mingde' and kind = 'wall')
     = array['A1','A2','A3','A4','W1','W2','W3','W4','B1','B2','B3','C1','C2','C3','D1','D2']);
-select tests.ok('新店分區：抱石 A（A1、A2 合併）、B1、B2、C1、C2、D、E', (select array_agg(code order by sort) from public.zones where gym_id = 'g5') = array['A','B1','B2','C1','C2','D','E']
-  and (select name = '抱石 A 區' from public.zones where gym_id = 'g5' and code = 'A'));
+select tests.ok('新店分區：抱石 A1、A2（合併後又拆回）、B1、B2、C1、C2、D、E', (select array_agg(code order by sort) from public.zones where gym_id = 'g5') = array['A1','A2','B1','B2','C1','C2','D','E']
+  and (select array_agg(name order by sort) from public.zones where gym_id = 'g5' and code in ('A1', 'A2')) = array['抱石 A1 區','抱石 A2 區']);
 select tests.ok('中和分區：A（A1、A2 合併回來）、AB1、AB2，都用 YDS', (select array_agg(code order by sort) from public.zones where gym_id = 'g3') = array['A','AB1','AB2','B','C','D','SP','BO']
   and (select bool_and(grade_system = 'yds') from public.zones where gym_id = 'g3' and code in ('A', 'AB2'))
   and (select name = 'A 區' from public.zones where gym_id = 'g3' and code = 'A'));
@@ -1313,12 +1313,20 @@ select tests.ok('中和合併：擋下時什麼都沒改', (select count(*) = 2 
   and not exists (select 1 from public.zones where gym_id = 'g3' and code = 'A'));
 
 -- ---------------------------------------------------------------------
--- 新店 A1、A2 合併成抱石 A 區（0042）：跟中和一樣，把 A 改回合併前的 A1、再加一個 A2，再跑一次 0042
+-- 新店 A1、A2 合併成抱石 A 區（0042），又拆回 A1、A2（0045）
+-- 一開始是拆開的（0045 已經跑過）：先測合併、再測拆回，最後停在拆開
 -- ---------------------------------------------------------------------
-update public.zones set code = 'A1', name = '抱石 A1 區' where gym_id = 'g5' and code = 'A';
-insert into public.zones (gym_id, code, name, sort) values ('g5', 'A2', '抱石 A2 區', 2);
 insert into ids select 'xA1', id from public.zones where gym_id = 'g5' and code = 'A1';
 insert into ids select 'xA2', id from public.zones where gym_id = 'g5' and code = 'A2';
+\set xmerge_sql `cat migrations/20261106000042_xindian_a_merge.sql`
+\set xsplit_sql `cat migrations/20261108000045_xindian_a_split.sql`
+-- A2 牆上還有路線：不能合併（整份取消）
+insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values ((select v from ids where k = 'xA2'), 3, '藍', 1, 1);
+select tests.throws('新店合併：A2 牆上還有路線就擋下（請先整區換線）', :'xmerge_sql', 'A2 牆上還有');
+select tests.ok('新店合併：擋下時什麼都沒改', (select count(*) = 2 from public.zones where gym_id = 'g5' and code in ('A1', 'A2'))
+  and not exists (select 1 from public.zones where gym_id = 'g5' and code = 'A'));
+delete from public.routes where zone_id = (select v from ids where k = 'xA2');
+-- A2 的舊路線（已下架、有紀錄）和換線公告
 insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, created_at) values ((select v from ids where k = 'xA2'), 3, '藍', 1, 1, now() - interval '3 days');
 insert into ids select 'xrA2', id from public.routes where zone_id = (select v from ids where k = 'xA2');
 insert into public.ascents (user_id, route_id, status, climbed_on) values (:A, (select v from ids where k = 'xrA2'), 'send', public.taipei_today() - 1);
@@ -1337,18 +1345,42 @@ select tests.ok('新店合併：換線公告裡的 A2 改成 A（重複的只留
     = array[array[(select v from ids where k = 'xA1')], array[(select v from ids where k = 'xA1')]]);
 \ir ../migrations/20261106000042_xindian_a_merge.sql
 select tests.ok('新店合併：再執行一次不會改到東西', (select array_agg(code order by sort) from public.zones where gym_id = 'g5') = array['A','B1','B2','C1','C2','D','E']);
--- A2 牆上還有路線：不能合併（整份取消）
-update public.zones set code = 'A1', name = '抱石 A1 區' where gym_id = 'g5' and code = 'A';
-insert into public.zones (gym_id, code, name, sort) values ('g5', 'A2', '抱石 A2 區', 2);
-insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values ((select id from public.zones where gym_id = 'g5' and code = 'A2'), 3, '藍', 1, 1);
-\set xmerge_sql `cat migrations/20261106000042_xindian_a_merge.sql`
-select tests.throws('新店合併：A2 牆上還有路線就擋下（請先整區換線）', :'xmerge_sql', 'A2 牆上還有');
-select tests.ok('新店合併：擋下時什麼都沒改', (select count(*) = 2 from public.zones where gym_id = 'g5' and code in ('A1', 'A2'))
-  and not exists (select 1 from public.zones where gym_id = 'g5' and code = 'A'));
--- 還原成合併後（後面的測試不受影響）
-delete from public.routes where zone_id = (select id from public.zones where gym_id = 'g5' and code = 'A2');
-delete from public.zones where gym_id = 'g5' and code = 'A2';
-update public.zones set code = 'A', name = '抱石 A 區' where gym_id = 'g5' and code = 'A1';
+
+-- 拆回 A1、A2（0045）：以前的換線公告（已經過去）只寫 A
+insert into public.reset_events (gym_id, label, zone_ids, starts_on, ends_on)
+values ('g5', '以前換 A', array[(select v from ids where k = 'xA1')], public.taipei_today() - 10, public.taipei_today() - 9);
+\ir ../migrations/20261108000045_xindian_a_split.sql
+insert into ids select 'xA2b', id from public.zones where gym_id = 'g5' and code = 'A2';
+select tests.ok('新店拆回：A 改回抱石 A1 區（同一筆），加回抱石 A2 區、排在 A1 後面',
+  (select id = (select v from ids where k = 'xA1') and name = '抱石 A1 區' from public.zones where gym_id = 'g5' and code = 'A1')
+  and (select array_agg(code order by sort) from public.zones where gym_id = 'g5') = array['A1','A2','B1','B2','C1','C2','D','E']
+  and (select name = '抱石 A2 區' and kind = 'wall' and grade_system = 'v' and photo_path is null from public.zones where gym_id = 'g5' and code = 'A2'));
+select tests.ok('新店拆回：A2 的舊路線（A2-xx）搬回 A2、紀錄還在',
+  (select zone_id = (select v from ids where k = 'xA2b') and code like 'A2-%' from public.routes where id = (select v from ids where k = 'xrA2'))
+  and exists (select 1 from public.ascents where route_id = (select v from ids where k = 'xrA2') and user_id = :A));
+select tests.ok('新店拆回：還沒到的換線公告 A1、A2 都排上，已經過去的照舊',
+  (select zone_ids from public.reset_events where gym_id = 'g5' and label = '以前換 A') = array[(select v from ids where k = 'xA1')]
+  and (select bool_and(cardinality(zone_ids) = 2 and zone_ids @> array[(select v from ids where k = 'xA1'), (select v from ids where k = 'xA2b')])
+         from public.reset_events where gym_id = 'g5' and label in ('只換 A2', '換 A1、A2')));
+-- 新路線編號接在舊的後面（舊的 A2-02 → 新的 A2-03；前面擋下合併的那條用掉了 A2-01），不會撞號
+insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values ((select v from ids where k = 'xA2b'), 2, '紅', 1, 1);
+select tests.ok('新店拆回：A2 的新路線編號接在舊的後面（A2-02 → A2-03）',
+  (select code from public.routes where id = (select v from ids where k = 'xrA2')) = 'A2-02'
+  and (select code from public.routes where zone_id = (select v from ids where k = 'xA2b') and archived_at is null) = 'A2-03');
+delete from public.routes where zone_id = (select v from ids where k = 'xA2b') and archived_at is null;
+\ir ../migrations/20261108000045_xindian_a_split.sql
+select tests.ok('新店拆回：再執行一次不會改到東西', (select array_agg(code order by sort) from public.zones where gym_id = 'g5') = array['A1','A2','B1','B2','C1','C2','D','E']
+  and (select id from public.zones where gym_id = 'g5' and code = 'A2') = (select v from ids where k = 'xA2b'));
+-- A 牆上還有路線：不能拆（整份取消）
+delete from public.reset_events where gym_id = 'g5' and label in ('以前換 A', '只換 A2', '換 A1、A2');
+\ir ../migrations/20261106000042_xindian_a_merge.sql
+insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values ((select v from ids where k = 'xA1'), 3, '藍', 1, 1);
+select tests.throws('新店拆回：A 牆上還有路線就擋下（請先整區換線）', :'xsplit_sql', 'A 區牆上還有');
+select tests.ok('新店拆回：擋下時什麼都沒改', (select code = 'A' from public.zones where id = (select v from ids where k = 'xA1'))
+  and not exists (select 1 from public.zones where gym_id = 'g5' and code in ('A1', 'A2')));
+-- 還原成拆開（後面的測試不受影響）
+delete from public.routes where zone_id = (select v from ids where k = 'xA1') and archived_at is null;
+\ir ../migrations/20261108000045_xindian_a_split.sql
 
 -- ---------------------------------------------------------------------
 -- 上線前安全加強（0038）
