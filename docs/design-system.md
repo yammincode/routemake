@@ -30,7 +30,7 @@
 
 **平面圖完成度**：`color-mix(accent (18 + 完成比例×72)%, blush)`。
 
-**各館顏色**（凡是要分館的地方都用這組，例如換線行事曆）：`lib/gyms.ts` 的 `GYM_COLORS`，照各店標準色（明德 #6D3540、萬華 #6959B2、中和 #01BCB5、南港 #066D6A、新店 #006382、中壢 #304562）；色塊上的字用 `inkOn()` 自動選深字或白字。
+**各館顏色**（凡是要分館的地方都用這組，例如換線行事曆、我的紀錄的路線進度）：`lib/gyms.ts` 的 `GYM_COLORS`，照各店標準色（明德 #6D3540、萬華 #6959B2、中和 #01BCB5、南港 #066D6A、新店 #006382、中壢 #304562）；色塊上的字用 `inkOn()` 自動選深字或白字。
 
 **難度色帶**：膠帶顏色用 `gradeColor`，色塊加一圈 30% ink 細框（深色模式的黑色膠帶也看得到）；還沒定顏色的 V9、V10 和上攀用虛線框。同一個難度合成一段、寫條數；所有區域用同一個比例，路線多的牆色帶比較長。選了難度時，範圍內的段保持粗、其他縮成細線；整區沒有這個難度就把縮圖變灰、區名變淡（字不要整張透明，淺色模式會看不清楚）。上攀為主的館（抱石少於一半）不顯示難度分布和篩選。
 
@@ -110,10 +110,11 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Comments.tsx` | `CommentItem`（含 👍 按讚；刪除要按兩次；New~ 用：place 路線一行＋onOpen「看路線 ›」、clamp 最多 3 行）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
 | `Spray.tsx` | `HoldMarks`（照片上的圈圈：起攀 S 綠、路線點 藍、完攀 T 紅；細框 1.5px＋外圈極細深色邊，兩指放大時框不變粗；S／T 標籤 15px）、`HoldLegend`、`HoldTools`（選種類與大小）、`SprayRow`、`RouteThumb`（列表縮圖，放大到路線範圍）、`HOLD_TYPES`、`HOLD_SIZES` |
 | `Profile.tsx` | `Avatar`（暱稱第一個字）、`HexChart`（六角形能力表）、`ProfileCardView`（人物卡） |
-| `Tabs.tsx` | `Tabs`（路線卡片的紀錄／影片／留言分頁） |
+| `Tabs.tsx` | `Tabs`（分頁：路線卡片的紀錄／影片／留言、New~ 的影片／留言、我的紀錄路線進度的牆上進度／我的進度） |
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |
 | `Video.tsx` | 省流量：列表只放縮圖 `thumb`（`<img loading="lazy">`，沒有縮圖是 `bg-line` 灰色方塊＋▶），不放 `<video>`；`VideoViewer` 從列表點開的那支直接播，滑到別支先顯示縮圖和 ▶、按了才載入。`VideoRow`、`VideoList`（路線卡片影片分頁：一支一列，方形縮圖＋片長、心得、誰・攀爬日（沒有紀錄時「○ 天前分享」，`videoWhen`）、`VideoResult` 分享者紀錄、New~ 的哪條路線（`place`）、型態一行（`feel`，`feelTagText`）、身高・動作一行（`tags`））、`VideoStrip`（橫向滑動縮圖，後台用）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`、`VideoTrim`（顧客分享影片；VideoTrim 剪輯長度：預覽、▶ 播放選的這段、時間軸、開始／結束拉桿＋－／＋ 0.5 秒，最長 max 秒，結束不超過影片長度；disabled：處理中不能改） |
-| `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`GradeBars`、`MonthGradeChart`（我的紀錄本月完攀直條圖：每個難度一根、黃色那段是 Flash、難度下面膠帶色；點一根選它其他變淡；上攀用主色；沒有完攀只有其他紀錄的那根畫虛線、沒紀錄的變淡點不了）、`TotalRow`、`SetBox` |
+| `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`MonthGradeChart`（我的紀錄本月完攀直條圖：每個難度一根、黃色那段是 Flash、難度下面膠帶色；點一根選它其他變淡；上攀用主色；沒有完攀只有其他紀錄的那根畫虛線、沒紀錄的變淡點不了）、`TotalRow`、`SetBox` |
+| `Progress.tsx` | 我的紀錄「路線進度」：`GymLegend`（各館色點＋館名）、`GymBar`（依館分段的長條，各店標準色；`of` 是滿格幾條，`track` 灰底：牆上進度有、我的進度沒有）、`ProgressCard`（抱石／上攀一張卡片，標題用 h4；`mode="wall"` 牆上進度：右上「你完成 幾 / 幾 條」、下一行「★ 大滿貫 ○ 個難度」或「還沒有大滿貫」，每行「完成/總數」，全部完成寫「★ 大滿貫」；`mode="mine"` 我的進度：右上「累計完攀 幾 條」，每行「幾 條」，最多的難度畫滿；點一行展開各館數字，某館那個難度全部完成也加 ★）、`SlamStar`（大滿貫星星，Flash 黃） |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
 | `Endurance.tsx` | `NumberMarks`（長耐力路線照順序的點：細圈＋號碼，第 1 點綠、最後一點紅、中間藍；放大照片時線和號碼不變粗；reached 之後的點變淡；onTap 編輯時點圈圈刪點，號碼點不到＝點在照片上）、`HighpointPicker`（最高爬到第幾點：－／拉桿／＋，最多到倒數第 2 點，下面大字「30 ／ 38 點」） |
 | `Grant.tsx` | `GrantList`、`GrantRow`（授權名單的一個人：暱稱、帳號）、`GrantGroup`（一組權限：小標＋膠囊，按下去＝有權限，再按一次取消；營運分頁老闆用） |

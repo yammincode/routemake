@@ -1,4 +1,3 @@
-import { gradeLabel } from "@/lib/design";
 import type { ReactNode } from "react";
 import { tapeLook } from "./Gym";
 
@@ -162,23 +161,6 @@ export function MonthGradeChart({
           );
         })}
       </div>
-    </div>
-  );
-}
-
-// 難度長條圖（原型 .gbars）
-export function GradeBars({ rows }: { rows: { grade: number; ratio: number; label: string }[] }) {
-  return (
-    <div className="grid gap-2.5">
-      {rows.map((r) => (
-        <div key={r.grade} className="grid grid-cols-[52px_1fr_56px] items-center gap-2.5">
-          <span className="font-num text-num-bar font-bold">{gradeLabel(r.grade)}</span>
-          <span className="h-3 overflow-hidden rounded-md bg-line">
-            <i className="block h-full rounded-md bg-accent" style={{ width: `${r.ratio * 100}%` }} />
-          </span>
-          <span className="text-right font-num text-num-chip leading-none font-semibold text-muted">{r.label}</span>
-        </div>
-      ))}
     </div>
   );
 }

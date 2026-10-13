@@ -6,36 +6,54 @@ import PointsPanel from "@/components/PointsPanel";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
 import { Empty, SectionTitle, Tip } from "@/components/ui/Card";
+import { GymLegend, ProgressCard } from "@/components/ui/Progress";
 import { Points, RouteList, RouteRow } from "@/components/ui/Route";
-import { CalendarHeat, Delta, GradeBars, MonthGradeChart, MonthSwitcher, StatGrid, StatTile, TotalRow, type MonthCol } from "@/components/ui/Stats";
+import { CalendarHeat, Delta, MonthGradeChart, MonthSwitcher, StatGrid, StatTile, TotalRow, type MonthCol } from "@/components/ui/Stats";
+import { Tabs } from "@/components/ui/Tabs";
 import {
-  getGym,
-  getGymActiveRoutes,
+  getGyms,
+  getLiveWallRoutes,
   getMonthAscents,
   getMonthlyStats,
-  getMyAscents,
+  getMySends,
   getPointsSummary,
   seqPhotoUrl,
   seqTotal,
-  type Ascent,
   type Gym,
   type MonthAscent,
   type MonthStats,
+  type MySend,
   type PointsSummary,
-  type Route,
+  type WallRoute,
 } from "@/lib/data";
 import { todayYmd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, GRADES, gradeLabel } from "@/lib/design";
 import { overlayPending, withCache } from "@/lib/offline";
+import { myProgress, progressGyms, wallProgress } from "@/lib/progress";
 import { ascentPoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
+
+// 路線進度的兩個分頁；選哪一個記在手機
+type ProgressTab = "wall" | "mine";
+const PROGRESS_TABS = [
+  { key: "wall", label: "牆上進度" },
+  { key: "mine", label: "我的進度" },
+] as const;
+const TAB_KEY = "routemake-progress-tab";
+const savedTab = (): ProgressTab => {
+  try {
+    return localStorage.getItem(TAB_KEY) === "mine" ? "mine" : "wall";
+  } catch {
+    return "wall";
+  }
+};
 
 const thisMonth = () => {
   const t = todayYmd();
   return { y: +t.slice(0, 4), m: +t.slice(5, 7), d: +t.slice(8, 10) };
 };
 
-// 我的紀錄：月份切換、四格統計、攀爬日月曆、本月完攀直條圖（點一根才列出那個難度的路線和心得）、累計、牆上進度
+// 我的紀錄：月份切換、四格統計、攀爬日月曆、本月完攀直條圖（點一根才列出那個難度的路線和心得）、累計、路線進度（牆上進度／我的進度）
 export default function MeView({ gymId }: { gymId: string }) {
   const { session, ready } = useAuth();
   const now = thisMonth();
@@ -46,15 +64,19 @@ export default function MeView({ gymId }: { gymId: string }) {
   const [list, setList] = useState<MonthAscent[]>([]);
   // 本月完攀直條圖點了哪一根（v:3＝V3、y:104＝5.10）；換月份就收起來
   const [pick, setPick] = useState<string | null>(null);
-  const [wall, setWall] = useState<{ routes: Route[]; mine: Record<string, Ascent> } | null>(null);
-  const [gym, setGym] = useState<Gym | null>(null);
+  // 路線進度：開放的館現在牆上的路線、自己完攀過的岩館路線（done＝牆上進度算完成的路線，含還沒送出的紀錄）
+  const [progress, setProgress] = useState<{ routes: WallRoute[]; sends: MySend[]; done: Set<string> } | null>(null);
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const [tab, setTab] = useState<ProgressTab>("wall");
+  // 路線卡片：各館有沒有開放留言（打開哪一館的路線就查哪一館；存在手機，離線也查得到）
+  const [gymComments, setGymComments] = useState<Record<string, boolean> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<MonthAscent | null>(null);
   const uid = session?.user.id;
 
   // 第一次載入時先顯示手機裡上次的資料，抓到最新的再換掉
   const firstMonth = useRef(true);
-  const firstWall = useRef(true);
+  const firstProgress = useRef(true);
   const loadMonth = useCallback(async () => {
     if (!uid) return;
     type Data = { s: MonthStats; l: MonthAscent[]; p: PointsSummary | null };
@@ -80,28 +102,38 @@ export default function MeView({ gymId }: { gymId: string }) {
     }
   }, [uid, ym.y, ym.m]);
 
-  const loadWall = useCallback(async () => {
+  const loadProgress = useCallback(async () => {
     if (!uid) return;
-    type Data = { g: Gym; routes: Route[]; mine: Record<string, Ascent> };
+    type Data = { routes: WallRoute[]; sends: MySend[] };
     const apply = (data: Data) => {
-      setGym(data.g);
-      setWall({ routes: data.routes, mine: overlayPending(data.mine, uid) });
+      // 牆上進度也算手機裡還沒送出的紀錄（離線時記的）；我的進度跟上面的累計完攀一樣只算已經送出的
+      const mine = overlayPending(Object.fromEntries(data.sends.map((s) => [s.route_id, { route_id: s.route_id, status: "send" }])), uid);
+      const done = new Set(Object.values(mine).filter((a) => a.status === "flash" || a.status === "send").map((a) => a.route_id));
+      setProgress({ ...data, done });
     };
     try {
       const { data } = await withCache<Data>(
-        `wall:${uid}:${gymId}`,
+        `progress:${uid}`,
         async () => {
-          const [g, routes] = await Promise.all([getGym(gymId), getGymActiveRoutes(gymId)]);
-          return { g, routes, mine: await getMyAscents(routes.map((r) => r.id)) };
+          const [routes, sends] = await Promise.all([getLiveWallRoutes(), getMySends(uid)]);
+          return { routes, sends };
         },
-        firstWall.current ? apply : undefined
+        firstProgress.current ? apply : undefined
       );
-      firstWall.current = false;
+      firstProgress.current = false;
       apply(data);
+      setProgressError(null);
     } catch (e) {
-      setError((e as Error).message);
+      // 只影響路線進度這一段：在這一段顯示錯誤和「重新整理」（上面的月統計照常）
+      setProgressError((e as Error).message);
     }
-  }, [uid, gymId]);
+  }, [uid]);
+  const loadGyms = useCallback(async () => {
+    const apply = (gs: Gym[]) => setGymComments(Object.fromEntries(gs.map((g) => [g.id, g.comments_enabled])));
+    try {
+      apply((await withCache<Gym[]>("gyms", getGyms, apply)).data);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (!ready) return;
@@ -110,8 +142,28 @@ export default function MeView({ gymId }: { gymId: string }) {
     return () => window.removeEventListener("routemake:synced", loadMonth);
   }, [ready, loadMonth]);
   useEffect(() => {
-    if (ready) void Promise.resolve().then(loadWall);
-  }, [ready, loadWall]);
+    if (!ready) return;
+    void Promise.resolve().then(loadProgress);
+    // 紀錄送出後、網路恢復時重讀（離線第一次打開讀不到時，有訊號就自己補上）
+    window.addEventListener("routemake:synced", loadProgress);
+    window.addEventListener("online", loadProgress);
+    return () => {
+      window.removeEventListener("routemake:synced", loadProgress);
+      window.removeEventListener("online", loadProgress);
+    };
+  }, [ready, loadProgress]);
+  useEffect(() => {
+    if (ready) void Promise.resolve().then(loadGyms);
+  }, [ready, loadGyms]);
+  useEffect(() => {
+    void Promise.resolve().then(() => setTab(savedTab()));
+  }, []);
+  const pickTab = (t: ProgressTab) => {
+    setTab(t);
+    try {
+      localStorage.setItem(TAB_KEY, t);
+    } catch {}
+  };
 
   if (!ready || !session) return null;
   if (error && !stats)
@@ -119,7 +171,7 @@ export default function MeView({ gymId }: { gymId: string }) {
       <>
         <Empty>{error}</Empty>
         <div className="mt-3">
-          <Button onClick={() => void (loadMonth(), loadWall())}>重新整理</Button>
+          <Button onClick={() => void (loadMonth(), loadProgress())}>重新整理</Button>
         </div>
       </>
     );
@@ -130,8 +182,7 @@ export default function MeView({ gymId }: { gymId: string }) {
 
   const counts = stats ? Object.fromEntries(Object.entries(stats.by_day).map(([d, n]) => [+d, n])) : {};
 
-  const done = (id: string) => ["flash", "send"].includes(wall?.mine[id]?.status ?? "");
-  const wallGrades = wall ? [...new Set(wall.routes.map((r) => r.grade))].sort((a, b) => a - b) : [];
+  const prog = progress && (tab === "wall" ? wallProgress(progress.routes, (id) => progress.done.has(id)) : myProgress(progress.sends));
 
   // 本月完攀直條圖：抱石 VB–V10 每級一根；上攀 5.6–5.9 每級一根、5.10 以上 a–d 合成一根（20 根手機放不下）
   // 長條只算岩館路線的完攀（跟上面的完攀數一樣；岩友路線不算統計）；長耐力沒爬完、岩友路線點了照樣列出來
@@ -220,17 +271,33 @@ export default function MeView({ gymId }: { gymId: string }) {
 
       <TotalRow label="累計完攀" value={stats?.total_sends ?? "–"} />
 
-      <SectionTitle>目前牆上進度</SectionTitle>
-      {wall && wallGrades.length ? (
-        <GradeBars
-          rows={wallGrades.map((g) => {
-            const rs = wall.routes.filter((r) => r.grade === g);
-            const d = rs.filter((r) => done(r.id)).length;
-            return { grade: g, ratio: d / rs.length, label: `${d}/${rs.length}` };
-          })}
-        />
+      {/* 路線進度（版型固定，見 CLAUDE.md）：牆上進度／我的進度 → 各館圖例 → 說明 → 抱石、上攀卡片 */}
+      <SectionTitle>路線進度</SectionTitle>
+      <Tabs tabs={PROGRESS_TABS} value={tab} onChange={pickTab} />
+      {!prog ? (
+        progressError ? (
+          <>
+            <Empty>{progressError}</Empty>
+            <div className="mt-3">
+              <Button onClick={() => void loadProgress()}>重新整理</Button>
+            </div>
+          </>
+        ) : (
+          <Empty>讀取中…</Empty>
+        )
+      ) : prog.boulder.length || prog.rope.length ? (
+        <>
+          <GymLegend gyms={progressGyms(prog)} />
+          <Tip>
+            {tab === "wall"
+              ? "現在牆上的路線，開放的館全部一起算（Spray Wall 不算）；一個難度全部完成就是 ★ 大滿貫。點一行看各館。"
+              : "你到現在完攀過的路線，換線拆掉的也算（跟上面的累計完攀一樣）；顏色是在哪一館爬的。點一行看各館。"}
+          </Tip>
+          {prog.boulder.length > 0 && <ProgressCard key={`${tab}-b`} title="抱石" rows={prog.boulder} mode={tab} />}
+          {prog.rope.length > 0 && <ProgressCard key={`${tab}-r`} title="上攀" rows={prog.rope} mode={tab} />}
+        </>
       ) : (
-        <Empty>{wall ? "牆上目前沒有路線。" : "讀取中…"}</Empty>
+        <Empty>{tab === "wall" ? "牆上目前沒有路線。" : "還沒有完攀紀錄：路線按「完攀」或「Flash」就會算進來。"}</Empty>
       )}
 
       <RouteSheet
@@ -238,10 +305,10 @@ export default function MeView({ gymId }: { gymId: string }) {
         photo={open && seqTotal(open.route) ? seqPhotoUrl(open.route, open.route.zone_photo ?? null) : null}
         zoneName={open?.route.zone_name ?? ""}
         gymId={open?.route.gym_id ?? gymId}
-        gymCommentsOn={gym?.comments_enabled ?? true}
+        gymCommentsOn={gymComments?.[open?.route.gym_id ?? gymId] ?? false}
         ascent={open}
         onClose={() => setOpen(null)}
-        onSaved={() => void (loadMonth(), loadWall())}
+        onSaved={() => void (loadMonth(), loadProgress())}
       />
     </>
   );

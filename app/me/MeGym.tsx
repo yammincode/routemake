@@ -6,7 +6,7 @@ import MeView from "@/components/MeView";
 import { PageTitle } from "@/components/ui/Card";
 import { LIVE_GYM, lastLiveGym } from "@/lib/gyms";
 
-// 我的紀錄：用上次選的館（已開放的）算「目前牆上進度」，頁首也顯示那間館
+// 我的紀錄：頁首顯示上次選的館（已開放的）；路線進度是全部開放的館一起算，跟這間館無關
 export default function MeGym() {
   const [gym, setGym] = useState(LIVE_GYM);
   useEffect(() => {

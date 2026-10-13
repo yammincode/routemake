@@ -25,7 +25,8 @@ import { GymDot, ResetDateRow, ResetLines, ResetMonth } from "@/components/ui/Re
 import { newRoutesText, type ResetEvent } from "@/lib/resets";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, RouteTag, SetterNote, StatusBadge, StatusPicker, Tags, Tape, VideoCount } from "@/components/ui/Route";
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
-import { CalendarHeat, DailyBars, Delta, GradeBars, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
+import { GymLegend, ProgressCard } from "@/components/ui/Progress";
+import { CalendarHeat, DailyBars, Delta, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
@@ -518,16 +519,6 @@ export default function DesignShowcase() {
           })}
         />
         <p className="mt-0 mb-1.5 text-meta text-muted">點一根選它（其他變淡）、再點一次取消；沒有紀錄的那根點不了</p>
-        <SectionTitle>難度長條（GradeBars，目前牆上進度用）</SectionTitle>
-        <GradeBars
-          rows={[
-            { grade: 2, ratio: 0.5, label: "4 條" },
-            { grade: 3, ratio: 1, label: "8 條" },
-            { grade: 4, ratio: 0.75, label: "6 條" },
-            { grade: 5, ratio: 0.5, label: "4 條" },
-            { grade: 6, ratio: 0.125, label: "1 條" },
-          ]}
-        />
         <SectionTitle>每日積分</SectionTitle>
         <div className="rounded-tile bg-surface px-3.5 pt-3 pb-2.5 shadow-card">
           <p className="mt-0 mb-2 flex justify-between text-meta text-muted">
@@ -549,12 +540,25 @@ export default function DesignShowcase() {
           路線分數：藍色 A-02<Points n={50} />　得分<Points prefix="+" n={60} />
         </p>
         <TotalRow label="累計完攀" value={143} />
-        <SectionTitle>目前牆上進度</SectionTitle>
-        <GradeBars
+        <SectionTitle>路線進度（GymLegend、GymBar、ProgressCard）</SectionTitle>
+        <p className="mt-0 mb-1.5 text-meta text-muted">牆上進度：依館分段（各店標準色）、灰底是還沒完成的；全部完成寫「★ 大滿貫」；點一行展開各館</p>
+        <GymLegend gyms={["mingde", "g2", "g3", "g4", "g5"]} />
+        <ProgressCard
+          title="抱石"
+          mode="wall"
           rows={[
-            { grade: 0, ratio: 1, label: "6/6" },
-            { grade: 3, ratio: 0.6, label: "9/15" },
-            { grade: 6, ratio: 0.1, label: "1/10" },
+            { grade: -1, done: 4, total: 4, gyms: [{ gym: "mingde", done: 2, total: 2 }, { gym: "g2", done: 1, total: 1 }, { gym: "g4", done: 1, total: 1 }] },
+            { grade: 3, done: 5, total: 12, gyms: [{ gym: "mingde", done: 3, total: 5 }, { gym: "g2", done: 1, total: 4 }, { gym: "g5", done: 1, total: 3 }] },
+            { grade: 6, done: 0, total: 6, gyms: [{ gym: "mingde", done: 0, total: 4 }, { gym: "g4", done: 0, total: 2 }] },
+          ]}
+        />
+        <p className="mt-0 mb-1.5 text-meta text-muted">我的進度：累積完攀幾條，沒有總數所以不畫灰底，最多的那個難度畫滿</p>
+        <ProgressCard
+          title="上攀"
+          mode="mine"
+          rows={[
+            { grade: 101, done: 8, total: 8, gyms: [{ gym: "g3", done: 5, total: 5 }, { gym: "g5", done: 3, total: 3 }] },
+            { grade: 104, done: 3, total: 3, gyms: [{ gym: "g3", done: 2, total: 2 }, { gym: "g5", done: 1, total: 1 }] },
           ]}
         />
       </Block>

@@ -106,7 +106,7 @@ export function createMock() {
   };
   const addRoute = (zone, grade, color, tags = [], x = 30, y = 40, createdAt = now()) => {
     zone.route_seq++;
-    const r = { id: uuid(), zone_id: zone.id, code: `${zone.code}-${String(zone.route_seq).padStart(2, "0")}`, grade, hold_color: color, style_tags: tags, setter_note: null, pin_x: x, pin_y: y, comments_enabled: true, created_at: createdAt, archived_at: null };
+    const r = { id: uuid(), zone_id: zone.id, code: `${zone.code}-${String(zone.route_seq).padStart(2, "0")}`, grade, hold_color: color, style_tags: tags, setter_note: null, pin_x: x, pin_y: y, comments_enabled: true, created_at: createdAt, archived_at: null, kind: "gym" };
     db.routes.push(r);
     return r;
   };
@@ -273,7 +273,8 @@ export function createMock() {
       rows = rows.filter((r) => cond(r, k, v));
     }
     const limit = Number(sp.get("limit"));
-    return limit ? rows.slice(0, limit) : rows;
+    const offset = Number(sp.get("offset")) || 0;
+    return limit ? rows.slice(offset, offset + limit) : rows.slice(offset);
   };
   const base = (g) => (g >= 100 ? db.scoring.yds_points[g - 100] : g < 0 ? db.scoring.vb_points : db.scoring.grade_points[g]);
   const rawPoints = (r) => base(r.grade) * (100 + Math.min(db.scoring.max_style_bonus, r.style_tags.reduce((s, t) => s + (db.scoring.style_bonus[t] || 0), 0)));
@@ -367,7 +368,7 @@ export function createMock() {
       }));
     if (fn === "monthly_stats") {
       const { from, to, prev } = monthBounds(a.p_year, a.p_month);
-      const mine = db.ascents.filter((x) => x.user_id === uid && x.status !== "project");
+      const mine = db.ascents.filter((x) => x.user_id === uid && x.status !== "project" && db.routes.find((r) => r.id === x.route_id)?.kind !== "community");
       const cur = mine.filter((x) => x.climbed_on >= from && x.climbed_on < to);
       const grade = (x) => db.routes.find((r) => r.id === x.route_id).grade;
       const by_grade = {}, by_day = {};
@@ -731,7 +732,11 @@ export function createMock() {
     }
     if (t === "routes") {
       if (m === "GET") {
-        let rows = db.routes.map((r) => ({ ...r, zones: { gym_id: zoneOf(r.zone_id).gym_id, name: zoneOf(r.zone_id).name, kind: zoneOf(r.zone_id).kind ?? "wall" } }));
+        let rows = db.routes.map((r) => {
+          const z = zoneOf(r.zone_id);
+          const g = db.gyms.find((x) => x.id === z.gym_id);
+          return { ...r, zones: { gym_id: z.gym_id, name: z.name, kind: z.kind ?? "wall", gyms: { id: g.id, is_live: g.is_live } } };
+        });
         rows = filt(rows, sp);
         if ((sp.get("order") || "").includes("created_at.desc")) rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
         else rows.sort((a, b) => a.grade - b.grade || a.code.localeCompare(b.code));
@@ -797,8 +802,9 @@ export function createMock() {
       if (m === "GET") {
         // state.ascentsReadFail：讀紀錄時伺服器暫時出錯
         if (state.ascentsReadFail) return J(route, 500, { message: "Internal Server Error" }); // 503 套件會自動重試約 7 秒，這裡用 500 直接失敗
-        let rows = filt(mine, sp);
-        if (sel.includes("routes(")) rows = rows.map((x) => { const r = db.routes.find((y) => y.id === x.route_id); const z = zoneOf(r.zone_id); return { ...x, routes: { ...r, zones: { name: z.name, gym_id: z.gym_id, photo_path: z.photo_path } } }; }).sort((p1, p2) => p2.climbed_on.localeCompare(p1.climbed_on));
+        let rows = mine;
+        if (/routes(!inner)?\(/.test(sel)) rows = rows.map((x) => { const r = db.routes.find((y) => y.id === x.route_id); const z = zoneOf(r.zone_id); return { ...x, routes: { ...r, zones: { name: z.name, gym_id: z.gym_id, photo_path: z.photo_path, kind: z.kind ?? "wall" } } }; }).sort((p1, p2) => p2.climbed_on.localeCompare(p1.climbed_on));
+        rows = filt(rows, sp);
         return out(rows);
       }
       if (m === "POST") {

@@ -551,20 +551,46 @@ export async function getMonthAscents(year: number, month: number): Promise<Mont
     return { ...a, route: { ...r, zone_name: zones.name, gym_id: zones.gym_id, zone_photo: zones.photo_path } };
   });
 }
-// 場館目前牆上所有路線（算各難度進度）
-export async function getGymActiveRoutes(gym: string): Promise<Route[]> {
-  const rows = must(
-    await supabase()
+// ---------- 路線進度（我的紀錄）----------
+// 資料庫一次最多回 1000 筆，超過就一頁一頁讀（要照固定的順序排，換頁才不會重複或漏掉）
+const PAGE_ROWS = 1000;
+async function allPages<T>(page: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message?: string; code?: string } | null }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE_ROWS) {
+    const rows = must(await page(from, from + PAGE_ROWS - 1)) as T[];
+    out.push(...rows);
+    if (rows.length < PAGE_ROWS) return out;
+  }
+}
+// 牆上進度：開放的館現在牆上所有路線（Spray Wall 不算）；只抓 id、難度、館，五間館幾百條也才幾十 KB
+export type WallRoute = { id: string; grade: number; gym_id: string };
+export async function getLiveWallRoutes(): Promise<WallRoute[]> {
+  const rows = await allPages<{ id: string; grade: number; zones: { gym_id: string } }>((from, to) =>
+    supabase()
       .from("routes")
-      .select(`${ROUTE_COLS},zones!inner(gym_id,kind)`)
-      .eq("zones.gym_id", gym)
+      .select("id,grade,zones!inner(gym_id,kind,gyms!inner(is_live))")
       .eq("zones.kind", "wall")
+      .eq("zones.gyms.is_live", true)
       .is("archived_at", null)
-  ) as unknown as (Route & { zones?: unknown })[];
-  return rows.map((r) => {
-    delete r.zones;
-    return r;
-  });
+      .order("id")
+      .range(from, to)
+  );
+  return rows.map((r) => ({ id: r.id, grade: r.grade, gym_id: r.zones.gym_id }));
+}
+// 我的進度、牆上進度：自己 Flash 或完攀過的岩館路線（跟「累計完攀」一樣：換線拆掉的、Spray Wall 上員工出的也算，岩友路線不算）
+export type MySend = { route_id: string; grade: number; gym_id: string };
+export async function getMySends(uid: string): Promise<MySend[]> {
+  const rows = await allPages<{ route_id: string; routes: { grade: number; zones: { gym_id: string } } }>((from, to) =>
+    supabase()
+      .from("ascents")
+      .select("route_id,routes!inner(grade,kind,zones!inner(gym_id))")
+      .eq("user_id", uid)
+      .in("status", ["flash", "send"])
+      .eq("routes.kind", "gym")
+      .order("route_id")
+      .range(from, to)
+  );
+  return rows.map((a) => ({ route_id: a.route_id, grade: a.routes.grade, gym_id: a.routes.zones.gym_id }));
 }
 
 // ---------- 積分 ----------

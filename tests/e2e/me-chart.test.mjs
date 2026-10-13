@@ -73,7 +73,8 @@ test("我的紀錄：本月完攀改成直條圖（抱石、上攀分開，Flash
   // 上個月：只有抱石圖，選的收起來
   await page.click('main button[aria-label="上個月"]');
   await page.waitForTimeout(1000);
-  assert.ok((await main()).includes("抱石") && !(await main()).includes("上攀"), "上個月沒爬上攀：只有抱石圖");
+  // 只看本月完攀直條圖（下面的路線進度有自己的抱石、上攀卡片）
+  assert.ok((await col("V6").count()) === 1 && (await col("5.10").count()) === 0, "上個月沒爬上攀：只有抱石圖");
   assert.equal(await col("V6").getAttribute("aria-pressed"), "false");
   assert.equal(await page.locator("main li", { hasText: "小安的路線" }).count(), 0, "換月份收起來");
   // 回到這個月：剛剛點開的也收起來了

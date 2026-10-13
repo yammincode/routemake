@@ -122,3 +122,29 @@ test("上攀為主的館不顯示難度分布和篩選，區域卡片寫 YDS 難
   assert.ok((await page.locator("main button.rounded-card", { hasText: "A 區" }).textContent()).includes("5.10a–5.11a"));
   assert.deepEqual(errors, []);
 });
+
+test("館首頁：這週新路線很多（170 條）時，自己的紀錄分批查（每次最多 80 條、全部查到，網址不會太長被拒絕）", async () => {
+  const mock = createMock();
+  const me = mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zA = mock.db.zones.find((z) => z.gym_id === "mingde" && z.code === "A1");
+  const rs = Array.from({ length: 170 }, (_, i) => mock.addRoute(zA, 3, "藍", [], 10 + (i % 80), 20, daysAgo(2)));
+  mock.addAscent(me, rs[4], "send", taipeiDay(-1));
+  mock.addAscent(me, rs[149], "flash", taipeiDay(0));
+  const { page, errors } = await phone(browser, mock);
+  const sizes = [];
+  const ids = new Set();
+  page.on("request", (req) => {
+    const u = new URL(req.url());
+    const list = u.searchParams.get("route_id");
+    if (u.pathname === "/rest/v1/ascents" && list?.startsWith("in.")) {
+      const part = list.slice(4, -1).split(",");
+      sizes.push(part.length);
+      part.forEach((id) => ids.add(id.replace(/"/g, "")));
+    }
+  });
+  await login(page, "climber88", "password1", "/gym/mingde");
+  await page.waitForTimeout(1500);
+  assert.ok(sizes.length >= 3 && Math.max(...sizes) <= 80, `每次最多查 80 條（實際：${sizes.join("、")}）`);
+  assert.ok(rs.every((r) => ids.has(r.id)), `170 條都查到（${ids.size}）`);
+  assert.deepEqual(errors, []);
+});
