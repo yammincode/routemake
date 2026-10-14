@@ -60,7 +60,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="font-sans">
         <ToastProvider>
           <AuthProvider>
-            <main className="mx-auto max-w-page px-4 pt-3 pb-28">
+            {/* 下面留給底部分頁和右下角的小夥伴（iPhone 底部橫條另外加），最後一列捲得上來不被擋 */}
+            <main className="mx-auto max-w-page px-4 pt-3 pb-[calc(10rem+env(safe-area-inset-bottom,0px))]">
               <SyncManager />
               {children}
             </main>

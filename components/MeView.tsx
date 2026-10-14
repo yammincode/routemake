@@ -215,7 +215,8 @@ export default function MeView({ gymId }: { gymId: string }) {
   // 原岩夥伴：講這個月的成績、差一兩條的大滿貫（這頁本來就算好的，不多讀資料）
   const wall = progress ? wallProgress(progress.routes, (id) => progress.done.has(id)) : null;
   const near = wall ? [...wall.boulder, ...wall.rope].filter((r) => r.total >= 2 && r.total - r.done > 0 && r.total - r.done <= 2).map((r) => ({ grade: gradeLabel(r.grade), left: r.total - r.done })) : [];
-  const mePool = isNow && stats ? meLines({ sends: stats.sends, prev: stats.prev_sends, flashes: stats.flashes, days: stats.days, near }) : null;
+  // 路線進度讀好（或讀不到）才說，差一兩條的大滿貫才講得到；換到別的月份不說
+  const mePool = isNow && stats && (progress || progressError) ? meLines({ sends: stats.sends, prev: stats.prev_sends, flashes: stats.flashes, days: stats.days, near }) : null;
   const prog = progress && (tab === "wall" ? wallProgress(progress.routes, (id) => progress.done.has(id)) : myProgress(progress.sends));
 
   // 本月完攀直條圖：抱石 VB–V10 每級一根；上攀 5.6–5.9 每級一根、5.10 以上 a–d 合成一根（20 根手機放不下）

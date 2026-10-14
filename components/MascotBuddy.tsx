@@ -36,25 +36,28 @@ export default function MascotBuddy() {
   // 換頁：先把上一頁的話收起來；New~、人物卡、Spray Wall 打開時說一句
   const lastPath = useRef<string | null>(null);
   useEffect(() => {
-    if (!shown || lastPath.current === pathname) return;
+    if (!shown) {
+      lastPath.current = null; // 回到有小夥伴的頁面時照樣先說一句
+      return;
+    }
+    if (lastPath.current === pathname) return;
     lastPath.current = pathname;
     void Promise.resolve().then(() => (on(pathname, SPEAK_ON_OPEN) ? say() : setText(null)));
   }, [shown, pathname, say]);
 
   if (!shown || !pick) return null;
   return (
-    <div className="fixed right-3 bottom-[calc(72px+env(safe-area-inset-bottom,0px))] z-[15]">
-      <MascotBuddyView
-        pick={pick}
-        troll={troll}
-        text={text}
-        onTap={say}
-        onHush={() => {
-          setText(null);
-          talk.hush();
-        }}
-      />
-    </div>
+    <MascotBuddyView
+      fixed
+      pick={pick}
+      troll={troll}
+      text={text}
+      onTap={say}
+      onHush={() => {
+        setText(null);
+        talk.hush();
+      }}
+    />
   );
 }
 

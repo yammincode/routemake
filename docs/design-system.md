@@ -90,7 +90,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 - 底部面板往上滑 0.22 秒（`animate-sheet`）
 - 新增標記彈出 0.25 秒（`animate-pop`）
 - 大滿貫兌換卡的條紋一直往右走 1.2 秒一輪（`animate-slam-stripe`；截圖的話不會動）
-- 夥伴說話的泡泡、跳出來的夥伴從下面浮上來 0.3 秒（`animate-talk`）；Flash、破紀錄的彩帶往下掉 1.4 秒（`animate-confetti`）
+- 夥伴說話的泡泡、跳出來的夥伴從下面浮上來 0.3 秒（`animate-talk`）；Flash、破紀錄的彩帶往下掉 1.4 秒（`animate-confetti`，顏色是 Flash 黃加上岩點的紅、藍、綠、粉、白）
 - 區域頁換區：新的區從滑的方向滑進來 0.2 秒（`animate-zone-next` 從右邊、`animate-zone-prev` 從左邊）；滑的時候內容跟著手指移、彈回 0.18 秒（`lib/swipe.ts`）
 - 手機設定「減少動態效果」時以上都不播（`globals.css` 最下面），換區也不跟著手指移動
 - 手機設定「減少動態」時關閉
@@ -119,7 +119,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`MonthGradeChart`（我的紀錄本月完攀直條圖：每個難度一根、黃色那段是 Flash、難度下面膠帶色；點一根選它其他變淡；上攀用主色；沒有完攀只有其他紀錄的那根畫虛線、沒紀錄的變淡點不了）、`TotalRow`、`SetBox` |
 | `Progress.tsx` | 我的紀錄「路線進度」：`GymLegend`（各館色點＋館名）、`GymBar`（依館分段的長條，各店標準色；`of` 是滿格幾條，`track` 灰底：牆上進度有、我的進度沒有）、`ProgressCard`（抱石／上攀一張卡片，標題用 h4；`mode="wall"` 牆上進度：右上「你完成 幾 / 幾 條」、下一行「★ 大滿貫 ○ 個難度」或「還沒有大滿貫」，每行「完成/總數」，全部完成寫「★ 大滿貫」；`mode="mine"` 我的進度：右上「累計完攀 幾 條」，每行「幾 條」，最多的難度畫滿；點一行展開各館數字，某館那個難度全部完成也加 ★；`slam`／`onSlam`：大滿貫兌換，那一行右邊換成「★ 兌換 ›」或「★ 已兌換」，展開和兌換是兩個按鈕）、`SlamStar`（大滿貫星星，Flash 黃） |
 | `Slam.tsx` | 大滿貫兌換：`SlamTicket`（兌換卡＝B 案票券＋C 案動態條紋和時間：上半段膠帶顏色＋大難度（沒有膠帶顏色用主色）、`LiveStripe`、QR code、兌換碼、`LiveClock`、撕線、暱稱／獎品／期限；`redeemed` 已兌換：上半段變灰、條紋停住、QR code 淡掉蓋章）、`QrCode`（SVG，白底，深色模式也是）、`LiveStripe`（膠帶色＋Flash 黃斜條紋一直往右走，`animate-slam-stripe`，減少動態時不動；`stopped` 灰色不動）、`LiveClock`（台北時間，秒在跳）、`SlamRedeemTag`（牆上進度那一行的「★ 兌換 ›」黃色膠囊／「★ 已兌換」） |
-| `Mascot.tsx` | 原岩夥伴（六館 logo 的動物，圖在 `lib/mascot-art.ts`、資料在 `lib/mascots.ts`）：`MascotArt`（夥伴圖，部位顏色用 CSS 變數 `--m1`…換；`troll` 幹話模式加刀疤和棒棒糖）、`MascotAvatar`（圓形頭像，淡館色底；null＝還在讀，空的圓）、`UserAvatar`（某個人的頭像，自動讀那個人的夥伴和這支手機的幹話模式；留言、影片名字前面）、`CharacterTop`（人物卡上半段角色卡：背景色、大夥伴、右上角名字）、`MascotPicker`（選夥伴，三隻一排，還沒開放的館寫「即將登場」點不了）、`MascotColors`（每個部位一排色票、卡片背景六館標準色、換回原本的顏色）、`MascotBubble`（頁面上面夥伴的泡泡：館首頁、區域頁、我的紀錄，✕ 關掉）、`MascotBuddyView`（右下角小夥伴：點牠說話，泡泡上「🤫 閉嘴」）、`MascotToastView`（做了事情夥伴從上面跳出來，背景是夥伴的卡片背景色；party 撒彩帶）。夥伴本身的顏色、背景色是資料（跟各館顏色一樣），不另外配色 |
+| `Mascot.tsx` | 原岩夥伴（六館 logo 的動物，圖在 `lib/mascot-art.ts`、資料在 `lib/mascots.ts`）：`MascotArt`（夥伴圖，部位顏色用 CSS 變數 `--m1`…換；`troll` 幹話模式加刀疤和棒棒糖）、`MascotAvatar`（圓形頭像，淡館色底；null＝還在讀，空的圓）、`UserAvatar`（某個人的頭像，自動讀那個人的夥伴和這支手機的幹話模式；留言、影片名字前面）、`CharacterTop`（人物卡上半段角色卡：背景色、大夥伴、右上角名字）、`MascotPicker`（選夥伴，三隻一排，還沒開放的館寫「即將登場」點不了）、`MascotColors`（每個部位一排色票、卡片背景六館標準色、換回原本的顏色）、`MascotBubble`（頁面上面夥伴的泡泡：館首頁、區域頁、我的紀錄，✕ 關掉）、`MascotBuddyView`（右下角小夥伴：點牠說話，泡泡上「🤫 閉嘴」）、`MascotToastView`（做了事情夥伴從上面跳出來，背景是夥伴的卡片背景色、白字（跟角色卡一樣，背景都是深的館色）；party 撒彩帶）。頁面最下面留 10rem＋iPhone 底部橫條，最後一列不被底部分頁和小夥伴擋住夥伴本身的顏色、背景色是資料（跟各館顏色一樣），不另外配色 |
 | `Log.tsx` | `LogList`、`LogRow`（操作紀錄） |
 | `Endurance.tsx` | `NumberMarks`（長耐力路線照順序的點：細圈＋號碼，第 1 點綠、最後一點紅、中間藍；放大照片時線和號碼不變粗；reached 之後的點變淡；onTap 編輯時點圈圈刪點，號碼點不到＝點在照片上）、`HighpointPicker`（最高爬到第幾點：－／拉桿／＋，最多到倒數第 2 點，下面大字「30 ／ 38 點」） |
 | `Grant.tsx` | `GrantList`、`GrantRow`（授權名單的一個人：暱稱、帳號）、`GrantGroup`（一組權限：小標＋膠囊，按下去＝有權限，再按一次取消；營運分頁老闆用） |

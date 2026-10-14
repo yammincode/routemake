@@ -235,6 +235,7 @@ function RouteBody({
   // 點 Flash／完攀／嘗試中：直接記錄；點已選的狀態就打開細節
   const quick = async (s: Status) => {
     if (!session) return toLogin();
+    if (busy) return; // 上一次還在存（很快連點完攀、Flash 不會送兩次、夥伴也不會說兩次）
     if (s === status && ascent) {
       setTab("log");
       setDetails(true);
@@ -265,8 +266,8 @@ function RouteBody({
             ? `完攀 +${pts} 分`
             : "已記錄：嘗試中";
     const saved = await persist(current(s, day), msg);
-    // 原岩夥伴：記了完攀、Flash（原本不是）就跳出來說一句；岩友路線不算
-    if (saved !== "failed" && s !== "project" && s !== before && r.kind !== "community" && session)
+    // 原岩夥伴：第一次記完攀、Flash（原本沒紀錄或嘗試中）就跳出來說一句；完攀、Flash 互換不算；岩友路線不算
+    if (saved !== "failed" && s !== "project" && (before == null || before === "project") && r.kind !== "community" && session)
       void cheerSend({ userId: session.user.id, routeId: r.id, grade: r.grade, status: s, climbedOn: day || todayYmd(), queued: saved === "queued" });
   };
 

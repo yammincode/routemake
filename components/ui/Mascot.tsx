@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
+import { HOLD_COLORS } from "@/lib/design";
 import { MASCOT_ART } from "@/lib/mascot-art";
 import { useMascot, useTroll } from "@/lib/mascot-store";
 import {
@@ -197,29 +198,34 @@ export function MascotBubble({ pick, troll = false, text, onClose }: { pick: Mas
   );
 }
 
-// 右下角小夥伴：一直站在右下角（底部分頁上面）；text 有值時旁邊冒泡泡（「🤫 閉嘴」今天都不說）；點夥伴換一句
+// 右下角小夥伴：一直站在右下角（fixed：底部分頁上面，路線卡片、全螢幕播放蓋在上面）；text 有值時旁邊冒泡泡；點夥伴換一句
+// 「🤫 閉嘴」放在泡泡右上角（離下面的列表遠一點，不容易誤按）：今天都不說
 export function MascotBuddyView({
   pick,
   troll = false,
   text,
   onTap,
   onHush,
+  fixed = false,
 }: {
   pick: MascotPick;
   troll?: boolean;
   text: string | null;
   onTap: () => void;
   onHush: () => void;
+  fixed?: boolean;
 }) {
   return (
-    <div className="flex items-end gap-1.5" data-testid="mascot-buddy">
+    <div className={`flex items-end gap-1.5 ${fixed ? "fixed right-3 bottom-[calc(72px+env(safe-area-inset-bottom,0px))] z-[15]" : ""}`} data-testid="mascot-buddy">
       {text && (
         <div className="relative mb-1 max-w-[210px] animate-talk rounded-card border border-line bg-surface px-3 py-2 text-note leading-normal shadow-card" role="status">
-          <b className="block text-tiny text-muted">{mascotInfo(pick.id).name}</b>
+          <span className="flex items-start justify-between gap-2">
+            <b className="text-tiny text-muted">{mascotInfo(pick.id).name}</b>
+            <button type="button" onClick={onHush} className="-mt-0.5 -mr-1 px-1 text-tiny font-bold text-accent">
+              🤫 閉嘴
+            </button>
+          </span>
           {text}
-          <button type="button" onClick={onHush} className="mt-1 block text-tiny font-bold text-accent">
-            🤫 閉嘴（今天不說話）
-          </button>
         </div>
       )}
       <button type="button" aria-label={`${mascotInfo(pick.id).name}：點我說話`} onClick={onTap} className="rounded-full border-2 border-surface shadow-card">
@@ -230,7 +236,8 @@ export function MascotBuddyView({
 }
 
 // 做了事情（記錄完攀、Flash、破紀錄…）：夥伴從上面跳出來說一句；party 撒彩帶（減少動態效果時不撒）
-const PARTY = ["#F5B700", "#D7263D", "#2F6FD6", "#2E9E5B", "#F07BB5", "#FFFFFF"];
+// 彩帶顏色：Flash 黃加上岩點色（紅、藍、綠、粉、白）
+const PARTY = ["var(--flash)", HOLD_COLORS.紅, HOLD_COLORS.藍, HOLD_COLORS.綠, HOLD_COLORS.粉, HOLD_COLORS.白];
 export function MascotToastView({ pick, troll = false, text, party = false, onClose }: { pick: MascotPick; troll?: boolean; text: string; party?: boolean; onClose: () => void }) {
   return (
     <>

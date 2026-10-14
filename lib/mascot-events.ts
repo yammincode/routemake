@@ -38,9 +38,17 @@ export async function cheerSend(o: { userId: string; routeId: string; grade: num
   sayEvent(eventLine(kind, troll, vars), kind === "flash" || kind === "best");
 }
 
-// 留言送出之後：第一則留言才說
+// 留言送出之後：第一則留言才說；說過（或之前就留過）記在這支手機，之後不再查（刪掉留言再留也不會再說）
 export async function cheerComment(userId: string) {
+  const key = `routemake:commented:${userId}`;
   try {
-    if ((await myCommentCount(userId)) === 1) sayEvent(eventLine("comment", trollOn()));
+    if (localStorage.getItem(key)) return;
+  } catch {}
+  try {
+    const n = await myCommentCount(userId);
+    try {
+      localStorage.setItem(key, "1");
+    } catch {}
+    if (n === 1) sayEvent(eventLine("comment", trollOn()));
   } catch {}
 }

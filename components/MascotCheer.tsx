@@ -25,7 +25,7 @@ export function PageCheer({ uid, page, pool }: { uid: string; page: string; pool
     void Promise.resolve().then(() => (shut ? setClosed(true) : setText(t)));
   }, [state, text, closed, pick, pool, troll, page]);
 
-  if (state !== "on" || closed || !pick || !text) return null;
+  if (state !== "on" || closed || !pick || !text || pool == null) return null;
   return (
     <MascotBubble
       pick={pick}

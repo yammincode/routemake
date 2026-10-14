@@ -1088,11 +1088,11 @@ export async function getCheerFacts(userId: string, gym: string): Promise<CheerF
     lastClimbed: ((last.data ?? []) as { climbed_on: string }[])[0]?.climbed_on ?? null,
   };
 }
-// 記錄完攀後夥伴要說什麼：有沒有別條同樣難或更難的完攀（沒有＝破自己的紀錄）、最近 7 天哪幾天有別條完攀（連續幾天）
+// 記錄完攀後夥伴要說什麼：有沒有別條同樣難或更難的完攀（沒有＝破自己的紀錄）、最近 60 天哪幾天有別條完攀（連續幾天，岩友路線不算）
 // 只在記錄完攀、Flash 時讀一次；抱石（V）、上攀（YDS）分開比
 export async function getSendFacts(userId: string, routeId: string, grade: number): Promise<{ best: boolean; days: string[] }> {
   const ceil = grade >= 100 ? 200 : 100;
-  const since = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date(Date.now() - 7 * 86400000));
+  const since = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date(Date.now() - 60 * 86400000));
   const [harder, recent] = await Promise.all([
     supabase()
       .from("ascents")
@@ -1103,7 +1103,13 @@ export async function getSendFacts(userId: string, routeId: string, grade: numbe
       .gte("routes.grade", grade)
       .lt("routes.grade", ceil)
       .limit(2),
-    supabase().from("ascents").select("route_id,climbed_on").eq("user_id", userId).in("status", ["flash", "send"]).gte("climbed_on", since),
+    supabase()
+      .from("ascents")
+      .select("route_id,climbed_on,routes!inner(kind)")
+      .eq("user_id", userId)
+      .in("status", ["flash", "send"])
+      .eq("routes.kind", "gym")
+      .gte("climbed_on", since),
   ]);
   const others = (must(harder) as { route_id: string }[]).filter((x) => x.route_id !== routeId);
   // 別條路線的完攀日（這條剛存的不算：用來判斷今天是不是第一條）
