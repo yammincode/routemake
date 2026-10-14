@@ -145,6 +145,8 @@
   --animate-zone-next: zone-next 0.2s ease-out;
   --animate-zone-prev: zone-prev 0.2s ease-out;
   --animate-slam-stripe: slam-stripe 1.2s linear infinite;
+  --animate-talk: talk-pop 0.3s ease-out;
+  --animate-confetti: confetti-fall 1.4s ease-in forwards;
 
   @keyframes sheet-up {
     from {
@@ -168,6 +170,19 @@
     from {
       transform: translateX(-28px);
       opacity: 0.4;
+    }
+  }
+  /* 夥伴說話：泡泡從下面一點點浮上來 */
+  @keyframes talk-pop {
+    from {
+      transform: translateY(8px) scale(0.96);
+      opacity: 0;
+    }
+  }
+  /* Flash、破紀錄的彩帶：從上面掉下來，邊掉邊轉 */
+  @keyframes confetti-fall {
+    to {
+      transform: translateY(105vh) rotate(540deg);
     }
   }
   /* 大滿貫兌換卡的條紋一直往右走：截圖的話不會動，櫃檯一眼看得出來 */
@@ -222,7 +237,9 @@
   .animate-pop,
   .animate-zone-next,
   .animate-zone-prev,
-  .animate-slam-stripe {
+  .animate-slam-stripe,
+  .animate-talk,
+  .animate-confetti {
     animation: none;
   }
 }

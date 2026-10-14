@@ -252,7 +252,7 @@ export function createMock() {
     if (op === "eq") return String(x) === val;
     if (op === "is") return val === "null" ? x == null : true;
     if (op === "in") return val.replace(/[()]/g, "").split(",").map((s) => s.replace(/"/g, "")).includes(String(x));
-    if (op === "gte") return String(x) >= val;
+    if (op === "gte") return typeof x === "number" ? x >= Number(val) : String(x) >= val;
     if (op === "lt") return typeof x === "number" ? x < Number(val) : String(x) < val;
     return true;
   };

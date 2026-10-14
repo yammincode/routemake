@@ -1,7 +1,7 @@
-// 原岩夥伴：選夥伴、換色、存起來；留言、影片旁的頭像；別人的人物卡；館首頁每天一句；幹話模式；還沒套用 step41 照常
+// 原岩夥伴：選夥伴、換色、存起來；留言、影片旁的頭像；別人的人物卡；夥伴說話（每頁上面、右下角、做了事情）；閉嘴；幹話模式；還沒套用 step41 照常
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { BASE, createMock, launch, login, phone } from "./helpers.mjs";
+import { BASE, createMock, launch, login, phone, taipeiDay } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -63,7 +63,7 @@ test("原岩夥伴：選夥伴、換色、中壢熊即將登場；留言和影�
   await V.ctx.close();
 });
 
-test("原岩夥伴：館首頁每天第一次說一句（看紀錄）、關掉後今天不再出現；幹話模式加刀疤棒棒糖、幹話和平常的話混著講", async () => {
+test("原岩夥伴：館首頁每次打開說一句（看紀錄）、✕ 關掉後這次打開 App 不再出現；幹話模式加刀疤棒棒糖、幹話和平常的話混著講", async () => {
   const mock = createMock();
   const a = mock.addUser("climbera", "password1", { nickname: "小岩" });
   const zone = mock.db.zones[0];
@@ -83,21 +83,26 @@ test("原岩夥伴：館首頁每天第一次說一句（看紀錄）、關掉�
   const title = await p.locator("h1", { hasText: "今天爬哪一區" }).boundingBox();
   const bb = await bubble.boundingBox();
   assert.ok(bb.y > title.y, "在標題下面");
+  // 每次打開都說：換到別頁再回來還在
+  await p.goto(`${BASE}/new`, { waitUntil: "networkidle" });
+  await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
+  await bubble.waitFor();
+  // ✕ 關掉：這次打開 App 回到館首頁不再出現
   await bubble.locator('button[aria-label="關掉，今天不再出現"]').click();
   assert.equal(await bubble.count(), 0, "關掉了");
-  await p.reload({ waitUntil: "networkidle" });
+  await p.goto(`${BASE}/new`, { waitUntil: "networkidle" });
+  await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
   await p.waitForTimeout(800);
-  assert.equal(await bubble.count(), 0, "同一天再打開不再出現");
+  assert.equal(await bubble.count(), 0, "這次打開 App 不再出現");
 
-  // 幹話模式：人物卡打開開關 → 夥伴加刀疤和棒棒糖；隔天館首頁講老闆給的幹話（Math.random 0.3）
+  // 幹話模式：人物卡打開開關 → 夥伴加刀疤和棒棒糖；重新打開 App 館首頁講老闆給的幹話（Math.random 0.3）
   await p.goto(`${BASE}/card`, { waitUntil: "networkidle" });
   await p.waitForSelector('main [data-mascot="mingde"]');
   assert.equal(await p.locator("main [data-troll]").count(), 0);
   await p.click('main button[role=switch][aria-label="幹話模式"]');
   assert.ok((await p.locator("main [data-troll]").count()) >= 1, "加上刀疤和棒棒糖");
-  await p.evaluate(() => {
-    for (const k of Object.keys(localStorage)) if (k.startsWith("routemake:cheer:")) localStorage.removeItem(k); // 當作隔天
-  });
+  const reopen = () => p.evaluate(() => sessionStorage.clear()); // 當作重新打開 App
+  await reopen();
   await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
   await bubble.waitFor();
   const troll = ["站起來就好，完攀很近", "閃電：我阿罵都可以，你也可以", "加油，點很大", "黑：有時間看我講幹話，怎麼不去爬", "啊～你怎麼掉下來了", "用力就抓住了", "不要坐墊子", "宋拔：（眼神凝視）", "攀岩治百病，爬爆", "抓不住就用力"];
@@ -106,14 +111,88 @@ test("原岩夥伴：館首頁每天第一次說一句（看紀錄）、關掉�
   assert.equal(await bubble.locator("[data-troll]").count(), 1, "泡泡旁的夥伴也有刀疤");
   // 幹話模式也會講平常的話（一半一半）：Math.random 0.7 → 不講幹話、講紀錄（嘗試中、新路線兩句裡的第二句）
   await fixRandom(A.ctx, 0.7);
-  await p.evaluate(() => {
-    for (const k of Object.keys(localStorage)) if (k.startsWith("routemake:cheer:")) localStorage.removeItem(k);
-  });
+  await reopen();
   await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
   await bubble.waitFor();
   const normal = await bubble.textContent();
   assert.ok(normal.includes("明德館這週有 1 條新路線") && !troll.some((t) => normal.includes(t)), `幹話模式也講平常的話：${normal}`);
   assert.equal(await bubble.locator("[data-troll]").count(), 1, "夥伴照樣有刀疤");
+  assert.deepEqual(A.errors, []);
+  await A.ctx.close();
+});
+
+test("夥伴說話：區域頁講這一區、記錄 Flash 破紀錄撒彩帶、完攀、第一則留言、我的紀錄、右下角小夥伴、🤫 閉嘴、人物卡關掉說話", async () => {
+  const mock = createMock();
+  const a = mock.addUser("climbera", "password1", { nickname: "小岩" });
+  const zone = mock.db.zones[0];
+  const easy = mock.addRoute(zone, 2, "藍", ["技巧"]);
+  mock.addRoute(zone, 3, "紅", ["指力"]);
+  mock.addAscent(a, easy, "project", taipeiDay(-3));
+
+  const A = await phone(browser, mock);
+  await fixRandom(A.ctx, 0.3);
+  await login(A.page, "climbera", "password1", `/zone?id=${zone.id}`);
+  const p = A.page;
+  const bubble = p.locator('[data-testid="mascot-bubble"]');
+  await bubble.waitFor();
+  assert.ok((await bubble.textContent()).includes("A1 區只剩 2 條沒完攀"), `區域頁講這一區：${await bubble.textContent()}`);
+  // 位置：上一區／下一區方框下面、照片上面
+  const nav = await p.locator("main button", { hasText: "下一區" }).first().boundingBox();
+  const bb = await bubble.boundingBox();
+  const howto = await p.locator("main", { hasText: "顏色和分數怎麼看" }).locator("text=顏色和分數怎麼看").first().boundingBox();
+  assert.ok(nav && bb.y > nav.y, "在方框下面");
+  assert.ok(howto && bb.y < howto.y, "在照片和路線上面");
+
+  // 記錄 Flash：第一次完攀 V3 → 破紀錄、撒彩帶
+  const toast = p.locator('[data-testid="mascot-toast"]');
+  await p.locator("main ul li button", { hasText: "A1-02" }).click();
+  await p.waitForTimeout(500);
+  await p.click('[role=dialog] button:has-text("Flash")');
+  await toast.waitFor();
+  assert.ok((await toast.textContent()).includes("新紀錄！你第一次完攀 V3"), `破紀錄：${await toast.textContent()}`);
+  assert.equal(await p.locator("[data-party]").count(), 1, "撒彩帶");
+  // 第一則留言
+  await p.click('[role=dialog] [role=tab]:has-text("留言")');
+  await p.fill('[role=dialog] textarea[placeholder^="公開留言"]', "起步右手很遠");
+  await p.click('[role=dialog] button:text-is("送出")');
+  await p.waitForFunction(() => document.querySelector('[data-testid="mascot-toast"]')?.textContent?.includes("謝謝分享 beta"));
+  await p.keyboard.press("Escape");
+  await p.waitForTimeout(3200);
+  assert.equal(await toast.count(), 0, "3 秒後收起來");
+  // 嘗試中改完攀：不是破紀錄（V2 比 V3 低）、今天已經爬過別條 → 一般的完攀
+  await p.locator("main ul li button", { hasText: "A1-01" }).click();
+  await p.waitForTimeout(500);
+  await p.click('[role=dialog] button:has-text("完攀")');
+  await toast.waitFor();
+  assert.ok((await toast.textContent()).includes("完攀！手感不錯喔！"), `完攀：${await toast.textContent()}`);
+  assert.equal(await p.locator("[data-party]").count(), 0, "完攀不撒彩帶");
+  await p.keyboard.press("Escape");
+
+  // 我的紀錄：講這個月
+  await p.goto(`${BASE}/me`, { waitUntil: "networkidle" });
+  await bubble.waitFor();
+  assert.ok((await bubble.textContent()).includes("這個月"), `我的紀錄講這個月：${await bubble.textContent()}`);
+
+  // 右下角小夥伴：New~ 打開時說一句；點牠換一句；🤫 閉嘴 → 今天都不說、小夥伴也不見
+  const buddy = p.locator('[data-testid="mascot-buddy"]');
+  await p.goto(`${BASE}/new`, { waitUntil: "networkidle" });
+  await buddy.locator("[role=status]").waitFor();
+  assert.ok((await buddy.textContent()).includes("喝水了沒？"), `小夥伴說話：${await buddy.textContent()}`);
+  const tab = await p.locator("nav").last().boundingBox();
+  const bb2 = await buddy.boundingBox();
+  assert.ok(bb2.y + bb2.height <= tab.y + 1, "在底部分頁上面");
+  await buddy.locator('button:has-text("閉嘴")').click();
+  assert.equal(await buddy.count(), 0, "閉嘴後小夥伴不見");
+  await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
+  await p.waitForTimeout(800);
+  assert.equal(await bubble.count(), 0, "閉嘴：館首頁也不說");
+  // 人物卡：今天閉嘴中 → 讓夥伴現在說話；關掉「夥伴說話」就一直不說
+  await p.goto(`${BASE}/card`, { waitUntil: "networkidle" });
+  assert.ok((await p.textContent("main")).includes("今天按了「閉嘴」"));
+  await p.click('main button:text-is("讓夥伴現在說話")');
+  await buddy.locator("[role=status]").waitFor();
+  await p.click('main button[role=switch][aria-label="夥伴說話"]');
+  assert.equal(await buddy.count(), 0, "關掉說話：小夥伴不見");
   assert.deepEqual(A.errors, []);
   await A.ctx.close();
 });

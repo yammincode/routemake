@@ -6,8 +6,23 @@ import { normalizePick, type MascotPick } from "./mascots";
 
 // 每個人的夥伴（留言、影片、人物卡共用）：同一輪畫面要的人一起讀一次，讀過的記在記憶體
 // 沒選、讀不到（沒網路、資料庫還沒套用 step41）都是預設的明德氂牛
-const picks = new Map<string, MascotPick>();
-const asked = new Set<string>();
+// 這次打開 App 讀過的記在 sessionStorage：重新整理、換頁不用重讀（省流量；別人換了夥伴，下次打開 App 就看到）
+const SAVED_KEY = "routemake:mascots";
+const picks = new Map<string, MascotPick>(
+  (() => {
+    try {
+      return Object.entries(JSON.parse(sessionStorage.getItem(SAVED_KEY) ?? "{}") as Record<string, unknown>).map(([k, v]) => [k, normalizePick(v)] as const);
+    } catch {
+      return [];
+    }
+  })()
+);
+const keep = () => {
+  try {
+    sessionStorage.setItem(SAVED_KEY, JSON.stringify(Object.fromEntries(picks)));
+  } catch {}
+};
+const asked = new Set<string>(picks.keys());
 const failed = new Set<string>(); // 讀不到（沒網路）：頭像先畫預設的氂牛，但編輯人物卡不能拿來當自己的夥伴
 let queue: string[] = [];
 const listeners = new Set<() => void>();
@@ -46,6 +61,7 @@ function want(userId: string) {
         }
       }
     }
+    keep();
     notify();
   });
 }
@@ -67,6 +83,7 @@ export function useMascot(userId: string | null | undefined, exact = false): Mas
 export function rememberMascot(userId: string, pick: MascotPick) {
   picks.set(userId, pick);
   asked.add(userId);
+  keep();
   notify();
 }
 
@@ -79,6 +96,7 @@ const readTroll = () => {
     return false;
   }
 };
+export const trollOn = readTroll;
 export function useTroll(): [boolean, (on: boolean) => void] {
   const on = useSyncExternalStore(subscribe, readTroll, () => false);
   return [
@@ -92,3 +110,64 @@ export function useTroll(): [boolean, (on: boolean) => void] {
     },
   ];
 }
+
+// ---------- 夥伴說話：開關、今天閉嘴、頁面泡泡關掉、事件 ----------
+// 「夥伴說話」關掉（人物卡開關）：一直不說；「🤫 閉嘴」：今天都不說（明天自動恢復）；都記在這支手機
+const QUIET_KEY = "routemake:mascot-quiet";
+const HUSH_KEY = "routemake:mascot-hush";
+const today = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date());
+const read = (k: string) => {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+const write = (k: string, v: string | null) => {
+  try {
+    if (v == null) localStorage.removeItem(k);
+    else localStorage.setItem(k, v);
+  } catch {}
+  notify();
+};
+const talkState = () => (read(QUIET_KEY) === "1" ? "quiet" : read(HUSH_KEY) === today() ? "hush" : "on");
+// on＝會說話；hush＝今天閉嘴；quiet＝關掉了
+export function useTalk(): { state: "on" | "hush" | "quiet"; setQuiet: (q: boolean) => void; hush: () => void } {
+  const state = useSyncExternalStore(subscribe, talkState, () => "quiet" as const);
+  return {
+    state,
+    setQuiet: (q) => {
+      write(QUIET_KEY, q ? "1" : null);
+      if (!q) write(HUSH_KEY, null);
+    },
+    hush: () => write(HUSH_KEY, today()),
+  };
+}
+
+// 頁面上面的泡泡按 ✕：這次打開 App 不再出現（記在 sessionStorage，下次打開 App 又會說）
+const CLOSED_KEY = "routemake:cheer-closed:";
+export const pageClosed = (page: string) => {
+  try {
+    return sessionStorage.getItem(CLOSED_KEY + page) === "1";
+  } catch {
+    return false;
+  }
+};
+export const closePage = (page: string) => {
+  try {
+    sessionStorage.setItem(CLOSED_KEY + page, "1");
+  } catch {}
+};
+
+// 做了事情（記錄完攀、Flash、破紀錄…）：夥伴從上面跳出來說一句（MascotToast 接）
+export type MascotEvent = { text: string; party: boolean; at: number };
+let lastEvent: MascotEvent | null = null;
+export function sayEvent(text: string, party = false) {
+  if (talkState() !== "on") return;
+  lastEvent = { text, party, at: Date.now() };
+  notify();
+}
+export const useMascotEvent = () => {
+  useSyncExternalStore(subscribe, () => version, () => 0);
+  return lastEvent;
+};

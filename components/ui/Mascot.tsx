@@ -184,7 +184,7 @@ export function MascotColors({ pick, onChange }: { pick: MascotPick; onChange: (
 // 館首頁的對話泡泡：夥伴小頭像＋一句話；右上角 ✕ 關掉（今天不再出現）
 export function MascotBubble({ pick, troll = false, text, onClose }: { pick: MascotPick; troll?: boolean; text: string; onClose: () => void }) {
   return (
-    <div className="mb-3 flex animate-pop items-start gap-2" data-testid="mascot-bubble">
+    <div className="mb-3 flex animate-talk items-start gap-2" data-testid="mascot-bubble">
       <MascotAvatar pick={pick} size={40} troll={troll} />
       <p className="relative m-0 flex-1 rounded-card border border-line bg-surface py-2 pr-8 pl-3 text-note leading-normal shadow-card">
         <b className="block text-tiny text-muted">{mascotInfo(pick.id).name}</b>
@@ -194,5 +194,73 @@ export function MascotBubble({ pick, troll = false, text, onClose }: { pick: Mas
         </button>
       </p>
     </div>
+  );
+}
+
+// 右下角小夥伴：一直站在右下角（底部分頁上面）；text 有值時旁邊冒泡泡（「🤫 閉嘴」今天都不說）；點夥伴換一句
+export function MascotBuddyView({
+  pick,
+  troll = false,
+  text,
+  onTap,
+  onHush,
+}: {
+  pick: MascotPick;
+  troll?: boolean;
+  text: string | null;
+  onTap: () => void;
+  onHush: () => void;
+}) {
+  return (
+    <div className="flex items-end gap-1.5" data-testid="mascot-buddy">
+      {text && (
+        <div className="relative mb-1 max-w-[210px] animate-talk rounded-card border border-line bg-surface px-3 py-2 text-note leading-normal shadow-card" role="status">
+          <b className="block text-tiny text-muted">{mascotInfo(pick.id).name}</b>
+          {text}
+          <button type="button" onClick={onHush} className="mt-1 block text-tiny font-bold text-accent">
+            🤫 閉嘴（今天不說話）
+          </button>
+        </div>
+      )}
+      <button type="button" aria-label={`${mascotInfo(pick.id).name}：點我說話`} onClick={onTap} className="rounded-full border-2 border-surface shadow-card">
+        <MascotAvatar pick={pick} size={48} troll={troll} />
+      </button>
+    </div>
+  );
+}
+
+// 做了事情（記錄完攀、Flash、破紀錄…）：夥伴從上面跳出來說一句；party 撒彩帶（減少動態效果時不撒）
+const PARTY = ["#F5B700", "#D7263D", "#2F6FD6", "#2E9E5B", "#F07BB5", "#FFFFFF"];
+export function MascotToastView({ pick, troll = false, text, party = false, onClose }: { pick: MascotPick; troll?: boolean; text: string; party?: boolean; onClose: () => void }) {
+  return (
+    <>
+      {party && (
+        <div aria-hidden className="pointer-events-none fixed inset-0 z-30 overflow-hidden motion-reduce:hidden" data-party>
+          {Array.from({ length: 36 }, (_, i) => (
+            <i
+              key={i}
+              className="absolute -top-3 block h-[11px] w-[7px] animate-confetti rounded-[2px]"
+              style={{ left: `${(i * 37) % 100}%`, background: PARTY[i % PARTY.length], animationDelay: `${(i % 9) * 0.05}s` }}
+            />
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={onClose}
+        role="status"
+        style={{ background: mascotBg(pick) }}
+        className="fixed inset-x-3 top-[calc(12px+env(safe-area-inset-top,0px))] z-30 mx-auto flex max-w-page animate-talk items-center gap-2.5 rounded-card px-3 py-2.5 text-left text-white shadow-card"
+        data-testid="mascot-toast"
+      >
+        <span className="grid flex-none place-items-center rounded-full bg-white/90" style={{ width: 42, height: 42 }}>
+          <MascotArt pick={pick} troll={troll} className="size-[84%]" />
+        </span>
+        <span className="text-sub leading-snug [text-shadow:0_1px_2px_rgba(0,0,0,.3)]">
+          <b className="block text-tiny opacity-90">{mascotInfo(pick.id).name}</b>
+          {text}
+        </span>
+      </button>
+    </>
   );
 }

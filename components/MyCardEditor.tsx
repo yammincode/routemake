@@ -16,7 +16,7 @@ import { useToast } from "@/components/ui/Toast";
 import { cardGyms, getProfileCard, mascotSupported, saveMyCard, saveMyMascot, type ProfileCard } from "@/lib/data";
 import { ABILITY_AXES, CLIMBING_YEARS } from "@/lib/design";
 import { GYMS } from "@/lib/gyms";
-import { rememberMascot, useMascot, useTroll } from "@/lib/mascot-store";
+import { rememberMascot, useMascot, useTalk, useTroll } from "@/lib/mascot-store";
 import { DEFAULT_MASCOT, mascotInfo, type MascotPick } from "@/lib/mascots";
 
 // 人物卡頁：上面是自己的人物卡（別人看到的樣子），按「編輯人物卡」修改；預設不公開；能力值依完攀自動計算，另外可以自評 1–5
@@ -37,6 +37,7 @@ export default function MyCardEditor() {
   const mine = useMascot(uid, true);
   const [draft, setDraft] = useState<MascotPick | null>(null);
   const [troll, setTroll] = useTroll();
+  const talk = useTalk();
 
   useEffect(() => {
     if (!uid) return;
@@ -129,7 +130,22 @@ export default function MyCardEditor() {
       </p>
       {cardView}
       <SetBox>
-        <Toggle checked={troll} onChange={setTroll} label="幹話模式" hint="夥伴加刀疤、叼棒棒糖，館首頁每天那句幹話和平常的話混著講（只有這支手機看得到）" />
+        <Toggle
+          checked={talk.state !== "quiet"}
+          onChange={(v) => talk.setQuiet(!v)}
+          label="夥伴說話"
+          hint={
+            talk.state === "hush"
+              ? "今天按了「閉嘴」，明天自動恢復"
+              : "館首頁、區域頁、我的紀錄上面的泡泡、右下角的小夥伴、記錄完攀時跳出來（只有這支手機）"
+          }
+        />
+        {talk.state === "hush" && (
+          <Button className="mb-2" onClick={() => talk.setQuiet(false)}>
+            讓夥伴現在說話
+          </Button>
+        )}
+        <Toggle checked={troll} onChange={setTroll} label="幹話模式" hint="夥伴加刀疤、叼棒棒糖，說的話幹話和平常的話混著講（只有這支手機看得到）" />
       </SetBox>
       {!editing ? (
         <Button className="mt-3" onClick={() => setEditing(true)}>

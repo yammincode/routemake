@@ -1,4 +1,4 @@
-// 館首頁每天一句：夥伴看紀錄、能力說話；幹話模式從老闆給的句子隨機挑
+// 夥伴說的話：館首頁、區域頁、我的紀錄上面的泡泡、右下角小夥伴、做了事情（事件）；幹話模式幹話和平常的話混著講
 import { ABILITY_AXES, gradeLabel } from "./design";
 import { MASCOT_LINES, TROLL_LINES, mascotInfo, type MascotId } from "./mascots";
 
@@ -51,12 +51,67 @@ export function abilityLines(c: CheerInput): string[] {
   return out;
 }
 
-// 挑一句：幹話模式幹話和平常的話混著講（一半一半）；平常紀錄、能力的話一起抽，偶爾（1/4）講夥伴自己的話，沒有可以講的就講夥伴的話
-export function pickCheer(c: CheerInput, rand: () => number = Math.random): string {
+// 挑一句：幹話模式幹話和平常的話混著講（一半一半）；紀錄、能力的話一起抽，偶爾（1/4）講夥伴自己的話，沒有可以講的就講夥伴的話
+export function pickFrom(pool: string[], mascot: MascotId, troll: boolean, rand: () => number = Math.random): string {
   const any = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length) % xs.length];
-  if (c.troll && rand() < 0.5) return any(TROLL_LINES);
-  const pool = [...recordLines(c), ...abilityLines(c)];
-  const own = MASCOT_LINES[c.mascot];
+  if (troll && rand() < 0.5) return any(TROLL_LINES);
+  const own = MASCOT_LINES[mascot];
   if (!pool.length || rand() < 0.25) return any(own);
   return any(pool);
+}
+// 館首頁
+export const pickCheer = (c: CheerInput, rand: () => number = Math.random) => pickFrom([...recordLines(c), ...abilityLines(c)], c.mascot, c.troll, rand);
+
+// 區域頁：這一區還有幾條沒完攀、嘗試中、新路線、全部完攀
+export type ZoneTalk = {
+  zone: string;
+  total: number;
+  done: number;
+  projects: { code: string; grade: number; hold_color: string }[];
+  fresh: number; // 7 天內的新路線、自己還沒完攀
+};
+export function zoneLines(z: ZoneTalk): string[] {
+  const out: string[] = [];
+  if (!z.total) return out;
+  const left = z.total - z.done;
+  if (left === 0) out.push(`${z.zone}你全部完攀了！換線前再來找我。`);
+  else if (left <= 3) out.push(`${z.zone}只剩 ${left} 條沒完攀，快收集完了！`);
+  else out.push(`${z.zone}還有 ${left} 條你沒完攀，挑一條試試？`);
+  if (z.done > 0 && left > 0) out.push(`你在${z.zone}已經完攀 ${z.done} / ${z.total} 條。`);
+  for (const p of z.projects.slice(0, 2)) out.push(`${p.code}（${gradeLabel(p.grade)} ${p.hold_color}）還在嘗試中，今天再試一次？`);
+  if (z.fresh > 0) out.push(`這區有 ${z.fresh} 條新路線你還沒完攀，去看看吧！`);
+  return out;
+}
+
+// 我的紀錄（只看這個月）：完攀、Flash、攀爬天數、差幾條大滿貫
+export type MeTalk = { sends: number; prev: number; flashes: number; days: number; near: { grade: string; left: number }[] };
+export function meLines(m: MeTalk): string[] {
+  const out: string[] = [];
+  if (m.sends > m.prev && m.prev > 0) out.push(`這個月已經完攀 ${m.sends} 條，比上個月多 ${m.sends - m.prev} 條！`);
+  else if (m.sends > 0) out.push(`這個月已經完攀 ${m.sends} 條，繼續保持！`);
+  else out.push("這個月還沒有完攀，今天來開張吧！");
+  if (m.flashes > 0) out.push(`這個月 Flash 了 ${m.flashes} 條，眼力很好喔！`);
+  if (m.days >= 8) out.push(`這個月爬了 ${m.days} 天，你是牆上的常客！`);
+  for (const n of m.near.slice(0, 2)) out.push(`再 ${n.left} 條就是 ${n.grade} 大滿貫了！`);
+  return out;
+}
+
+// 右下角小夥伴（點牠、換頁時）
+const BUDDY = ["今天爬哪一區？", "喝水了沒？", "爬累了就休息一下，我在這裡等你。", "要不要挑戰一條沒爬過的？", "我在這裡幫你加油！", "記得暖身喔！"];
+export const buddyLine = (mascot: MascotId, troll: boolean, rand: () => number = Math.random) => pickFrom(BUDDY, mascot, troll, rand);
+
+// 做了事情：記錄完攀、Flash、破自己的最高難度、連續爬好幾天、第一次留言
+export type EventKind = "send" | "flash" | "best" | "streak" | "comment";
+const EVENT: Record<EventKind, string[]> = {
+  send: ["完攀！又收集一條。", "完攀！手感不錯喔！", "上去了！下一條是哪條？", "完攀！我就知道你可以。"],
+  flash: ["Flash！一次就上，太強了吧！", "Flash！眼睛會看路線喔！", "第一次就上去，帥！"],
+  best: ["新紀錄！你第一次完攀 {grade}，我要跟大家炫耀！", "{grade}！這是你最難的一條，太厲害了！"],
+  streak: ["連續爬 {days} 天了，你是牆上的常客！", "第 {days} 天！記得讓手指休息一下。"],
+  comment: ["謝謝分享 beta，大家會感謝你的！", "第一則留言！你的心得會幫到別人喔。"],
+};
+// 事件的話：幹話模式一半講幹話（要撒彩帶的照樣撒）
+export function eventLine(kind: EventKind, troll: boolean, vars: { grade?: string; days?: number } = {}, rand: () => number = Math.random): string {
+  const any = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length) % xs.length];
+  if (troll && rand() < 0.5) return any(TROLL_LINES);
+  return any(EVENT[kind]).replace("{grade}", vars.grade ?? "").replace("{days}", String(vars.days ?? ""));
 }

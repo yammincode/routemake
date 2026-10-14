@@ -15,7 +15,7 @@ import { GrantGroup, GrantList, GrantRow } from "@/components/ui/Grant";
 import { HighpointPicker, NumberMarks } from "@/components/ui/Endurance";
 import { Tabs } from "@/components/ui/Tabs";
 import { HoldLegend, HoldMarks, HoldTools, RouteThumb, SprayRow } from "@/components/ui/Spray";
-import { CharacterTop, MascotAvatar, MascotBubble, MascotColors, MascotPicker } from "@/components/ui/Mascot";
+import { CharacterTop, MascotAvatar, MascotBubble, MascotBuddyView, MascotColors, MascotPicker, MascotToastView } from "@/components/ui/Mascot";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
@@ -921,6 +921,8 @@ export default function DesignShowcase() {
 function MascotDemo() {
   const [pick, setPick] = useState<MascotPick>({ id: "wanhua" });
   const [troll, setTroll] = useState(false);
+  const [buddy, setBuddy] = useState(true);
+  const [toast, setToast] = useState(0);
   return (
     <>
       <Toggle checked={troll} onChange={setTroll} label="幹話模式" hint="所有夥伴加刀疤、叼棒棒糖" />
@@ -935,6 +937,14 @@ function MascotDemo() {
       </div>
       <p className="mt-1 mb-3 text-tiny text-muted">最後一個是還在讀的頭像（空的圓）</p>
       <MascotBubble pick={pick} troll={troll} text="慢慢來，爬完一條是一條。" onClose={() => setTroll(false)} />
+      <p className="mt-1 mb-1 text-tiny text-muted">右下角小夥伴（點牠說話、「閉嘴」今天不說）：</p>
+      <div className="mb-3 flex justify-end">
+        <MascotBuddyView pick={pick} troll={troll} text={buddy ? "今天爬哪一區？" : null} onTap={() => setBuddy(!buddy)} onHush={() => setBuddy(false)} />
+      </div>
+      <Button className="mb-3" onClick={() => setToast(Date.now())}>
+        模擬記錄 Flash（夥伴從上面跳出來、撒彩帶）
+      </Button>
+      {toast > 0 && <MascotToastView key={toast} pick={pick} troll={troll} text="Flash！一次就上，太強了吧！" party onClose={() => setToast(0)} />}
       <MascotPicker value={pick.id} onChange={(id) => setPick({ id })} troll={troll} />
       <div className="mt-3">
         <MascotColors pick={pick} onChange={setPick} />

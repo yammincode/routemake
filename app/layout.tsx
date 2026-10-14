@@ -4,6 +4,7 @@ import { AuthProvider } from "@/components/AuthProvider";
 import TabBar from "@/components/TabBar";
 import { ToastProvider } from "@/components/ui/Toast";
 import InstallHelp from "@/components/InstallHelp";
+import MascotBuddy, { MascotToast } from "@/components/MascotBuddy";
 import SyncManager from "@/components/SyncManager";
 import UpdateWatcher from "@/components/UpdateWatcher";
 import "./globals.css";
@@ -64,6 +65,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               {children}
             </main>
             <TabBar />
+            <MascotBuddy />
+            <MascotToast />
           </AuthProvider>
           <UpdateWatcher />
           <InstallHelp />

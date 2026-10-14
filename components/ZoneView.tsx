@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { PageCheer } from "@/components/MascotCheer";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
 import { BackLink, Empty, Tip } from "@/components/ui/Card";
@@ -22,6 +23,7 @@ import {
   type Zone,
   type ZoneData,
 } from "@/lib/data";
+import { zoneLines } from "@/lib/cheer";
 import { ago, daysUntil, isNew } from "@/lib/date";
 import { GRADE_BANDS, gradeColor, gradeLabel, inBand, isYds, type BandId, type HoldColor, STYLE_TAGS } from "@/lib/design";
 import { backOr, upTo } from "@/lib/nav";
@@ -210,6 +212,21 @@ export default function ZoneView({
         )}
       </p>
       {nav}
+      {/* 原岩夥伴：講這一區（方框下面、照片上面；換區換一句） */}
+      {session && (
+        <PageCheer
+          key={zone.id}
+          uid={session.user.id}
+          page={`zone:${zone.id}`}
+          pool={zoneLines({
+            zone: zone.name,
+            total: routes.length,
+            done,
+            projects: routes.filter((r) => status(r) === "project"),
+            fresh: routes.filter((r) => isNew(r.created_at) && status(r) !== "flash" && status(r) !== "send").length,
+          })}
+        />
+      )}
 
       {src ? (
         <WallPhoto src={src} alt={`${zone.name}照片`} hideable={routes.length > 0}>

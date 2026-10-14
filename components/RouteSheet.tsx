@@ -36,6 +36,7 @@ import {
 import { ago, md, todayYmd, ymd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, STATUS_LABEL, type Status } from "@/lib/design";
 import { herePath } from "@/lib/nav";
+import { cheerComment, cheerSend } from "@/lib/mascot-events";
 import { isRetryable, queueAscent, unqueue } from "@/lib/offline";
 import { loginExpired } from "@/lib/supabase";
 import { ascentPoints, routePoints } from "@/lib/scoring";
@@ -164,9 +165,11 @@ function RouteBody({
       .catch(() => setComments([]));
   }, [r.id, commentsOpen]);
 
-  const persist = async (a: Omit<Ascent, "id" | "route_id">, msg: string) => {
-    if (!session) return;
+  // 回傳 saved（存好了）、queued（先排隊）、failed（被擋下）
+  const persist = async (a: Omit<Ascent, "id" | "route_id">, msg: string): Promise<"saved" | "queued" | "failed"> => {
+    if (!session) return "failed";
     setBusy(true);
+    let result: "saved" | "queued" | "failed" = "saved";
     try {
       await saveAscent(session.user.id, r.id, a);
       unqueue(session.user.id, r.id); // 之前排隊的舊版本不用再送（不然會蓋掉這次存的）
@@ -178,9 +181,14 @@ function RouteBody({
         queueAscent({ userId: session.user.id, routeId: r.id, ascent: a });
         onSaved({ id: ascent?.id ?? "", route_id: r.id, ...a });
         toast("目前送不出去，連上網路後會自動送出");
-      } else toast((e as Error).message);
+        result = "queued";
+      } else {
+        toast((e as Error).message);
+        result = "failed";
+      }
     }
     setBusy(false);
+    return result;
   };
   const current = (s: Status, day = date, high = hp) => ({
     status: s,
@@ -237,6 +245,7 @@ function RouteBody({
     // 自己改過日期就照改的；已下架的路線不超過下架那天（資料庫會擋）
     const wasProject = opened.status === "project" && s !== "project";
     const day = wasProject && date === opened.date ? (todayYmd() > maxDate ? maxDate : todayYmd()) : date;
+    const before = status;
     setStatus(s);
     setDate(day);
     const pts = rules ? ascentPoints(r.grade, r.style_tags, s, rules, s === "project" ? hp : null, total) : 0;
@@ -255,7 +264,10 @@ function RouteBody({
           : s === "send"
             ? `完攀 +${pts} 分`
             : "已記錄：嘗試中";
-    await persist(current(s, day), msg);
+    const saved = await persist(current(s, day), msg);
+    // 原岩夥伴：記了完攀、Flash（原本不是）就跳出來說一句；岩友路線不算
+    if (saved !== "failed" && s !== "project" && s !== before && r.kind !== "community" && session)
+      void cheerSend({ userId: session.user.id, routeId: r.id, grade: r.grade, status: s, climbedOn: day || todayYmd(), queued: saved === "queued" });
   };
 
   const save = async () => {
@@ -293,6 +305,7 @@ function RouteBody({
     if (!body) return toast("留言不能是空的");
     try {
       await postComment(r.id, body);
+      if (session) void cheerComment(session.user.id);
       setDraft("");
       setComments(await getComments(r.id));
       toast("已送出留言");

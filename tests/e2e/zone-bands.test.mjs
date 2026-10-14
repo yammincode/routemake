@@ -1,9 +1,9 @@
-// 區域頁版型（版型固定，見 CLAUDE.md）：標題 → 上一區／下一區方框 → 照片 → 難度色帶卡 → 難度四格 → 說明 → 顏色、風格篩選 → 路線依入門／進階／挑戰分段；
+// 區域頁版型（版型固定，見 CLAUDE.md）：標題 → 上一區／下一區方框 →（登入時）夥伴的泡泡 → 照片 → 難度色帶卡 → 難度四格 → 說明 → 顏色、風格篩選 → 路線依入門／進階／挑戰分段；
 // 選一段只列那段、照片上其他難度變淡；這區沒有的段點不了；四格跟館首頁同一個選擇（記在手機），這區沒有那段就先顯示全部
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { after, before, test } from "node:test";
-import { BASE, WALL, createMock, launch, phone } from "./helpers.mjs";
+import { BASE, WALL, createMock, launch, login, phone } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -171,5 +171,22 @@ test("難度四格跟館首頁同一個選擇：首頁選的帶進區域頁、�
   await page.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
   await page.waitForTimeout(800);
   assert.equal(await pressedBox(page), "VB–V2", "記著的沒有被清掉");
+  assert.deepEqual(errors, []);
+});
+
+test("區域頁版型（登入）：上一區／下一區方框 → 夥伴的泡泡 → 照片 → 難度色帶卡", async () => {
+  const mock = createMock();
+  seed(mock);
+  mock.addUser("climbera", "password1", { nickname: "小岩" });
+  const { page, errors } = await phone(browser, mock, { viewport: { width: 360, height: 780 } });
+  await login(page, "climbera", "password1", `/zone?id=${zoneOf(mock, "A2").id}`);
+  const bubble = page.locator('[data-testid="mascot-bubble"]');
+  await bubble.waitFor();
+  const nav = await page.locator('nav[aria-label="切換區域"]').boundingBox();
+  const bb = await bubble.boundingBox();
+  const photo = await page.locator('main img[alt="A2 區照片"]').boundingBox();
+  const card = await page.locator("main b", { hasText: "A2 區難度" }).boundingBox();
+  assert.ok(nav.y < bb.y && bb.y < photo.y && photo.y < card.y, "方框 → 夥伴的泡泡 → 照片 → 色帶卡");
+  assert.ok((await page.evaluate(() => document.documentElement.scrollWidth)) <= 360, "360 寬不撐破畫面");
   assert.deepEqual(errors, []);
 });
