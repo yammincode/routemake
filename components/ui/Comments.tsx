@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import Icon from "./Icon";
+import { LikeButton } from "./Like";
 
 // 留言（原型 .cmt）；likes／liked／onLike：👍 按讚（沒有 onLike 時只顯示讚數）；edited：顯示「已編輯」
 // place＋onOpen：New~ 用，下面多一行是哪條路線（RouteTag）和「看路線 ›」；clamp：長留言最多 3 行
@@ -66,16 +67,7 @@ export function CommentItem({
       <p className={`mt-0.5 mb-0 text-sub leading-normal break-words ${clamp ? "line-clamp-3" : ""}`}>{body}</p>
       {(onLike || likes > 0) && (
         <div className="mt-1.5 flex">
-          <button
-            aria-pressed={liked}
-            aria-label={liked ? `收回讚，目前 ${likes} 個讚` : `按讚，目前 ${likes} 個讚`}
-            disabled={!onLike}
-            onClick={onLike}
-            className="inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-[3px] text-meta text-muted aria-pressed:border-accent aria-pressed:bg-accent-soft aria-pressed:font-bold aria-pressed:text-accent disabled:border-transparent disabled:px-0"
-          >
-            <span aria-hidden>👍</span>
-            {likes > 0 ? <span className="font-num">{likes}</span> : "讚"}
-          </button>
+          <LikeButton likes={likes} liked={liked} onLike={onLike} />
         </div>
       )}
       {place && (

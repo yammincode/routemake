@@ -161,6 +161,14 @@ export default function DesignShowcase() {
   const [consent, setConsent] = useState(false);
   const [playing, setPlaying] = useState<number | null>(null);
   const [liked, setLiked] = useState(false);
+  const [videoLiked, setVideoLiked] = useState<Record<string, boolean>>({});
+  // 影片的讚：第一支沒人按（寫「讚」），之後幾支有人按過
+  const likedVideos: VideoCard[] = DEMO_VIDEOS.map((v, i) => ({
+    ...v,
+    likes: i + (videoLiked[v.key] ? 1 : 0),
+    liked: !!videoLiked[v.key],
+    onLike: () => setVideoLiked((m) => ({ ...m, [v.key]: !m[v.key] })),
+  }));
   const [demoTab, setDemoTab] = useState<"log" | "video" | "comment">("log");
   const [rate, setRate] = useState<number | null>(3);
   const [trendPick, setTrendPick] = useState<number | null>(null);
@@ -745,7 +753,7 @@ export default function DesignShowcase() {
       </Block>
 
       <Block title="顧客影片">
-        <p className="mt-0 mb-1.5 text-meta text-muted">路線卡片「影片」分頁：篩選鈕排不下就換行（ChipRow wrap），一支一列（VideoRow）；沒寫說明的標題是「某某的攀爬」</p>
+        <p className="mt-0 mb-1.5 text-meta text-muted">路線卡片「影片」分頁：篩選鈕排不下就換行（ChipRow wrap），一支一列（VideoRow）；沒寫說明的標題是「某某的攀爬」；右下角「👍 讚」（VideoCard likes、liked、onLike，跟留言一樣的 LikeButton），全螢幕播放在名字那一行</p>
         <ChipRow wrap>
           <Chip pressed={videoTag == null} onClick={() => setVideoTag(null)}>
             全部<span className="ml-1 font-num opacity-60">3</span>
@@ -757,14 +765,14 @@ export default function DesignShowcase() {
           ))}
         </ChipRow>
         <VideoList>
-          {DEMO_VIDEOS.map((v, i) => (
+          {likedVideos.map((v, i) => (
             <VideoRow key={v.key} v={v} onClick={() => setPlaying(i)} />
           ))}
         </VideoList>
         <p className="mt-3 mb-1.5 text-meta text-muted">後台：橫向縮圖（VideoStrip）</p>
         <VideoStrip items={DEMO_VIDEOS} onOpen={setPlaying} />
         <VideoViewer
-          items={DEMO_VIDEOS}
+          items={likedVideos}
           index={playing}
           onIndex={setPlaying}
           actions={() => (

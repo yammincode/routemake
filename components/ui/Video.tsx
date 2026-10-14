@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { STATUS_LABEL, type Status } from "@/lib/design";
 import Icon from "./Icon";
+import { LikeButton, LikeSpace } from "./Like";
 import { StatusBadge } from "./Route";
 
 // 省流量：列表只放縮圖（<img>），不放 <video>；按了才在全螢幕播放時建立 <video> 載入影片
@@ -21,6 +22,10 @@ export type VideoCard = {
   tags?: string; // 「身高 170–179cm・動態」（videoTagText）
   meta?: ReactNode; // 例如後台的「B 區 B-03」
   onName?: () => void; // 點名字看人物卡
+  // 👍 讚：有 onLike 才顯示（資料庫還沒套用 step42 時沒有）；列表在右下角、全螢幕播放在名字那一行
+  likes?: number;
+  liked?: boolean;
+  onLike?: () => void;
 };
 
 // 片長 0:42
@@ -68,11 +73,12 @@ function ThumbImage({ src }: { src?: string | null }) {
 }
 
 // 影片一列（像 Spray Wall 路線列）：方形縮圖（第一格畫面、▶、片長）｜標題（心得，沒寫就是「某某的攀爬」）、誰・攀爬日（或分享時間）＋紀錄、型態、身高・動作
-// 整列點了就播放
+// 整列點了就播放；有讚時右下角放「👍 讚」（另一顆按鈕疊在列上，按讚不會播放）
 export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) {
   const title = v.caption || `${v.name}的攀爬`;
+  const likes = v.likes ?? 0;
   return (
-    <li>
+    <li className="relative">
       <button
         aria-label={[`播放 ${v.name} 的影片：${title}`, v.duration != null && clock(v.duration), v.status && STATUS_LABEL[v.status], v.feel, v.tags].filter(Boolean).join("，")}
         onClick={onClick}
@@ -99,9 +105,18 @@ export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) 
           </span>
           {v.meta && <span className="mt-0.5 block truncate text-tiny text-muted">{v.meta}</span>}
           {v.feel && <span className="mt-0.5 block truncate text-tiny text-muted">{v.feel}</span>}
-          {v.tags && <span className="mt-0.5 block truncate text-tiny text-muted">{v.tags}</span>}
+          {v.onLike ? (
+            // 最後一行右邊先留讚按鈕的位置
+            <span className="mt-0.5 flex items-end justify-between gap-2">
+              <span className="min-w-0 truncate text-tiny text-muted">{v.tags}</span>
+              <LikeSpace likes={likes} />
+            </span>
+          ) : (
+            v.tags && <span className="mt-0.5 block truncate text-tiny text-muted">{v.tags}</span>
+          )}
         </span>
       </button>
+      {v.onLike && <LikeButton likes={likes} liked={!!v.liked} onLike={v.onLike} className="absolute right-2.5 bottom-2.5" />}
     </li>
   );
 }
@@ -273,6 +288,7 @@ export function VideoViewer({
           )}
           {v.ago}
           {v.status && <StatusBadge status={v.status} />}
+          {v.onLike && <LikeButton dark likes={v.likes ?? 0} liked={!!v.liked} onLike={v.onLike} className="ml-auto" />}
         </div>
         {v.meta && <div className="mt-0.5 text-meta text-white/75">{v.meta}</div>}
         {v.place && <div className="mt-1 text-meta text-white">{v.place}</div>}

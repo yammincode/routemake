@@ -23,12 +23,14 @@ import {
   getVideos,
   likeComment,
   likeRoute,
+  likeVideo,
   photoUrl,
   pickFeed,
   seqPhotoUrl,
   seqTotal,
   unlikeComment,
   unlikeRoute,
+  unlikeVideo,
   videoThumbUrl,
   videoUrl,
   type Ascent,
@@ -59,6 +61,8 @@ const placeText = (p: FeedPlace) => `${p.gym.name}・${p.zone.name}・${p.route.
 const place = (p: FeedPlace) => <RouteTag grade={p.route.grade}>{placeText(p)}</RouteTag>;
 const Heading = ({ children }: { children: ReactNode }) => <h3 className="m-0 text-meta font-bold text-muted">{children}</h3>;
 const already = (e: unknown) => (e as DbError).code === "23505"; // 已經按過讚（別的分頁按的）
+// 讚的人：加上或拿掉自己
+const withMe = (likers: string[], me: string, on: boolean) => (on ? [...likers.filter((u) => u !== me), me] : likers.filter((u) => u !== me));
 
 function start<T extends { id: string }>(feed: Feed<T>): Picked<T> {
   const shown = pickFeed(feed);
@@ -103,7 +107,7 @@ export default function NewView() {
   const [spray, setSpray] = useState<SprayInfo | null>(null);
   const [sprayTry, setSprayTry] = useState(0);
   const [profile, setProfile] = useState<{ userId: string; gymId: string } | null>(null);
-  const liking = useRef(new Set<string>()); // 正在送出讚的留言：重讀列表時保留手機上的讚
+  const liking = useRef(new Set<string>()); // 正在送出讚的留言、影片：重讀列表時保留手機上的讚
   const syncSeq = useRef<Record<string, number>>({}); // 每條路線最後一次重讀，舊的回來晚了不用
   const staleOpen = useRef<string | null>(null); // 打開時離線紀錄送出了：這條關掉後要重讀
 
@@ -195,7 +199,7 @@ export default function NewView() {
       .then((cs) => latest() && setComments((p) => p && syncRoute(p, routeId, cs, (x, n) => ({ ...x, ...n, likers: liking.current.has(x.id) ? x.likers : n.likers }))))
       .catch(() => {});
     void getVideos(routeId)
-      .then((vs) => latest() && setVideos((p) => p && syncRoute(p, routeId, vs, (x, n) => ({ ...x, ...n }))))
+      .then((vs) => latest() && setVideos((p) => p && syncRoute(p, routeId, vs, (x, n) => ({ ...x, ...n, likers: liking.current.has(x.id) ? x.likers : n.likers }))))
       .catch(() => {});
   };
 
@@ -243,6 +247,25 @@ export default function NewView() {
     }
   };
 
+  const toggleVideoLike = async (v: FeedVideo) => {
+    if (!session) return toLogin();
+    const me = session.user.id;
+    const had = !!v.likers?.includes(me);
+    const flip = (on: boolean) => setVideos((p) => p && edit(p, (x) => (x.id === v.id && x.likers ? { ...x, likers: withMe(x.likers, me, on) } : x)));
+    flip(!had);
+    liking.current.add(v.id);
+    try {
+      await (had ? unlikeVideo(v.id) : likeVideo(v.id));
+    } catch (e) {
+      if (!already(e)) {
+        flip(had);
+        toast((e as Error).message);
+      }
+    } finally {
+      liking.current.delete(v.id);
+    }
+  };
+
   const since = dayStartIso();
   const cards: VideoCard[] = (videos?.shown ?? []).map((v) => ({
     key: v.id,
@@ -257,6 +280,7 @@ export default function NewView() {
     feel: feelTagText(v.feel_tags),
     tags: videoTagText(v.height_band, v.move),
     onName: () => (setPlayingId(null), setProfile({ userId: v.user_id, gymId: v.gym.id })),
+    ...(v.likers ? { likes: v.likers.length, liked: !!uid && v.likers.includes(uid), onLike: () => void toggleVideoLike(v) } : {}),
   }));
   const playing = playingId ? cards.findIndex((c) => c.key === playingId) : -1;
 

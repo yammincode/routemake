@@ -10,7 +10,7 @@ import { ClosedNotice } from "@/components/ui/Comments";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { captureThumb, compressMinBytes, compressType, compressVideo, type VideoEdit } from "@/lib/video";
-import { checkPickedVideo, deleteVideo, durText, getVideos, uploadVideo, videoDaySupported, videoLimit, videoMaxSeconds, videoThumbUrl, videoUrl, type Route, type Video } from "@/lib/data";
+import { checkPickedVideo, deleteVideo, durText, getVideos, likeVideo, unlikeVideo, uploadVideo, videoDaySupported, videoLimit, videoMaxSeconds, videoThumbUrl, videoUrl, type DbError, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { videoWhen } from "@/lib/date";
 import { CLIMB_MOVES, FEEL_TAG_MAX, FEEL_TAGS, HEIGHT_BANDS, feelTagText, videoTagText, type ClimbMove, type FeelTag, type HeightBand, type Status } from "@/lib/design";
@@ -88,6 +88,23 @@ export default function RouteVideos({
   }, [videos, onCount]);
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
+  // 按讚、收回：先改畫面，失敗再改回來（已經按過＝別的分頁按的，不用改回）
+  const toggleLike = async (v: Video) => {
+    if (!session) return onLogin();
+    const me = session.user.id;
+    const had = !!v.likers?.includes(me);
+    const flip = (on: boolean) =>
+      setVideos((vs) => vs?.map((x) => (x.id === v.id && x.likers ? { ...x, likers: on ? [...x.likers.filter((u) => u !== me), me] : x.likers.filter((u) => u !== me) } : x)) ?? null);
+    flip(!had);
+    try {
+      await (had ? unlikeVideo(v.id) : likeVideo(v.id));
+    } catch (e) {
+      if ((e as DbError).code === "23505") return;
+      flip(had);
+      toast((e as Error).message);
+    }
+  };
+
   const canShare = open && !r.archived_at;
   // 篩選鈕只出現這條路線影片裡有的標籤：身高由矮到高，再來動態、靜態，最後型態；選的標籤不見了（例如刪掉影片）就回到全部
   const tagOpts = [
@@ -109,6 +126,7 @@ export default function RouteVideos({
     feel: feelTagText(v.feel_tags),
     tags: videoTagText(v.height_band, v.move),
     onName: onProfile ? () => (setPlaying(null), onProfile(v.user_id)) : undefined,
+    ...(v.likers ? { likes: v.likers.length, liked: !!session && v.likers.includes(session.user.id), onLike: () => void toggleLike(v) } : {}),
   }));
   if (!canShare && videos && !videos.length) return <ClosedNotice>這條路線目前不開放分享影片</ClosedNotice>;
 

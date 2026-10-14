@@ -82,6 +82,7 @@ export function createMock() {
     resetEditors: [], // 老闆授權輸入換線日的人（user_id）
     usageViewers: [], // 老闆授權看使用狀況的人和館（{ user_id, gym_id }）
     likes: [], // comment_likes
+    videoLikes: [], // video_likes（step42）
     audit: [],
     files: {},
     videos: [], // route_videos
@@ -418,6 +419,7 @@ export function createMock() {
       const g = gymOfRoute(v.route_id);
       if (v.user_id !== uid && !isStaff(uid, g)) return J(route, 403, { code: "42501", message: "沒有權限" });
       db.videos = db.videos.filter((x) => x !== v);
+      db.videoLikes = db.videoLikes.filter((l) => l.video_id !== v.id); // 讚跟著刪
       if (v.user_id !== uid) audit(uid, g, "video.delete", v.id, { code: db.routes.find((r) => r.id === v.route_id).code, author_nickname: prof(v.user_id)?.nickname, caption: v.caption });
       return J(route, 200, v.path);
     }
@@ -1035,6 +1037,11 @@ export function createMock() {
         state.tagFallbacks++;
         return J(route, 400, { code: "PGRST204", message: "Could not find the 'height_band' column of 'route_videos' in the schema cache" });
       }
+      // state.noVideoLikes：模擬資料庫還沒套用 step42（沒有 video_likes，PostgREST 找不到關聯）
+      if (state.noVideoLikes && (m === "GET" || m === "HEAD") && /video_likes/.test(sel)) {
+        state.likeFallbacks = (state.likeFallbacks ?? 0) + 1;
+        return J(route, 400, { code: "PGRST200", message: "Could not find a relationship between 'route_videos' and 'video_likes' in the schema cache" });
+      }
       if (m === "GET" || m === "HEAD") {
         const q = new URLSearchParams(sp);
         const gym = (q.get("routes.zones.gym_id") || "").replace(/^eq\./, "");
@@ -1042,7 +1049,12 @@ export function createMock() {
         let rows = db.videos.map((v) => {
           const r = db.routes.find((x) => x.id === v.route_id);
           const z = zoneOf(r.zone_id);
-          return { ...v, profiles: { nickname: prof(v.user_id)?.nickname }, routes: sel.includes("gyms") ? routeEmbed(r.id) : { code: r.code, zones: { gym_id: z.gym_id, name: z.name } } };
+          return {
+            ...v,
+            profiles: { nickname: prof(v.user_id)?.nickname },
+            ...(sel.includes("video_likes") ? { video_likes: db.videoLikes.filter((l) => l.video_id === v.id).map((l) => ({ user_id: l.user_id })) } : {}),
+            routes: sel.includes("gyms") ? routeEmbed(r.id) : { code: r.code, zones: { gym_id: z.gym_id, name: z.name } },
+          };
         });
         if (gym) rows = rows.filter((v) => v.routes.zones.gym_id === gym);
         if (state.noVideoTags) rows = rows.map(({ height_band, move, ...v }) => v); // 舊資料庫沒有這兩欄
@@ -1099,6 +1111,22 @@ export function createMock() {
       if (m === "DELETE") {
         const del = filt(db.routeLikes.filter((l) => l.user_id === uid), sp);
         db.routeLikes = db.routeLikes.filter((l) => !del.includes(l));
+        return empty(route);
+      }
+    }
+    // 同 0048：登入有暱稱、影片還在、每人每支一個讚；只能收回自己的
+    if (t === "video_likes") {
+      if (m === "POST") {
+        const v = db.videos.find((x) => x.id === body.video_id);
+        if (state.videoLikeFail) return J(route, 500, { message: "Internal Server Error" });
+        if (!uid || !v || !prof(uid)?.nickname) return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "video_likes"' });
+        if (db.videoLikes.some((l) => l.video_id === v.id && l.user_id === uid)) return J(route, 409, { code: "23505", message: "duplicate key" });
+        db.videoLikes.push({ video_id: v.id, user_id: uid });
+        return empty(route, 201);
+      }
+      if (m === "DELETE") {
+        const del = filt(db.videoLikes.filter((l) => l.user_id === uid), sp);
+        db.videoLikes = db.videoLikes.filter((l) => !del.includes(l));
         return empty(route);
       }
     }

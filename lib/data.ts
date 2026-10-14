@@ -674,6 +674,7 @@ export type Video = {
   feel_tags?: FeelTag[]; // 型態（資料庫還沒套用 step35 時沒有）
   climbed_on?: string | null; // 分享者在這條的攀爬日（分享時由資料庫從本人紀錄帶入；沒有紀錄、或資料庫還沒套用 step34 時沒有）
   thumb_path?: string | null; // 縮圖（video-thumbs）；舊影片還沒補、或資料庫還沒套用 step38 時沒有
+  likers?: string[]; // 按讚的人（user id）；資料庫還沒套用 step42 時沒有（不顯示讚）
   created_at: string;
   nickname: string;
 };
@@ -682,8 +683,12 @@ const VIDEO_BASE = "id,route_id,user_id,path,caption,status,duration_s,created_a
 const VIDEO_TAGS = `${VIDEO_BASE},height_band,move`;
 const VIDEO_DAYS = `${VIDEO_TAGS},climbed_on`;
 const VIDEO_COLS = `${VIDEO_DAYS},feel_tags`;
-type VideoRow = Omit<Video, "nickname"> & { profiles: { nickname: string | null } | null };
-const toVideo = ({ profiles, ...v }: VideoRow): Video => ({ ...v, nickname: profiles?.nickname ?? "攀岩者" });
+type VideoRow = Omit<Video, "nickname" | "likers"> & { profiles: { nickname: string | null } | null; video_likes?: { user_id: string }[] | null };
+const toVideo = ({ profiles, video_likes, ...v }: VideoRow): Video => ({
+  ...v,
+  nickname: profiles?.nickname ?? "攀岩者",
+  ...(video_likes !== undefined ? { likers: (video_likes ?? []).map((l) => l.user_id) } : {}),
+});
 // 資料庫還沒套用新的欄位：讀的時候 42703、寫的時候 PGRST204，改用原本的欄位
 const noTagCols = (e: { code?: string } | null) => e?.code === "42703" || e?.code === "PGRST204";
 // 資料庫有沒有影片攀爬日（step34）：讀影片時知道；沒有時分享表單不說會顯示日期、分享時也不送
@@ -693,17 +698,24 @@ export const videoDaySupported = () => videoDays;
 let videoFeel = true;
 // 資料庫有沒有影片縮圖（step38）：跟其他欄位分開判斷（step35 沒套用、step38 套用了也要讀得到縮圖）
 let videoThumbs = true;
+// 資料庫有沒有影片按讚（step42）：沒有時讀影片不帶讚（PostgREST 找不到關聯回 PGRST200）
+let videoLikes = true;
+const VIDEO_LIKES = "video_likes(user_id)";
+const missingLikes = (e: { code?: string; message?: string } | null) => e?.code === "PGRST200" && (e.message ?? "").includes("video_likes");
 const missingCol = (e: { code?: string; message?: string } | null, col: string) => noTagCols(e) && (e?.message ?? "").includes(col);
 // 讀影片：缺型態（還沒套用 step35）先退回攀爬日；缺攀爬日（step34）退回身高、動作；再缺（step25）退回原本的欄位
-// 每一層都先帶縮圖讀；缺縮圖（還沒套用 step38）就之後都不帶
+// 每一層都先帶縮圖、讚讀；缺縮圖（還沒套用 step38）、缺讚（step42）就之後都不帶
 async function selectVideos<T>(q: (cols: string) => PromiseLike<{ data: T | null; error: { message?: string; code?: string } | null }>): Promise<T> {
   for (const cols of [VIDEO_COLS, VIDEO_DAYS, VIDEO_TAGS, VIDEO_BASE]) {
-    // 看這次有沒有帶縮圖（同時有兩個讀取時，另一個可能已經把旗標改掉）
-    const withThumb = videoThumbs;
-    let r = await q(withThumb ? `${cols},thumb_path` : cols);
-    if (withThumb && missingCol(r.error, "thumb_path")) {
-      videoThumbs = false;
-      r = await q(cols);
+    // 看這次有沒有帶縮圖、讚（同時有兩個讀取時，另一個可能已經把旗標改掉）
+    let thumb = videoThumbs;
+    let likes = videoLikes;
+    let r = await q([cols, thumb && "thumb_path", likes && VIDEO_LIKES].filter(Boolean).join(","));
+    for (let n = 0; n < 2; n++) {
+      if (thumb && missingCol(r.error, "thumb_path")) thumb = videoThumbs = false;
+      else if (likes && missingLikes(r.error)) likes = videoLikes = false;
+      else break;
+      r = await q([cols, thumb && "thumb_path", likes && VIDEO_LIKES].filter(Boolean).join(","));
     }
     if (cols === VIDEO_BASE || !noTagCols(r.error)) {
       if (!r.error) {
@@ -853,6 +865,14 @@ export async function uploadVideo(
     if (thumb_path) await supabase().storage.from("video-thumbs").remove([thumb_path]).catch(() => undefined);
     throw new Error(dbError(ins.error));
   }
+}
+
+// 影片按讚、收回（跟留言按讚一樣：已經按過回 23505）
+export async function likeVideo(id: string) {
+  must(await supabase().from("video_likes").insert({ video_id: id }));
+}
+export async function unlikeVideo(id: string) {
+  must(await supabase().from("video_likes").delete().eq("video_id", id));
 }
 
 // 刪除影片：資料庫先刪資料（本人或員工），再刪檔案
