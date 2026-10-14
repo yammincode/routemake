@@ -108,7 +108,7 @@ export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) 
           {v.onLike ? (
             // 最後一行右邊先留讚按鈕的位置
             <span className="mt-0.5 flex items-end justify-between gap-2">
-              <span className="min-w-0 truncate text-tiny text-muted">{v.tags}</span>
+              <span className="block min-w-0 truncate text-tiny text-muted">{v.tags}</span>
               <LikeSpace likes={likes} />
             </span>
           ) : (

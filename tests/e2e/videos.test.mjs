@@ -768,7 +768,7 @@ test("省流量：影片列表只放縮圖（沒有縮圖是灰色方塊）、�
   assert.deepEqual(videoReqs, [], "還沒按播放，一支影片都沒下載");
 
   // 按了才建立 <video>、下載影片；縮圖當作封面
-  await withThumb.locator("button").click();
+  await withThumb.locator('button[aria-label^="播放"]').click();
   const viewer = c.locator('[aria-label="影片播放"]');
   await viewer.waitFor();
   const vid = viewer.locator("video");
