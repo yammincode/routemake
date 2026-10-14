@@ -4,17 +4,20 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { cardMeta, topGrades } from "@/components/ProfileSheet";
+import { cardMeta, mascotIntro, topGrades } from "@/components/ProfileSheet";
 import { Button } from "@/components/ui/Button";
 import { SectionTitle } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { Label, Rating, TextArea, Toggle } from "@/components/ui/Form";
+import { CharacterTop, MascotColors, MascotPicker } from "@/components/ui/Mascot";
 import { HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
-import { cardGyms, getProfileCard, saveMyCard, type ProfileCard } from "@/lib/data";
+import { cardGyms, getProfileCard, mascotSupported, saveMyCard, saveMyMascot, type ProfileCard } from "@/lib/data";
 import { ABILITY_AXES, CLIMBING_YEARS } from "@/lib/design";
 import { GYMS } from "@/lib/gyms";
+import { rememberMascot, useMascot, useTroll } from "@/lib/mascot-store";
+import { DEFAULT_MASCOT, mascotInfo, type MascotPick } from "@/lib/mascots";
 
 // 人物卡頁：上面是自己的人物卡（別人看到的樣子），按「編輯人物卡」修改；預設不公開；能力值依完攀自動計算，另外可以自評 1–5
 export default function MyCardEditor() {
@@ -30,6 +33,10 @@ export default function MyCardEditor() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const uid = session?.user.id;
+  // 原岩夥伴：draft 是編輯中還沒存的（null＝照資料庫的）
+  const mine = useMascot(uid);
+  const [draft, setDraft] = useState<MascotPick | null>(null);
+  const [troll, setTroll] = useTroll();
 
   useEffect(() => {
     if (!uid) return;
@@ -57,6 +64,8 @@ export default function MyCardEditor() {
   }
   if (!card) return <p className="text-note text-muted">讀取中…</p>;
   const selfDone = self.every((v) => v != null) ? (self as number[]) : null;
+  const pick = draft ?? mine ?? DEFAULT_MASCOT;
+  const pickPayload = (p: MascotPick) => ({ id: p.id, colors: mascotInfo(p.id).parts.map((_, i) => p.colors?.[i] ?? null), bg: p.bg ?? null });
   const multi = card.home_gyms != null;
 
   const save = async () => {
@@ -66,6 +75,18 @@ export default function MyCardEditor() {
       const kept = await saveMyCard({ public: pub, bio, years, home_gyms: homes, self_stats: selfDone });
       setHomes(kept);
       setCard({ ...card, public: pub, bio: bio.trim() || null, years, home_gym: kept[0] ?? null, ...(multi ? { home_gyms: kept } : {}), self_stats: selfDone });
+      // 夥伴有改才存（資料庫還沒套用 step41 時人物卡照樣存好，只說夥伴存不了）
+      if (draft && JSON.stringify(pickPayload(draft)) !== JSON.stringify(pickPayload(mine ?? DEFAULT_MASCOT))) {
+        try {
+          await saveMyMascot(pickPayload(draft));
+          rememberMascot(uid, draft);
+          setDraft(null);
+        } catch (e) {
+          toast(`人物卡已儲存，但夥伴沒存到：${(e as Error).message}`);
+          setBusy(false);
+          return;
+        }
+      }
       toast(pub ? "已儲存，人物卡已公開" : "已儲存，人物卡只有你看得到");
       setEditing(false);
     } catch (e) {
@@ -85,6 +106,8 @@ export default function MyCardEditor() {
       <div className="pt-3">
         <ProfileCardView
           name={access?.nickname ?? "我"}
+          top={<CharacterTop pick={pick} troll={troll} />}
+          intro={mascotIntro(pick)}
           meta={cardMeta(preview) || undefined}
           bio={preview.bio}
           chart={<HexChart actual={card.ability} self={selfDone} />}
@@ -105,6 +128,9 @@ export default function MyCardEditor() {
         {card.public ? "🌐 公開中：別人在留言、影片點你的名字會看到這張卡" : "🔒 目前只有你看得到，打開「公開人物卡」別人才看得到"}
       </p>
       {cardView}
+      <SetBox>
+        <Toggle checked={troll} onChange={setTroll} label="幹話模式" hint="夥伴加刀疤、叼棒棒糖，館首頁每天那句變幹話（只有這支手機看得到）" />
+      </SetBox>
       {!editing ? (
         <Button className="mt-3" onClick={() => setEditing(true)}>
           編輯人物卡
@@ -112,6 +138,18 @@ export default function MyCardEditor() {
       ) : (
         <>
           <SectionTitle>編輯人物卡</SectionTitle>
+          <SetBox>
+            <Label>選夥伴</Label>
+            {mascotSupported() ? (
+              <>
+                <MascotPicker value={pick.id} onChange={(id) => setDraft(id === pick.id ? pick : { id })} troll={troll} />
+                <p className="mt-1.5 mb-3 text-tiny text-muted">夥伴會出現在人物卡、留言和影片旁邊，大家都看得到（人物卡不公開也一樣）。</p>
+                <MascotColors pick={pick} onChange={setDraft} />
+              </>
+            ) : (
+              <p className="m-0 text-note text-muted">資料庫還沒更新，暫時不能選夥伴（請老闆在 Supabase 執行 step41）。</p>
+            )}
+          </SetBox>
           <SetBox>
             <Toggle checked={pub} onChange={setPub} label="公開人物卡" hint="關閉時，別人點你的名字只看得到暱稱" />
             <Label htmlFor="cbio">自我介紹（最多 60 字）</Label>

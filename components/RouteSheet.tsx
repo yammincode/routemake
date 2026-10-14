@@ -10,6 +10,7 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { HighpointPicker, NumberMarks } from "@/components/ui/Endurance";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import { Label, Segmented, TextArea, TextField } from "@/components/ui/Form";
+import { UserAvatar } from "@/components/ui/Mascot";
 import { Grade, SetterNote, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { Tabs } from "@/components/ui/Tabs";
@@ -515,6 +516,7 @@ function RouteBody({
                     <CommentItem
                       key={c.id}
                       name={c.nickname}
+                      avatar={<UserAvatar userId={c.user_id} />}
                       ago={ago(c.created_at)}
                       body={c.body}
                       edited={!!c.edited_at}

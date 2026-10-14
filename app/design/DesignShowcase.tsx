@@ -15,6 +15,7 @@ import { GrantGroup, GrantList, GrantRow } from "@/components/ui/Grant";
 import { HighpointPicker, NumberMarks } from "@/components/ui/Endurance";
 import { Tabs } from "@/components/ui/Tabs";
 import { HoldLegend, HoldMarks, HoldTools, RouteThumb, SprayRow } from "@/components/ui/Spray";
+import { CharacterTop, MascotAvatar, MascotBubble, MascotColors, MascotPicker } from "@/components/ui/Mascot";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
@@ -52,6 +53,7 @@ import {
 } from "@/lib/design";
 import { MINGDE_PLAN } from "@/lib/floorplan";
 import { GYMS, LIVE_GYM } from "@/lib/gyms";
+import { MASCOTS, type MascotPick } from "@/lib/mascots";
 
 type DemoRoute = { code: string; grade: number; color: HoldColor; tags: string[]; x: number; y: number; status: Status | null; isNew: boolean; comments: number; videos: number };
 
@@ -724,6 +726,10 @@ export default function DesignShowcase() {
         <Rating label="柔軟" value={rate} onChange={setRate} />
       </Block>
 
+      <Block title="原岩夥伴">
+        <MascotDemo />
+      </Block>
+
       <Block title="拖曳排序">
         <SortList items={order.map((n) => ({ id: n, label: n }))} onChange={setOrder} />
       </Block>
@@ -907,6 +913,30 @@ export default function DesignShowcase() {
         )}
       </Sheet>
 
+    </>
+  );
+}
+
+// 原岩夥伴：選夥伴、換色、角色卡、頭像、館首頁對話泡泡、幹話模式（刀疤＋棒棒糖）
+function MascotDemo() {
+  const [pick, setPick] = useState<MascotPick>({ id: "wanhua" });
+  const [troll, setTroll] = useState(false);
+  return (
+    <>
+      <Toggle checked={troll} onChange={setTroll} label="幹話模式" hint="所有夥伴加刀疤、叼棒棒糖" />
+      <CharacterTop pick={pick} troll={troll} />
+      <div className="mt-3 flex items-center gap-2">
+        {MASCOTS.map((m) => (
+          <MascotAvatar key={m.id} pick={{ id: m.id }} size={36} troll={troll} />
+        ))}
+        <MascotAvatar pick={null} size={36} />
+      </div>
+      <p className="mt-1 mb-3 text-tiny text-muted">最後一個是還在讀的頭像（空的圓）</p>
+      <MascotBubble pick={pick} troll={troll} text="慢慢來，爬完一條是一條。" onClose={() => setTroll(false)} />
+      <MascotPicker value={pick.id} onChange={(id) => setPick({ id })} troll={troll} />
+      <div className="mt-3">
+        <MascotColors pick={pick} onChange={setPick} />
+      </div>
     </>
   );
 }

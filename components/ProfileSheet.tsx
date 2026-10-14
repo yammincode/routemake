@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { LinkButton } from "@/components/ui/Button";
+import { CharacterTop } from "@/components/ui/Mascot";
 import { HexChart, ProfileCardView } from "@/components/ui/Profile";
 import Sheet from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/Toast";
 import { isManagerOf } from "@/lib/auth";
 import { cardGyms, clearCardBio, getProfileCard, type ProfileCard } from "@/lib/data";
-import { CLIMBING_YEARS, gradeLabel } from "@/lib/design";
+import { ABILITY_AXES, CLIMBING_YEARS, gradeLabel } from "@/lib/design";
 import { GYMS } from "@/lib/gyms";
+import { useMascot, useTroll } from "@/lib/mascot-store";
+import { mascotInfo, type MascotPick } from "@/lib/mascots";
 
 // 最高完攀：抱石、上攀都有就一起列
 export const topGrades = (c: ProfileCard) =>
@@ -24,6 +27,12 @@ export function cardMeta(c: ProfileCard) {
   ].filter(Boolean);
   return parts.join("・");
 }
+
+// 夥伴簡介一行：「夥伴：明德氂牛（耐力）— 毛很厚…」
+export const mascotIntro = (pick: MascotPick) => {
+  const m = mascotInfo(pick.id);
+  return `夥伴：${m.name}（${ABILITY_AXES[m.ability]}）— ${m.intro}`;
+};
 
 // 人物卡（從留言、影片點名字打開）：只有本人公開才看得到內容；沒有私訊、追蹤等聯絡功能
 export default function ProfileSheet({ userId, gymId, onClose }: { userId: string | null; gymId: string; onClose: () => void }) {
@@ -40,6 +49,8 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
   const [card, setCard] = useState<ProfileCard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
+  const pick = useMascot(userId);
+  const [troll] = useTroll();
 
   useEffect(() => {
     getProfileCard(userId)
@@ -51,8 +62,10 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
   if (!card) return <p className="text-note text-muted">讀取中…</p>;
   const name = card.nickname ?? "攀岩者";
 
+  // 角色卡上半段：夥伴（所有人都看得到，跟留言旁的頭像一樣）；還在讀先空著
+  const top = pick ? <CharacterTop pick={pick} troll={troll} /> : <div className="h-[190px] rounded-card bg-sunk" />;
   if (!card.public && !card.self) {
-    return <ProfileCardView name={name} meta="還沒有公開人物卡" />;
+    return <ProfileCardView name={name} meta="還沒有公開人物卡" top={top} />;
   }
 
   const clear = async () => {
@@ -70,8 +83,10 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
   return (
     <ProfileCardView
       name={name}
+      top={top}
       meta={cardMeta(card) || (card.self && !card.public ? "人物卡目前只有你看得到" : undefined)}
       bio={card.bio}
+      intro={pick && mascotIntro(pick)}
       chart={<HexChart actual={card.ability} self={card.self_stats} />}
       stats={
         <>

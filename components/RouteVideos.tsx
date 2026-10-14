@@ -7,6 +7,7 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { Check, Label, MultiOptionGrid, OptionGrid, TextField, Toggle } from "@/components/ui/Form";
 import { ClosedNotice } from "@/components/ui/Comments";
+import { UserAvatar } from "@/components/ui/Mascot";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { captureThumb, compressMinBytes, compressType, compressVideo, type VideoEdit } from "@/lib/video";
@@ -125,6 +126,7 @@ export default function RouteVideos({
     src: videoUrl(v.path),
     thumb: v.thumb_path ? videoThumbUrl(v.thumb_path) : null,
     name: v.nickname,
+    avatar: <UserAvatar userId={v.user_id} />,
     ago: videoWhen(v.climbed_on, v.created_at),
     caption: v.caption,
     status: v.status,

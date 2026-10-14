@@ -22,6 +22,7 @@ export type VideoCard = {
   tags?: string; // 「身高 170–179cm・動態」（videoTagText）
   meta?: ReactNode; // 例如後台的「B 區 B-03」
   onName?: () => void; // 點名字看人物卡
+  avatar?: ReactNode; // 分享者的夥伴小頭像（名字那一行最前面）
   // 👍 讚：有 onLike 才顯示（資料庫還沒套用 step42 時沒有）；列表在右下角、全螢幕播放在名字那一行
   likes?: number;
   liked?: boolean;
@@ -100,7 +101,10 @@ export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) 
           {v.place && <span className="mt-1 block text-meta text-ink">{v.place}</span>}
           <span className="mt-1 flex items-center justify-between gap-2 text-meta text-muted">
             {/* 沒寫說明時標題已經有名字，這行只寫時間 */}
-            <span className="min-w-0 truncate">{v.caption ? `${v.name}・${v.ago}` : v.ago}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              {v.avatar}
+              <span className="min-w-0 truncate">{v.caption ? `${v.name}・${v.ago}` : v.ago}</span>
+            </span>
             {v.status && <VideoResult status={v.status} />}
           </span>
           {v.meta && <span className="mt-0.5 block truncate text-tiny text-muted">{v.meta}</span>}
@@ -279,6 +283,7 @@ export function VideoViewer({
       </div>
       <div className="px-4 pt-3 pb-[calc(16px+env(safe-area-inset-bottom,0px))]">
         <div className="flex items-center gap-2 text-meta text-white/75">
+          {v.avatar}
           {v.onName ? (
             <button onClick={v.onName} className="text-sub font-bold text-white underline decoration-white/40 underline-offset-2">
               {v.name}

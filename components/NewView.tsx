@@ -8,6 +8,7 @@ import RouteSheet, { type RouteTab } from "@/components/RouteSheet";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Empty } from "@/components/ui/Card";
 import { CommentItem, CommentList } from "@/components/ui/Comments";
+import { UserAvatar } from "@/components/ui/Mascot";
 import { RouteTag } from "@/components/ui/Route";
 import { SheetSub } from "@/components/ui/Sheet";
 import { Tabs } from "@/components/ui/Tabs";
@@ -273,6 +274,7 @@ export default function NewView() {
     src: videoUrl(v.path),
     thumb: v.thumb_path ? videoThumbUrl(v.thumb_path) : null,
     name: v.nickname,
+    avatar: <UserAvatar userId={v.user_id} />,
     ago: videoWhen(v.climbed_on, v.created_at),
     caption: v.caption,
     status: v.status,
@@ -363,6 +365,7 @@ export default function NewView() {
             <CommentItem
               key={c.id}
               name={c.nickname}
+              avatar={<UserAvatar userId={c.user_id} />}
               ago={ago(c.created_at)}
               body={c.body}
               edited={!!c.edited_at}

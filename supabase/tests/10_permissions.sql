@@ -1920,6 +1920,45 @@ reset role;
 select tests.throws('大滿貫：內部函式不能直接呼叫', format('set role authenticated; select public.slam_progress(%L, 10)', :A));
 reset role;
 
+-- ---------------------------------------------------------------------
+-- 原岩夥伴（0047）：所有人看得到、只能用 save_my_mascot 改自己的、中壢熊還不能選、顏色要在色盤裡
+-- ---------------------------------------------------------------------
+update public.gyms set is_live = false where id = 'g6';
+set role authenticated; select tests.login(:A);
+select tests.lives('夥伴：選太空猩猩、換色、換背景', $q$select public.save_my_mascot('{"id":"wanhua","colors":["#d7263d",null,"#f4d03f"],"bg":"#006382"}')$q$);
+select tests.ok('夥伴：存進去了', (select mascot ->> 'id' from public.profiles where id = :A) = 'wanhua');
+select tests.throws('夥伴：不能直接改欄位', $q$update public.profiles set mascot = '{"id":"zhonghe"}' where id = auth.uid()$q$);
+select tests.throws('夥伴：中壢熊即將登場，還不能選', $q$select public.save_my_mascot('{"id":"zhongli"}')$q$, '即將登場');
+select tests.throws('夥伴：不認得的夥伴', $q$select public.save_my_mascot('{"id":"cat"}')$q$, '夥伴或顏色');
+select tests.throws('夥伴：色盤以外的顏色', $q$select public.save_my_mascot('{"id":"mingde","colors":["#123456"]}')$q$, '夥伴或顏色');
+select tests.throws('夥伴：顏色不能塞別的東西', $q$select public.save_my_mascot('{"id":"mingde","colors":[{"x":1}]}')$q$, '夥伴或顏色');
+select tests.throws('夥伴：最多 3 個部位', $q$select public.save_my_mascot('{"id":"mingde","colors":[null,null,null,null]}')$q$, '夥伴或顏色');
+select tests.throws('夥伴：背景只能是六館標準色', $q$select public.save_my_mascot('{"id":"mingde","bg":"#ff0000"}')$q$, '夥伴或顏色');
+select tests.throws('夥伴：不能多塞欄位', $q$select public.save_my_mascot('{"id":"mingde","note":"hi"}')$q$, '夥伴或顏色');
+select tests.throws('夥伴：空的物件不行', $q$select public.save_my_mascot('{}')$q$, '夥伴或顏色');
+select tests.throws('夥伴：陣列不行', $q$select public.save_my_mascot('["mingde"]')$q$, '夥伴或顏色');
+select tests.ok('夥伴：被擋下的沒有改到', (select mascot ->> 'id' from public.profiles where id = :A) = 'wanhua');
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.ok('夥伴：別人看得到我的夥伴', (select mascot ->> 'id' from public.profiles where id = :A) = 'wanhua');
+select tests.lives('夥伴：只改得到自己的（乙存自己的）', $q$select public.save_my_mascot('{"id":"xindian"}')$q$);
+select tests.ok('夥伴：甲的沒有被改', (select mascot ->> 'id' from public.profiles where id = :A) = 'wanhua');
+reset role;
+set role anon; select tests.login(null);
+select tests.ok('夥伴：沒登入也看得到（留言旁的頭像）', (select mascot ->> 'id' from public.profiles where id = :A) = 'wanhua');
+select tests.throws('夥伴：沒登入不能存', $q$select public.save_my_mascot('{"id":"mingde"}')$q$);
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.lives('夥伴：換回預設（null）', $q$select public.save_my_mascot(null)$q$);
+select tests.ok('夥伴：換回預設後是 null', (select mascot from public.profiles where id = :A) is null);
+reset role;
+update public.gyms set is_live = true where id = 'g6';
+set role authenticated; select tests.login(:A);
+select tests.lives('夥伴：中壢館開放後就能選中壢熊', $q$select public.save_my_mascot('{"id":"zhongli"}')$q$);
+reset role;
+update public.gyms set is_live = false where id = 'g6';
+select tests.throws('夥伴：資料庫也擋不合格的值（check）', $q$update public.profiles set mascot = '{"id":"mingde","bg":"red"}' where id = '00000000-0000-0000-0000-00000000000a'$q$);
+
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));
 

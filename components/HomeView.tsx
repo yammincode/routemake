@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import MascotCheer from "@/components/MascotCheer";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
 import { Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
@@ -163,6 +164,16 @@ export default function HomeView({ gymId }: { gymId: string }) {
   return (
     <>
       <PageTitle sub={session ? `牆上 ${total} 條路線，你完成了 ${done} 條` : `牆上 ${total} 條路線，登入後就能記錄完攀`}>今天爬哪一區？</PageTitle>
+      {/* 原岩夥伴：每天第一次打開說一句（標題下面、平面圖上面） */}
+      {uid && (
+        <MascotCheer
+          uid={uid}
+          gymId={gymId}
+          gymName={gym?.name ?? ""}
+          goal={goal && goalReset ? { zone: goal.name, days: goalReset.days, left: goal.route_count - goal.done_count } : null}
+          fresh={fresh.length}
+        />
+      )}
       {PLANS[gymId] && (
         <FloorPlan
           shape={PLANS[gymId]}

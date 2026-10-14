@@ -97,7 +97,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -485,6 +485,19 @@ export function createMock() {
         top_grade: sends.some((r) => r.grade < 100) ? Math.max(...sends.filter((r) => r.grade < 100).map((r) => r.grade)) : null,
         top_yds: sends.some((r) => r.grade >= 100) ? Math.max(...sends.filter((r) => r.grade >= 100).map((r) => r.grade)) : null,
       });
+    }
+    // 原岩夥伴（0047）：只能存自己的、只能選開放中的館的夥伴、顏色要在色盤裡
+    if (fn === "save_my_mascot") {
+      if (state.noMascot) return J(route, 404, { code: "PGRST202", message: "Could not find the function public.save_my_mascot(p_mascot) in the schema cache" });
+      if (!uid) return J(route, 401, { code: "42501", message: "請先登入" });
+      const v = a.p_mascot;
+      const GYM_OF = { mingde: "mingde", wanhua: "g2", zhonghe: "g3", nangang: "g4", xindian: "g5", zhongli: "g6" };
+      const PAL = ["#6d3540", "#6959b2", "#01bcb5", "#066d6a", "#006382", "#304562", "#d7263d", "#f28a1e", "#f4d03f", "#2e9e5b", "#2f6fd6", "#f07bb5", "#7b4b2a", "#8e9196", "#1a1a1a", "#f8c5a3", "#b5dcf2", "#a7d398", "#f5b1aa", "#f2e5dc", "#fbd8b5", "#ffe9a8", "#d9c6f0", "#ffffff"];
+      const ok = v == null || (GYM_OF[v.id] && (v.colors ?? []).length <= 3 && (v.colors ?? []).every((c) => c == null || PAL.includes(c)) && (v.bg == null || PAL.slice(0, 6).includes(v.bg)));
+      if (!ok) return J(route, 400, { code: "22023", message: "夥伴或顏色不對，請重新選一次" });
+      if (v && !db.gyms.find((g) => g.id === GYM_OF[v.id])?.is_live) return J(route, 400, { code: "22023", message: "這隻夥伴即將登場，現在還不能選" });
+      prof(uid).mascot = v;
+      return J(route, 200, null);
     }
     if (fn === "save_my_card") {
       const bio = (a.p_bio || "").trim();
@@ -1144,7 +1157,14 @@ export function createMock() {
         return empty(route);
       }
     }
-    if (t === "profiles" && m === "GET") return out(filt(db.profiles, sp).map((p) => ({ id: p.id, nickname: p.nickname })));
+    if (t === "profiles" && m === "GET") {
+      // 原岩夥伴（0047）：所有人讀得到 mascot；state.noMascot 模擬資料庫還沒套用 step41（沒有這個欄位）
+      if (sel.includes("mascot")) {
+        if (state.noMascot) return J(route, 400, { code: "42703", message: "column profiles.mascot does not exist" });
+        return out(filt(db.profiles, sp).map((p) => ({ id: p.id, mascot: p.mascot ?? null })));
+      }
+      return out(filt(db.profiles, sp).map((p) => ({ id: p.id, nickname: p.nickname })));
+    }
     if (t === "profiles" && m === "PATCH") {
       // 同 0038 的 profiles_nickname_check：看不見的字元、網址；冒充館方的字（員工、老闆可以）
       const nick = body.nickname ?? "";

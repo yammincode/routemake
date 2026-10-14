@@ -60,12 +60,15 @@ export function HexChart({ actual, self }: { actual?: number[] | null; self?: nu
 }
 
 // 人物卡內容：頭像、暱稱、一行基本資料、自我介紹、能力表、數字
+// top：角色卡上半段（原岩夥伴 CharacterTop），有的話不畫文字頭像；intro：夥伴簡介
 export function ProfileCardView({
   name,
   meta,
   bio,
   chart,
   stats,
+  top,
+  intro,
   children,
 }: {
   name: string;
@@ -73,18 +76,22 @@ export function ProfileCardView({
   bio?: string | null;
   chart?: ReactNode;
   stats?: ReactNode;
+  top?: ReactNode;
+  intro?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <div>
+      {top && <div className="mb-3">{top}</div>}
       <div className="flex items-center gap-3">
-        <Avatar name={name} size={52} />
+        {!top && <Avatar name={name} size={52} />}
         <div className="min-w-0">
           <h2 className="m-0 truncate text-sheet font-bold">{name}</h2>
           {meta && <p className="m-0 text-note text-muted">{meta}</p>}
         </div>
       </div>
       {bio && <p className="mt-3 mb-0 rounded-btn bg-sunk px-3 py-2.5 text-sub leading-normal break-words">{bio}</p>}
+      {intro && <p className="mt-2 mb-0 text-note leading-normal text-muted">{intro}</p>}
       {chart && <div className="mt-3">{chart}</div>}
       {stats && <div className="mt-2 text-center text-note text-muted">{stats}</div>}
       {children}

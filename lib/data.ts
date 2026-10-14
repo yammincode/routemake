@@ -1047,6 +1047,53 @@ export async function clearCardBio(userId: string, gym: string) {
   must(await supabase().rpc("clear_card_bio", { p_user: userId, p_gym: gym }));
 }
 
+// ---------- 原岩夥伴（人物卡、頭像） ----------
+// 資料庫還沒套用 step41（profiles 沒有 mascot 欄位）：讀不到就大家都是預設的明德氂牛、不能選
+export const NO_MASCOT = "資料庫還沒套用原岩夥伴（step41），請先請老闆在 Supabase 執行 step41";
+let mascotDb = true;
+export const mascotSupported = () => mascotDb;
+// 一次讀好幾個人的夥伴（沒選的人回 null）
+export async function getMascots(userIds: string[]): Promise<Record<string, unknown>> {
+  if (!mascotDb || !userIds.length) return {};
+  const r = await supabase().from("profiles").select("id,mascot").in("id", userIds);
+  if (NO_COLUMN.has(r.error?.code ?? "")) {
+    mascotDb = false;
+    return {};
+  }
+  const rows = must(r) as { id: string; mascot: unknown }[];
+  return Object.fromEntries(rows.map((x) => [x.id, x.mascot]));
+}
+// 館首頁每天一句要用的紀錄（一天只讀一次）：這間館牆上最近的嘗試中、最後攀爬日；讀不到的就是 null
+export type CheerFacts = {
+  project: { code: string; grade: number; hold_color: string; zone: string } | null;
+  lastClimbed: string | null;
+};
+export async function getCheerFacts(userId: string, gym: string): Promise<CheerFacts> {
+  const [p, last] = await Promise.all([
+    supabase()
+      .from("ascents")
+      .select("updated_at,routes!inner(code,grade,hold_color,archived_at,kind,zones!inner(gym_id,name))")
+      .eq("user_id", userId)
+      .eq("status", "project")
+      .eq("routes.zones.gym_id", gym)
+      .eq("routes.kind", "gym")
+      .is("routes.archived_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(1),
+    supabase().from("ascents").select("climbed_on").eq("user_id", userId).order("climbed_on", { ascending: false }).limit(1),
+  ]);
+  const pr = ((p.data ?? []) as unknown as { routes: { code: string; grade: number; hold_color: string; zones: { name: string } } }[])[0];
+  return {
+    project: pr ? { code: pr.routes.code, grade: pr.routes.grade, hold_color: pr.routes.hold_color, zone: pr.routes.zones.name } : null,
+    lastClimbed: ((last.data ?? []) as { climbed_on: string }[])[0]?.climbed_on ?? null,
+  };
+}
+export async function saveMyMascot(pick: { id: string; colors: (string | null)[]; bg: string | null }) {
+  const r = await supabase().rpc("save_my_mascot", { p_mascot: pick });
+  if (r.error?.code === "PGRST202") throw new Error(NO_MASCOT);
+  must(r);
+}
+
 // ---------- 使用狀況（店長看自己的館；老闆可看全部 gym = null） ----------
 export type UsageStats = {
   since: string | null; // 統計起始日（null＝還沒設定，算全部）

@@ -20,7 +20,9 @@ export function CommentItem({
   place,
   onOpen,
   clamp = false,
+  avatar,
 }: {
+  avatar?: ReactNode; // 名字前面的夥伴小頭像
   onName?: () => void; // 點名字看人物卡
   place?: ReactNode;
   onOpen?: () => void;
@@ -40,7 +42,8 @@ export function CommentItem({
   return (
     <div className="h-full rounded-btn bg-sunk px-3 py-2.5">
       <div className="flex items-center justify-between text-meta text-muted">
-        <span>
+        <span className="inline-flex min-w-0 items-center">
+          {avatar && <span className="mr-1.5">{avatar}</span>}
           {onName ? (
             <button onClick={onName} className="mr-1.5 font-bold text-ink underline decoration-line underline-offset-2">
               {name}
