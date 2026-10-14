@@ -8,6 +8,7 @@ import { normalizePick, type MascotPick } from "./mascots";
 // 沒選、讀不到（沒網路、資料庫還沒套用 step41）都是預設的明德氂牛
 const picks = new Map<string, MascotPick>();
 const asked = new Set<string>();
+const failed = new Set<string>(); // 讀不到（沒網路）：頭像先畫預設的氂牛，但編輯人物卡不能拿來當自己的夥伴
 let queue: string[] = [];
 const listeners = new Set<() => void>();
 let version = 0;
@@ -33,12 +34,15 @@ function want(userId: string) {
       const part = ids.slice(i, i + 80);
       try {
         const got = await getMascots(part);
-        for (const id of part) picks.set(id, normalizePick(got[id]));
+        for (const id of part) {
+          picks.set(id, normalizePick(got[id]));
+          failed.delete(id);
+        }
       } catch {
-        // 沒網路：先畫預設的氂牛，下次打開畫面再讀
+        // 沒網路：記下來，網路回來再讀
         for (const id of part) {
           asked.delete(id);
-          if (!picks.has(id)) picks.set(id, normalizePick(null));
+          failed.add(id);
         }
       }
     }
@@ -46,14 +50,18 @@ function want(userId: string) {
   });
 }
 
+// 網路回來：之前讀不到的再讀一次
+if (typeof window !== "undefined") window.addEventListener("online", () => [...failed].forEach(want));
+
 // 還在讀回 null（頭像先畫空的圓，不要先閃一下氂牛再換）；沒有人（userId 空）就是預設
-export function useMascot(userId: string | null | undefined): MascotPick | null {
+// 讀不到（沒網路）：頭像用預設的氂牛；exact（編輯自己的夥伴）照樣回 null，免得拿氂牛蓋掉真的夥伴
+export function useMascot(userId: string | null | undefined, exact = false): MascotPick | null {
   useEffect(() => {
     if (userId) want(userId);
   }, [userId]);
   useSyncExternalStore(subscribe, () => version, () => 0);
   if (!userId) return normalizePick(null);
-  return picks.get(userId) ?? null;
+  return picks.get(userId) ?? (!exact && failed.has(userId) ? normalizePick(null) : null);
 }
 // 自己存了新的夥伴：馬上換掉畫面上所有自己的頭像
 export function rememberMascot(userId: string, pick: MascotPick) {

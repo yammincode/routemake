@@ -19,23 +19,29 @@ const seenToday = (uid: string) => {
 };
 
 export default function MascotCheer({ uid, gymId, gymName, goal, fresh }: { uid: string; gymId: string; gymName: string; goal: CheerInput["goal"]; fresh: number }) {
-  const pick = useMascot(uid);
-  const [troll] = useTroll();
   const [show, setShow] = useState(false);
+  // 今天要說才讀自己的夥伴（說過了就不多讀一次）
+  const want = useMascot(show ? uid : null);
+  const pick = show ? want : null;
+  const [troll] = useTroll();
   const [text, setText] = useState<string | null>(null);
   const ctx = useRef({ gymName, goal, fresh });
   useEffect(() => {
     ctx.current = { gymName, goal, fresh };
   }, [gymName, goal, fresh]);
 
-  // 今天還沒說過才說；一打開就記下來（同一天再回到館首頁不再出現）
+  // 今天還沒說過才說
   useEffect(() => {
     if (seenToday(uid)) return;
+    void Promise.resolve().then(() => setShow(true));
+  }, [uid]);
+  // 真的說出來了才記「今天說過了」（還沒說完就離開館首頁，下次打開再說）
+  useEffect(() => {
+    if (!text) return;
     try {
       localStorage.setItem(KEY + uid, todayYmd());
     } catch {}
-    void Promise.resolve().then(() => setShow(true));
-  }, [uid]);
+  }, [text, uid]);
 
   // 要說的時候才讀紀錄（一天一次）；夥伴讀好了才挑
   useEffect(() => {

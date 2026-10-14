@@ -34,7 +34,7 @@ export default function MyCardEditor() {
   const [editing, setEditing] = useState(false);
   const uid = session?.user.id;
   // 原岩夥伴：draft 是編輯中還沒存的（null＝照資料庫的）
-  const mine = useMascot(uid);
+  const mine = useMascot(uid, true);
   const [draft, setDraft] = useState<MascotPick | null>(null);
   const [troll, setTroll] = useTroll();
 
@@ -140,14 +140,16 @@ export default function MyCardEditor() {
           <SectionTitle>編輯人物卡</SectionTitle>
           <SetBox>
             <Label>選夥伴</Label>
-            {mascotSupported() ? (
+            {!mascotSupported() ? (
+              <p className="m-0 text-note text-muted">資料庫還沒更新，暫時不能選夥伴（請老闆在 Supabase 執行 step41）。</p>
+            ) : !mine ? (
+              <p className="m-0 text-note text-muted">讀取你的夥伴中…（要連上網路才能換夥伴）</p>
+            ) : (
               <>
                 <MascotPicker value={pick.id} onChange={(id) => setDraft(id === pick.id ? pick : { id })} troll={troll} />
                 <p className="mt-1.5 mb-3 text-tiny text-muted">夥伴會出現在人物卡、留言和影片旁邊，大家都看得到（人物卡不公開也一樣）。</p>
                 <MascotColors pick={pick} onChange={setDraft} />
               </>
-            ) : (
-              <p className="m-0 text-note text-muted">資料庫還沒更新，暫時不能選夥伴（請老闆在 Supabase 執行 step41）。</p>
             )}
           </SetBox>
           <SetBox>

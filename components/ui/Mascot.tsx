@@ -90,11 +90,13 @@ export function UserAvatar({ userId, size = 22 }: { userId: string | null | unde
 }
 
 // 人物卡上半段（角色卡）：大大的夥伴、背景色、右上角夥伴名字
-export function CharacterTop({ pick, troll = false, small = false, children }: { pick: MascotPick; troll?: boolean; small?: boolean; children?: ReactNode }) {
+// pick 是 null＝還在讀（先畫一樣高的灰色方塊）
+export function CharacterTop({ pick, troll = false, small = false, children }: { pick: MascotPick | null; troll?: boolean; small?: boolean; children?: ReactNode }) {
+  if (!pick) return <div aria-hidden className={`rounded-card bg-sunk ${small ? "h-[120px]" : "h-[190px]"}`} />;
   const info = mascotInfo(pick.id);
   return (
     <div style={{ background: mascotBg(pick) }} className={`relative grid place-items-center overflow-hidden rounded-card ${small ? "h-[120px]" : "h-[190px]"}`}>
-      <span className="absolute top-2.5 left-3 rounded-full bg-white/90 px-2.5 py-0.5 text-tiny font-bold text-[#15201B]">夥伴</span>
+      <span className="absolute top-2.5 left-3 rounded-full bg-surface/90 px-2.5 py-0.5 text-tiny font-bold text-ink">夥伴</span>
       <span className="absolute top-2.5 right-3 text-meta font-bold text-white [text-shadow:0_1px_2px_rgba(0,0,0,.4)]">{info.name}</span>
       <MascotArt pick={pick} troll={troll} className={small ? "size-[100px]" : "size-[160px]"} />
       {children}

@@ -493,7 +493,7 @@ export function createMock() {
       const v = a.p_mascot;
       const GYM_OF = { mingde: "mingde", wanhua: "g2", zhonghe: "g3", nangang: "g4", xindian: "g5", zhongli: "g6" };
       const PAL = ["#6d3540", "#6959b2", "#01bcb5", "#066d6a", "#006382", "#304562", "#d7263d", "#f28a1e", "#f4d03f", "#2e9e5b", "#2f6fd6", "#f07bb5", "#7b4b2a", "#8e9196", "#1a1a1a", "#f8c5a3", "#b5dcf2", "#a7d398", "#f5b1aa", "#f2e5dc", "#fbd8b5", "#ffe9a8", "#d9c6f0", "#ffffff"];
-      const ok = v == null || (GYM_OF[v.id] && (v.colors ?? []).length <= 3 && (v.colors ?? []).every((c) => c == null || PAL.includes(c)) && (v.bg == null || PAL.slice(0, 6).includes(v.bg)));
+      const ok = v == null || (typeof v === "object" && !Array.isArray(v) && Object.keys(v).every((k) => ["id", "colors", "bg"].includes(k)) && Object.hasOwn(GYM_OF, v.id) && (v.colors == null || Array.isArray(v.colors)) && (v.colors ?? []).length <= 3 && (v.colors ?? []).every((c) => c == null || PAL.includes(c)) && (v.bg == null || PAL.slice(0, 6).includes(v.bg)));
       if (!ok) return J(route, 400, { code: "22023", message: "夥伴或顏色不對，請重新選一次" });
       if (v && !db.gyms.find((g) => g.id === GYM_OF[v.id])?.is_live) return J(route, 400, { code: "22023", message: "這隻夥伴即將登場，現在還不能選" });
       prof(uid).mascot = v;

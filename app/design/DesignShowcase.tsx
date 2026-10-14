@@ -925,6 +925,8 @@ function MascotDemo() {
     <>
       <Toggle checked={troll} onChange={setTroll} label="幹話模式" hint="所有夥伴加刀疤、叼棒棒糖" />
       <CharacterTop pick={pick} troll={troll} />
+      <p className="mt-1 mb-1 text-tiny text-muted">還在讀的時候：</p>
+      <CharacterTop pick={null} small />
       <div className="mt-3 flex items-center gap-2">
         {MASCOTS.map((m) => (
           <MascotAvatar key={m.id} pick={{ id: m.id }} size={36} troll={troll} />

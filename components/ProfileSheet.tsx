@@ -63,7 +63,7 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
   const name = card.nickname ?? "攀岩者";
 
   // 角色卡上半段：夥伴（所有人都看得到，跟留言旁的頭像一樣）；還在讀先空著
-  const top = pick ? <CharacterTop pick={pick} troll={troll} /> : <div className="h-[190px] rounded-card bg-sunk" />;
+  const top = <CharacterTop pick={pick} troll={troll} />;
   if (!card.public && !card.self) {
     return <ProfileCardView name={name} meta="還沒有公開人物卡" top={top} />;
   }
