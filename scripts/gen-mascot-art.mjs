@@ -20,10 +20,10 @@ for (const id of IDS) {
     for (const m of svg.querySelector("style").textContent.matchAll(/\.(cls-\d+)\s*\{\s*fill:\s*([^;]+);/g)) fills[m[1]] = m[2].trim().toLowerCase();
     const vbw = svg.viewBox.baseVal.width;
     const shapes = [...svg.querySelectorAll("path,circle,ellipse,polygon,rect,polyline")];
-    // 粉紅 T 圓圈（logo 的品牌色）和比畫面一半還大的白色圓底都拿掉
+    // 粉紅 T 圓圈（logo 的品牌色）和白色圓底（比畫面八成還大）拿掉；動物的白邊（約六成寬）留著
     const drop = (el) => {
       const c = fills[el.getAttribute("class")];
-      return c === "#e5006e" || c === "#d41768" || (c === "#fff" && el.getBBox().width > vbw * 0.55);
+      return c === "#e5006e" || c === "#d41768" || (c === "#fff" && el.getBBox().width > vbw * 0.8);
     };
     let box = null;
     for (const el of shapes) {
