@@ -1000,6 +1000,11 @@ export function createMock() {
       }
     }
     if (t === "route_videos") {
+      // state.noVideoLikes：模擬資料庫還沒套用 step42（沒有 video_likes）；PostgREST 先檢查關聯再查欄位，所以放在缺欄位的前面
+      if (state.noVideoLikes && (m === "GET" || m === "HEAD") && /video_likes/.test(sel)) {
+        state.likeFallbacks = (state.likeFallbacks ?? 0) + 1;
+        return J(route, 400, { code: "PGRST200", message: "Could not find a relationship between 'route_videos' and 'video_likes' in the schema cache" });
+      }
       // state.noVideoThumb：模擬資料庫還沒套用 step38（沒有縮圖欄位）
       if (state.noVideoThumb && (m === "GET" || m === "HEAD") && /thumb_path/.test(sel)) {
         state.tagFallbacks++;
@@ -1036,11 +1041,6 @@ export function createMock() {
       if (state.noVideoTags && m === "POST" && ("height_band" in body || "move" in body)) {
         state.tagFallbacks++;
         return J(route, 400, { code: "PGRST204", message: "Could not find the 'height_band' column of 'route_videos' in the schema cache" });
-      }
-      // state.noVideoLikes：模擬資料庫還沒套用 step42（沒有 video_likes，PostgREST 找不到關聯）
-      if (state.noVideoLikes && (m === "GET" || m === "HEAD") && /video_likes/.test(sel)) {
-        state.likeFallbacks = (state.likeFallbacks ?? 0) + 1;
-        return J(route, 400, { code: "PGRST200", message: "Could not find a relationship between 'route_videos' and 'video_likes' in the schema cache" });
       }
       if (m === "GET" || m === "HEAD") {
         const q = new URLSearchParams(sp);
