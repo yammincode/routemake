@@ -249,6 +249,7 @@ export default function NewView() {
 
   const toggleVideoLike = async (v: FeedVideo) => {
     if (!session) return toLogin();
+    if (liking.current.has(v.id)) return; // 上一次還沒送完：不收新的（快速連按時順序才不會亂）
     const me = session.user.id;
     const had = !!v.likers?.includes(me);
     const flip = (on: boolean) => setVideos((p) => p && edit(p, (x) => (x.id === v.id && x.likers ? { ...x, likers: withMe(x.likers, me, on) } : x)));

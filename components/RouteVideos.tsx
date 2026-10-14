@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -76,6 +76,7 @@ export default function RouteVideos({
   const [mute, setMute] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [playing, setPlaying] = useState<number | null>(null);
+  const liking = useRef(new Set<string>()); // 正在送出讚的影片
   const [confirmDel, setConfirmDel] = useState<string | null>(null); // 刪除要按兩次（刪了不能復原）；換到別支影片就重來
 
   useEffect(() => {
@@ -91,6 +92,8 @@ export default function RouteVideos({
   // 按讚、收回：先改畫面，失敗再改回來（已經按過＝別的分頁按的，不用改回）
   const toggleLike = async (v: Video) => {
     if (!session) return onLogin();
+    if (liking.current.has(v.id)) return; // 上一次還沒送完：不收新的（快速連按時順序才不會亂）
+    liking.current.add(v.id);
     const me = session.user.id;
     const had = !!v.likers?.includes(me);
     const flip = (on: boolean) =>
@@ -99,9 +102,12 @@ export default function RouteVideos({
     try {
       await (had ? unlikeVideo(v.id) : likeVideo(v.id));
     } catch (e) {
-      if ((e as DbError).code === "23505") return;
-      flip(had);
-      toast((e as Error).message);
+      if ((e as DbError).code !== "23505") {
+        flip(had);
+        toast((e as Error).message);
+      }
+    } finally {
+      liking.current.delete(v.id);
     }
   };
 

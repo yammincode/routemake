@@ -264,10 +264,10 @@ test("影片標籤：一支一列、用身高、動作或型態篩選；分享�
   assert.ok((await rows.nth(0).textContent()).includes("起步跳上去") && (await rows.nth(0).textContent()).includes("身高 170–179cm・動態"), "列上有說明和身高・動作");
   assert.ok((await rows.nth(0).textContent()).includes("0:42"), "片長");
   assert.ok((await rows.nth(1).textContent()).includes("阿明的攀爬"), "沒寫說明的標題是「某某的攀爬」");
-  const chips = await dialog.locator("button[aria-pressed].rounded-full").allTextContents();
+  const chips = await dialog.locator("button[aria-pressed].rounded-full:not([aria-label*=讚])").allTextContents();
   assert.deepEqual(chips.map((t) => t.replace(/\s+/g, "")), ["全部3", "160cm以下", "170–179cm", "動態", "靜態"], "只出現影片裡有的標籤，身高在前");
 
-  const chip = (t) => dialog.locator(`button[aria-pressed].rounded-full:text-is("${t}")`);
+  const chip = (t) => dialog.locator(`button[aria-pressed].rounded-full:not([aria-label*=讚]):text-is("${t}")`);
   await chip("170–179cm").click();
   await c.waitForTimeout(200);
   assert.equal(await rows.count(), 1, "篩選後只剩這個身高");
@@ -313,7 +313,7 @@ test("影片標籤：一支一列、用身高、動作或型態篩選；分享�
   assert.equal(mine.move, "dynamic");
   assert.deepEqual(mine.feel_tags, ["fingers", "risky"]);
   assert.equal(mine.caption, null);
-  const pressed = await dialog.locator('button[aria-pressed="true"].rounded-full').allTextContents();
+  const pressed = await dialog.locator('button[aria-pressed="true"].rounded-full:not([aria-label*=讚])').allTextContents();
   assert.deepEqual(pressed.map((t) => t.replace(/\s+/g, "")), ["全部4"], "分享完篩選回到全部");
   assert.equal(await rows.count(), 4);
   assert.ok((await rows.first().textContent()).includes("小安的攀爬"), "新的在最上面");
@@ -347,7 +347,7 @@ test("影片標籤：一支一列、用身高、動作或型態篩選；分享�
   await c.waitForTimeout(600);
   await open();
   assert.equal(await rows.count(), 4, "還沒更新資料庫也看得到影片");
-  assert.equal(await dialog.locator("button[aria-pressed].rounded-full").count(), 0, "沒有標籤就不出現篩選");
+  assert.equal(await dialog.locator("button[aria-pressed].rounded-full:not([aria-label*=讚])").count(), 0, "沒有標籤就不出現篩選");
   await dialog.locator("input[type=file]").setInputFiles(clip("c.mp4"));
   await c.waitForTimeout(600);
   assert.equal(await opt("160–169").getAttribute("aria-pressed"), "true", "重新整理後身高還記得（存在手機）");
@@ -531,7 +531,7 @@ test("影片時間：有紀錄顯示攀爬日（不是上傳日）、沒有紀�
   await open();
   assert.equal(await rows.count(), 3, "還沒套用 step34 也看得到影片");
   assert.ok((await row(1)).includes("今天分享") && (await row(1)).includes("身高170–179cm"), "身高標籤照樣顯示：" + (await row(1)));
-  assert.ok((await dialog.locator('button[aria-pressed].rounded-full:text-is("170–179cm")').count()) === 1, "身高篩選照樣出現");
+  assert.ok((await dialog.locator('button[aria-pressed].rounded-full:not([aria-label*=讚]):text-is("170–179cm")').count()) === 1, "身高篩選照樣出現");
   await dialog.locator("input[type=file]").setInputFiles(clip("c.mp4"));
   await c.waitForTimeout(600);
   const form = (await dialog.textContent()).replace(/\s+/g, "");
