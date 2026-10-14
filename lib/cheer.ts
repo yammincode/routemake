@@ -51,10 +51,10 @@ export function abilityLines(c: CheerInput): string[] {
   return out;
 }
 
-// 挑一句：幹話模式只講幹話；平常紀錄、能力的話一起抽，偶爾（1/4）講夥伴自己的話，沒有可以講的就講夥伴的話
+// 挑一句：幹話模式幹話和平常的話混著講（一半一半）；平常紀錄、能力的話一起抽，偶爾（1/4）講夥伴自己的話，沒有可以講的就講夥伴的話
 export function pickCheer(c: CheerInput, rand: () => number = Math.random): string {
   const any = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length) % xs.length];
-  if (c.troll) return any(TROLL_LINES);
+  if (c.troll && rand() < 0.5) return any(TROLL_LINES);
   const pool = [...recordLines(c), ...abilityLines(c)];
   const own = MASCOT_LINES[c.mascot];
   if (!pool.length || rand() < 0.25) return any(own);

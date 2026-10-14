@@ -70,7 +70,7 @@ export function rememberMascot(userId: string, pick: MascotPick) {
   notify();
 }
 
-// 幹話模式：記在這支手機，只影響自己看到的（所有夥伴加刀疤和棒棒糖、每天一句改成幹話）
+// 幹話模式：記在這支手機，只影響自己看到的（所有夥伴加刀疤和棒棒糖、每天一句幹話和平常的話混著講）
 const TROLL_KEY = "routemake:troll";
 const readTroll = () => {
   try {

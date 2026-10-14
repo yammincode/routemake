@@ -129,7 +129,7 @@ export default function MyCardEditor() {
       </p>
       {cardView}
       <SetBox>
-        <Toggle checked={troll} onChange={setTroll} label="幹話模式" hint="夥伴加刀疤、叼棒棒糖，館首頁每天那句變幹話（只有這支手機看得到）" />
+        <Toggle checked={troll} onChange={setTroll} label="幹話模式" hint="夥伴加刀疤、叼棒棒糖，館首頁每天那句幹話和平常的話混著講（只有這支手機看得到）" />
       </SetBox>
       {!editing ? (
         <Button className="mt-3" onClick={() => setEditing(true)}>

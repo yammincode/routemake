@@ -7,7 +7,7 @@ import { getCheerFacts, getMonthlyStats, getProfileCard } from "@/lib/data";
 import { daysUntil, todayYmd } from "@/lib/date";
 import { useMascot, useTroll } from "@/lib/mascot-store";
 
-// 館首頁標題下面：每天第一次打開，夥伴說一句（看紀錄、能力；幹話模式講幹話）；✕ 關掉
+// 館首頁標題下面：每天第一次打開，夥伴說一句（看紀錄、能力；幹話模式幹話和平常的話混著講）；✕ 關掉
 // 「今天說過了」記在這支手機（每個帳號分開）；讀不到紀錄（沒網路）就講夥伴自己的話
 const KEY = "routemake:cheer:";
 const seenToday = (uid: string) => {
@@ -50,10 +50,7 @@ export default function MascotCheer({ uid, gymId, gymName, goal, fresh }: { uid:
     const now = todayYmd();
     const [y, m] = [+now.slice(0, 4), +now.slice(5, 7)];
     const soft = <T,>(p: Promise<T>) => p.catch(() => null);
-    void (troll
-      ? Promise.resolve([null, null, null] as const)
-      : Promise.all([soft(getCheerFacts(uid, gymId)), soft(getMonthlyStats(y, m)), soft(getProfileCard(uid))])
-    ).then(([facts, month, card]) => {
+    void Promise.all([soft(getCheerFacts(uid, gymId)), soft(getMonthlyStats(y, m)), soft(getProfileCard(uid))]).then(([facts, month, card]) => {
       if (!alive) return;
       const away = facts?.lastClimbed ? -(daysUntil(facts.lastClimbed) ?? 0) : null;
       setText(

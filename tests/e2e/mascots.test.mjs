@@ -63,7 +63,7 @@ test("原岩夥伴：選夥伴、換色、中壢熊即將登場；留言和影�
   await V.ctx.close();
 });
 
-test("原岩夥伴：館首頁每天第一次說一句（看紀錄）、關掉後今天不再出現；幹話模式加刀疤棒棒糖、講幹話", async () => {
+test("原岩夥伴：館首頁每天第一次說一句（看紀錄）、關掉後今天不再出現；幹話模式加刀疤棒棒糖、幹話和平常的話混著講", async () => {
   const mock = createMock();
   const a = mock.addUser("climbera", "password1", { nickname: "小岩" });
   const zone = mock.db.zones[0];
@@ -89,7 +89,7 @@ test("原岩夥伴：館首頁每天第一次說一句（看紀錄）、關掉�
   await p.waitForTimeout(800);
   assert.equal(await bubble.count(), 0, "同一天再打開不再出現");
 
-  // 幹話模式：人物卡打開開關 → 夥伴加刀疤和棒棒糖；隔天館首頁講老闆給的幹話
+  // 幹話模式：人物卡打開開關 → 夥伴加刀疤和棒棒糖；隔天館首頁講老闆給的幹話（Math.random 0.3）
   await p.goto(`${BASE}/card`, { waitUntil: "networkidle" });
   await p.waitForSelector('main [data-mascot="mingde"]');
   assert.equal(await p.locator("main [data-troll]").count(), 0);
@@ -104,6 +104,16 @@ test("原岩夥伴：館首頁每天第一次說一句（看紀錄）、關掉�
   const said = await bubble.textContent();
   assert.ok(troll.some((t) => said.includes(t)), `講幹話：${said}`);
   assert.equal(await bubble.locator("[data-troll]").count(), 1, "泡泡旁的夥伴也有刀疤");
+  // 幹話模式也會講平常的話（一半一半）：Math.random 0.7 → 不講幹話、講紀錄（嘗試中、新路線兩句裡的第二句）
+  await fixRandom(A.ctx, 0.7);
+  await p.evaluate(() => {
+    for (const k of Object.keys(localStorage)) if (k.startsWith("routemake:cheer:")) localStorage.removeItem(k);
+  });
+  await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
+  await bubble.waitFor();
+  const normal = await bubble.textContent();
+  assert.ok(normal.includes("明德館這週有 1 條新路線") && !troll.some((t) => normal.includes(t)), `幹話模式也講平常的話：${normal}`);
+  assert.equal(await bubble.locator("[data-troll]").count(), 1, "夥伴照樣有刀疤");
   assert.deepEqual(A.errors, []);
   await A.ctx.close();
 });
