@@ -73,7 +73,8 @@ test("路線進度：牆上進度開放的館一起算（Spray Wall、沒開放�
   // 由上而下：累計完攀 → 路線進度 → 牆上進度｜我的進度（預設牆上進度）→ 各館圖例 → 說明 → 抱石 → 上攀
   assertOrder(main, ["累計完攀", "路線進度", "牆上進度", "我的進度", "明德", "新店", "開放的館全部一起算", "抱石", "上攀"]);
   assert.equal(await page.getAttribute('main [role=tab]:has-text("牆上進度")', "aria-selected"), "true", "預設停在牆上進度");
-  assert.equal(flat(await page.locator("main div.flex-wrap", { hasText: "明德" }).first().textContent()), "明德萬華中和南港新店", "圖例：有路線的館，照館的順序（中壢沒開放不列）");
+  // 路線進度的圖例（上面攀爬日月曆也有自己的館圖例，所以取最後一個）
+  assert.equal(flat(await page.locator("main div.flex-wrap", { hasText: "明德" }).last().textContent()), "明德萬華中和南港新店", "圖例：有路線的館，照館的順序（中壢沒開放不列）");
 
   // 抱石：VB 4/4 大滿貫（Spray Wall、中壢、下架的 VB 都不算），V3 1/4（嘗試中不算）
   const b = flat(await card(page, "抱石").textContent());
