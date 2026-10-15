@@ -28,7 +28,7 @@ export function cardMeta(c: ProfileCard) {
   return parts.join("・");
 }
 
-// 夥伴簡介一行：「夥伴：明德氂牛（耐力）— 毛很厚…」
+// 夥伴簡介一行：「夥伴：高山猛牛（耐力）— 毛很厚…」
 export const mascotIntro = (pick: MascotPick) => {
   const m = mascotInfo(pick.id);
   return `夥伴：${m.name}（${ABILITY_AXES[m.ability]}）— ${m.intro}`;

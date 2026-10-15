@@ -1,4 +1,4 @@
-// 夥伴說的話：館首頁、區域頁、我的紀錄上面的泡泡、右下角小夥伴、做了事情（事件）；幹話模式幹話和平常的話混著講
+// 夥伴說的話：館首頁、區域頁、我的紀錄上面的泡泡、右下角小夥伴、做了事情（事件）；幹話模式只講幹話（跟平常的話分開）
 import { ABILITY_AXES, gradeLabel } from "./design";
 import { MASCOT_LINES, TROLL_LINES, mascotInfo, type MascotId } from "./mascots";
 
@@ -51,10 +51,10 @@ export function abilityLines(c: CheerInput): string[] {
   return out;
 }
 
-// 挑一句：幹話模式幹話和平常的話混著講（一半一半）；紀錄、能力的話一起抽，偶爾（1/4）講夥伴自己的話，沒有可以講的就講夥伴的話
+// 挑一句：幹話模式只講幹話（跟平常的話分開，不混）；平常紀錄、能力的話一起抽，偶爾（1/4）講夥伴自己的話，沒有可以講的就講夥伴的話
 export function pickFrom(pool: string[], mascot: MascotId, troll: boolean, rand: () => number = Math.random): string {
   const any = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length) % xs.length];
-  if (troll && rand() < 0.5) return any(TROLL_LINES);
+  if (troll) return any(TROLL_LINES);
   const own = MASCOT_LINES[mascot];
   if (!pool.length || rand() < 0.25) return any(own);
   return any(pool);
@@ -109,9 +109,9 @@ const EVENT: Record<EventKind, string[]> = {
   streak: ["連續爬 {days} 天了，你是牆上的常客！", "第 {days} 天！記得讓手指休息一下。"],
   comment: ["謝謝分享 beta，大家會感謝你的！", "第一則留言！你的心得會幫到別人喔。"],
 };
-// 事件的話：幹話模式一半講幹話（要撒彩帶的照樣撒）
+// 事件的話：幹話模式只講幹話（要撒彩帶的照樣撒）
 export function eventLine(kind: EventKind, troll: boolean, vars: { grade?: string; days?: number } = {}, rand: () => number = Math.random): string {
   const any = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length) % xs.length];
-  if (troll && rand() < 0.5) return any(TROLL_LINES);
+  if (troll) return any(TROLL_LINES);
   return any(EVENT[kind]).replace("{grade}", vars.grade ?? "").replace("{days}", String(vars.days ?? ""));
 }

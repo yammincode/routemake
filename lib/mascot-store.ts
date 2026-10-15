@@ -5,7 +5,7 @@ import { getMascots } from "./data";
 import { normalizePick, type MascotPick } from "./mascots";
 
 // 每個人的夥伴（留言、影片、人物卡共用）：同一輪畫面要的人一起讀一次，讀過的記在記憶體
-// 沒選、讀不到（沒網路、資料庫還沒套用 step41）都是預設的明德氂牛
+// 沒選、讀不到（沒網路、資料庫還沒套用 step41）都是預設的高山猛牛
 // 這次打開 App 讀過的記在 sessionStorage：重新整理、換頁不用重讀（省流量；別人換了夥伴，下次打開 App 就看到）
 const SAVED_KEY = "routemake:mascots";
 const picks = new Map<string, MascotPick>(
@@ -23,7 +23,7 @@ const keep = () => {
   } catch {}
 };
 const asked = new Set<string>(picks.keys());
-const failed = new Set<string>(); // 讀不到（沒網路）：頭像先畫預設的氂牛，但編輯人物卡不能拿來當自己的夥伴
+const failed = new Set<string>(); // 讀不到（沒網路）：頭像先畫預設的猛牛，但編輯人物卡不能拿來當自己的夥伴
 let queue: string[] = [];
 const listeners = new Set<() => void>();
 let version = 0;
@@ -69,8 +69,8 @@ function want(userId: string) {
 // 網路回來：之前讀不到的再讀一次
 if (typeof window !== "undefined") window.addEventListener("online", () => [...failed].forEach(want));
 
-// 還在讀回 null（頭像先畫空的圓，不要先閃一下氂牛再換）；沒有人（userId 空）就是預設
-// 讀不到（沒網路）：頭像用預設的氂牛；exact（編輯自己的夥伴）照樣回 null，免得拿氂牛蓋掉真的夥伴
+// 還在讀回 null（頭像先畫空的圓，不要先閃一下猛牛再換）；沒有人（userId 空）就是預設
+// 讀不到（沒網路）：頭像用預設的猛牛；exact（編輯自己的夥伴）照樣回 null，免得拿猛牛蓋掉真的夥伴
 export function useMascot(userId: string | null | undefined, exact = false): MascotPick | null {
   useEffect(() => {
     if (userId) want(userId);
@@ -87,7 +87,7 @@ export function rememberMascot(userId: string, pick: MascotPick) {
   notify();
 }
 
-// 幹話模式：記在這支手機，只影響自己看到的（所有夥伴加刀疤和棒棒糖、每天一句幹話和平常的話混著講）
+// 幹話模式：記在這支手機，只影響自己看到的（所有夥伴加刀疤和棒棒糖、說的話全部是幹話）
 const TROLL_KEY = "routemake:troll";
 const readTroll = () => {
   try {

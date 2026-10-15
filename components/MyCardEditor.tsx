@@ -145,7 +145,7 @@ export default function MyCardEditor() {
             讓夥伴現在說話
           </Button>
         )}
-        <Toggle checked={troll} onChange={setTroll} label="幹話模式" hint="夥伴加刀疤、叼棒棒糖，說的話幹話和平常的話混著講（只有這支手機看得到）" />
+        <Toggle checked={troll} onChange={setTroll} label="幹話模式" hint="夥伴加刀疤、叼棒棒糖，說的話全部是幹話（只有這支手機看得到）" />
       </SetBox>
       {!editing ? (
         <Button className="mt-3" onClick={() => setEditing(true)}>

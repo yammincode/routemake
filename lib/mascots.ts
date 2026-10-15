@@ -14,7 +14,7 @@ export const MASCOTS: MascotInfo[] = [
   {
     id: "mingde",
     gymId: "mingde",
-    name: "明德氂牛",
+    name: "高山猛牛",
     ability: 3,
     intro: "毛很厚，爬再久也不喘。最愛長路線和一圈一圈的耐力訓練。",
     parts: [
@@ -25,7 +25,7 @@ export const MASCOTS: MascotInfo[] = [
   {
     id: "wanhua",
     gymId: "g2",
-    name: "太空猩猩",
+    name: "星際猿猿",
     ability: 2,
     intro: "戴著太空頭盔也要飛撲。看到遠遠的點，第一個想法就是跳過去。",
     parts: [
@@ -37,7 +37,7 @@ export const MASCOTS: MascotInfo[] = [
   {
     id: "zhonghe",
     gymId: "g3",
-    name: "中和恐龍",
+    name: "歡樂恐龍",
     ability: 0,
     intro: "大仰角、大屋簷靠一身蠻力，拉得上去就是好路線。",
     parts: [
@@ -48,7 +48,7 @@ export const MASCOTS: MascotInfo[] = [
   {
     id: "nangang",
     gymId: "g4",
-    name: "墨鏡羊駝",
+    name: "態度羊駝",
     ability: 5,
     intro: "腳抬到頭旁邊也一臉從容，戴著墨鏡把高跨步做得很帥。",
     parts: [
@@ -60,7 +60,7 @@ export const MASCOTS: MascotInfo[] = [
   {
     id: "xindian",
     gymId: "g5",
-    name: "新店刺蝟",
+    name: "扎扎刺蝟",
     ability: 1,
     intro: "再小的點都捏得住。手指跟背上的刺一樣硬。",
     parts: [
@@ -71,7 +71,7 @@ export const MASCOTS: MascotInfo[] = [
   {
     id: "zhongli",
     gymId: "g6",
-    name: "中壢熊",
+    name: "太空小熊",
     ability: 4,
     intro: "看起來壯，其實重心和腳法最細膩。",
     parts: [
@@ -87,7 +87,7 @@ export const mascotInfo = (id: string | null | undefined) => MASCOTS.find((m) =>
 export const mascotOpen = (id: MascotId) => GYMS.find((g) => g.id === mascotInfo(id).gymId)?.live ?? false;
 export const mascotGymColor = (id: MascotId) => GYM_COLORS[mascotInfo(id).gymId];
 export const mascotAbility = (id: MascotId) => ABILITY_AXES[mascotInfo(id).ability];
-// 讀資料庫的值：不認得的夥伴、還沒開放的館都當成預設（明德氂牛）
+// 讀資料庫的值：不認得的夥伴、還沒開放的館都當成預設（高山猛牛）
 export function normalizePick(v: unknown): MascotPick {
   const p = v as MascotPick | null;
   if (!p || typeof p !== "object" || !MASCOTS.some((m) => m.id === p.id) || !mascotOpen(p.id)) return DEFAULT_MASCOT;
@@ -109,7 +109,7 @@ const light = (hex: string) => {
 };
 // 這個部位用哪一組色盤：原本是淺色（臉、玻璃）用淺色那組
 export const partSwatches = (orig: string) => (light(orig) ? MASCOT_SWATCHES_LITE : MASCOT_SWATCHES);
-// 跟色：跟白色混一點（氂牛毛的亮部）
+// 跟色：跟白色混一點（猛牛毛的亮部）
 export function tint(hex: string, k = 0.35) {
   const n = parseInt(hex.slice(1), 16);
   const f = (v: number) => Math.round(v + (255 - v) * k).toString(16).padStart(2, "0");

@@ -10,7 +10,7 @@ after(async () => browser?.close());
 // 每天一句要固定挑哪一句：Math.random 固定成 v（0.3：不講夥伴自己的話、挑第一句紀錄）
 const fixRandom = (ctx, v) => ctx.addInitScript((x) => (Math.random = () => x), v);
 
-test("原岩夥伴：選夥伴、換色、中壢熊即將登場；留言和影片旁的頭像、別人的人物卡跟著換", async () => {
+test("原岩夥伴：選夥伴、換色、太空小熊即將登場；留言和影片旁的頭像、別人的人物卡跟著換", async () => {
   const mock = createMock();
   const b = mock.addUser("climberb", "password1", { nickname: "小安" });
   mock.addUser("viewer01", "password1", { nickname: "阿明" });
@@ -23,18 +23,18 @@ test("原岩夥伴：選夥伴、換色、中壢熊即將登場；留言和影�
   await login(B.page, "climberb", "password1", "/card");
   const p = B.page;
   await p.waitForSelector('main [data-mascot="mingde"]');
-  assert.ok((await p.textContent("main")).includes("夥伴：明德氂牛（耐力）"), "還沒選：預設明德氂牛，有夥伴簡介");
+  assert.ok((await p.textContent("main")).includes("夥伴：高山猛牛（耐力）"), "還沒選：預設高山猛牛，有夥伴簡介");
 
   await p.click('main button:text-is("編輯人物卡")');
-  const bear = p.locator("main button", { hasText: "中壢熊" });
-  assert.ok(await bear.isDisabled(), "中壢熊點不了");
+  const bear = p.locator("main button", { hasText: "太空小熊" });
+  assert.ok(await bear.isDisabled(), "太空小熊點不了");
   assert.ok((await bear.textContent()).includes("即將登場"));
-  await p.locator("main button", { hasText: "太空猩猩" }).click();
+  await p.locator("main button", { hasText: "星際猿猿" }).click();
   await p.click('main button[aria-label="身體 #d7263d"]');
   await p.click('main button[aria-label="卡片背景 #006382"]');
   // 預覽馬上換
-  assert.equal(await p.locator('main [data-mascot="wanhua"]').count() >= 1, true, "上面的角色卡換成太空猩猩");
-  assert.ok((await p.textContent("main")).includes("夥伴：太空猩猩（動態）"));
+  assert.equal(await p.locator('main [data-mascot="wanhua"]').count() >= 1, true, "上面的角色卡換成星際猿猿");
+  assert.ok((await p.textContent("main")).includes("夥伴：星際猿猿（動態）"));
   await p.click('main button:text-is("儲存人物卡")');
   await p.waitForTimeout(600);
   assert.deepEqual(mock.db.profiles.find((x) => x.id === b).mascot, { id: "wanhua", colors: ["#d7263d", null, null], bg: "#006382" }, "存進資料庫");
@@ -57,13 +57,13 @@ test("原岩夥伴：選夥伴、換色、中壢熊即將登場；留言和影�
   await v.waitForTimeout(600);
   const card = v.locator("[role=dialog]").last();
   assert.ok((await card.textContent()).includes("還沒有公開人物卡"));
-  assert.ok((await card.textContent()).includes("太空猩猩"), "沒公開也看得到夥伴");
+  assert.ok((await card.textContent()).includes("星際猿猿"), "沒公開也看得到夥伴");
   assert.deepEqual(V.errors, []);
   await B.ctx.close();
   await V.ctx.close();
 });
 
-test("原岩夥伴：館首頁每次打開說一句（看紀錄）、✕ 關掉後這次打開 App 不再出現；幹話模式加刀疤棒棒糖、幹話和平常的話混著講", async () => {
+test("原岩夥伴：館首頁每次打開說一句（看紀錄）、✕ 關掉後這次打開 App 不再出現；幹話模式加刀疤棒棒糖、只講幹話（關掉沒有幹話）", async () => {
   const mock = createMock();
   const a = mock.addUser("climbera", "password1", { nickname: "小岩" });
   const zone = mock.db.zones[0];
@@ -77,7 +77,7 @@ test("原岩夥伴：館首頁每次打開說一句（看紀錄）、✕ 關掉�
   const bubble = p.locator('[data-testid="mascot-bubble"]');
   await bubble.waitFor();
   const text = await bubble.textContent();
-  assert.ok(text.includes("明德氂牛"), "預設明德氂牛");
+  assert.ok(text.includes("高山猛牛"), "預設高山猛牛");
   assert.ok(text.includes("上次 A1-01（V5 藍）還在嘗試中"), `講嘗試中的路線：${text}`);
   // 在標題下面、平面圖上面
   const title = await p.locator("h1", { hasText: "今天爬哪一區" }).boundingBox();
@@ -109,14 +109,27 @@ test("原岩夥伴：館首頁每次打開說一句（看紀錄）、✕ 關掉�
   const said = await bubble.textContent();
   assert.ok(troll.some((t) => said.includes(t)), `講幹話：${said}`);
   assert.equal(await bubble.locator("[data-troll]").count(), 1, "泡泡旁的夥伴也有刀疤");
-  // 幹話模式也會講平常的話（一半一半）：Math.random 0.7 → 不講幹話、講紀錄（嘗試中、新路線兩句裡的第二句）
+  // 幹話模式只講幹話（跟平常的話分開）：Math.random 0.7（以前會講紀錄）也照樣講幹話
   await fixRandom(A.ctx, 0.7);
   await reopen();
   await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
   await bubble.waitFor();
+  const again = await bubble.textContent();
+  assert.ok(troll.some((t) => again.includes(t)) && !again.includes("新路線"), `幹話模式只講幹話：${again}`);
+  // 右下角小夥伴點牠也只講幹話
+  await p.goto(`${BASE}/card`, { waitUntil: "networkidle" });
+  const buddy = p.locator('[data-testid="mascot-buddy"] [role=status]');
+  await buddy.waitFor();
+  const bt = await buddy.textContent();
+  assert.ok(troll.some((t) => bt.includes(t)), `小夥伴只講幹話：${bt}`);
+  // 關掉幹話模式：沒有幹話
+  await p.click('main button[role=switch][aria-label="幹話模式"]');
+  await reopen();
+  await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
+  await bubble.waitFor();
   const normal = await bubble.textContent();
-  assert.ok(normal.includes("明德館這週有 1 條新路線") && !troll.some((t) => normal.includes(t)), `幹話模式也講平常的話：${normal}`);
-  assert.equal(await bubble.locator("[data-troll]").count(), 1, "夥伴照樣有刀疤");
+  assert.ok(normal.includes("明德館這週有 1 條新路線") && !troll.some((t) => normal.includes(t)), `關掉幹話模式講平常的話：${normal}`);
+  assert.equal(await bubble.locator("[data-troll]").count(), 0, "關掉後沒有刀疤");
   assert.deepEqual(A.errors, []);
   await A.ctx.close();
 });
@@ -197,7 +210,7 @@ test("夥伴說話：區域頁講這一區、記錄 Flash 破紀錄撒彩帶、�
   await A.ctx.close();
 });
 
-test("原岩夥伴：資料庫還沒套用 step41 照常（大家都是氂牛、不能選夥伴）", async () => {
+test("原岩夥伴：資料庫還沒套用 step41 照常（大家都是猛牛、不能選夥伴）", async () => {
   const mock = createMock();
   mock.state.noMascot = true;
   const b = mock.addUser("climberb", "password1", { nickname: "小安" });

@@ -1921,14 +1921,14 @@ select tests.throws('大滿貫：內部函式不能直接呼叫', format('set ro
 reset role;
 
 -- ---------------------------------------------------------------------
--- 原岩夥伴（0047）：所有人看得到、只能用 save_my_mascot 改自己的、中壢熊還不能選、顏色要在色盤裡
+-- 原岩夥伴（0047）：所有人看得到、只能用 save_my_mascot 改自己的、太空小熊還不能選、顏色要在色盤裡
 -- ---------------------------------------------------------------------
 update public.gyms set is_live = false where id = 'g6';
 set role authenticated; select tests.login(:A);
-select tests.lives('夥伴：選太空猩猩、換色、換背景', $q$select public.save_my_mascot('{"id":"wanhua","colors":["#d7263d",null,"#f4d03f"],"bg":"#006382"}')$q$);
+select tests.lives('夥伴：選星際猿猿、換色、換背景', $q$select public.save_my_mascot('{"id":"wanhua","colors":["#d7263d",null,"#f4d03f"],"bg":"#006382"}')$q$);
 select tests.ok('夥伴：存進去了', (select mascot ->> 'id' from public.profiles where id = :A) = 'wanhua');
 select tests.throws('夥伴：不能直接改欄位', $q$update public.profiles set mascot = '{"id":"zhonghe"}' where id = auth.uid()$q$);
-select tests.throws('夥伴：中壢熊即將登場，還不能選', $q$select public.save_my_mascot('{"id":"zhongli"}')$q$, '即將登場');
+select tests.throws('夥伴：太空小熊即將登場，還不能選', $q$select public.save_my_mascot('{"id":"zhongli"}')$q$, '即將登場');
 select tests.throws('夥伴：不認得的夥伴', $q$select public.save_my_mascot('{"id":"cat"}')$q$, '夥伴或顏色');
 select tests.throws('夥伴：色盤以外的顏色', $q$select public.save_my_mascot('{"id":"mingde","colors":["#123456"]}')$q$, '夥伴或顏色');
 select tests.throws('夥伴：顏色不能塞別的東西', $q$select public.save_my_mascot('{"id":"mingde","colors":[{"x":1}]}')$q$, '夥伴或顏色');
@@ -1954,7 +1954,7 @@ select tests.ok('夥伴：換回預設後是 null', (select mascot from public.p
 reset role;
 update public.gyms set is_live = true where id = 'g6';
 set role authenticated; select tests.login(:A);
-select tests.lives('夥伴：中壢館開放後就能選中壢熊', $q$select public.save_my_mascot('{"id":"zhongli"}')$q$);
+select tests.lives('夥伴：中壢館開放後就能選太空小熊', $q$select public.save_my_mascot('{"id":"zhongli"}')$q$);
 reset role;
 update public.gyms set is_live = false where id = 'g6';
 select tests.throws('夥伴：資料庫也擋不合格的值（check）', $q$update public.profiles set mascot = '{"id":"mingde","bg":"red"}' where id = '00000000-0000-0000-0000-00000000000a'$q$);

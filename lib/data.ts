@@ -1048,7 +1048,7 @@ export async function clearCardBio(userId: string, gym: string) {
 }
 
 // ---------- 原岩夥伴（人物卡、頭像） ----------
-// 資料庫還沒套用 step41（profiles 沒有 mascot 欄位）：讀不到就大家都是預設的明德氂牛、不能選
+// 資料庫還沒套用 step41（profiles 沒有 mascot 欄位）：讀不到就大家都是預設的高山猛牛、不能選
 export const NO_MASCOT = "資料庫還沒套用原岩夥伴（step41），請先請老闆在 Supabase 執行 step41";
 let mascotDb = true;
 export const mascotSupported = () => mascotDb;
