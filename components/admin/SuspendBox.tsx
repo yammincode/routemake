@@ -20,7 +20,9 @@ export default function SuspendBox({ info, gymId, onDone }: { info: AccountInfo;
   const owner = !!access?.is_owner;
   const [days, setDays] = useState<Days | null>("7");
   const [reason, setReason] = useState("");
-  const [wipe, setWipe] = useState(info.comments > 0);
+  // 店長只刪得到這館的留言，老闆刪全部
+  const wipeCount = owner ? info.comments : info.comments_here;
+  const [wipe, setWipe] = useState(wipeCount > 0);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -45,11 +47,12 @@ export default function SuspendBox({ info, gymId, onDone }: { info: AccountInfo;
     return (
       <>
         <SuspendedLine until={s.until} reason={s.reason} by={s.by} at={s.at} />
-        {(owner || s.until) && (
+        {(owner || (s.until && s.mine)) && (
           <Button className="mt-2" disabled={busy} onClick={() => void run(() => unsuspendUser(info.id, gymId), `已解除 ${info.nickname ?? info.username} 的停權`)}>
             {s.until ? "提早解除停權" : "解除停權"}
           </Button>
         )}
+        {!owner && !(s.until && s.mine) && <small className="mt-1 block text-tiny text-muted">{s.until ? "別人停的權，要提早解除請找他或老闆" : "永久停權只有老闆可以解除"}</small>}
       </>
     );
   }
@@ -69,13 +72,13 @@ export default function SuspendBox({ info, gymId, onDone }: { info: AccountInfo;
     <div data-suspend-form className="mt-3 rounded-tile bg-sunk p-3">
       <b className="block text-sub">停權這個帳號</b>
       <Label>停權多久</Label>
-      <OptionGrid options={options} value={days} onChange={(v) => (setDays(v), setConfirm(false))} cols={4} />
+      <OptionGrid options={options} value={days} onChange={(v) => (setDays(v), setConfirm(false))} cols={owner ? 4 : 3} />
       {!owner && <small className="mt-1 block text-tiny text-muted">永久停權只有老闆能選</small>}
       <Label htmlFor={`why-${info.id}`}>原因（他會看到）</Label>
       <TextField id={`why-${info.id}`} maxLength={60} value={reason} onChange={(e) => (setReason(e.target.value), setConfirm(false))} placeholder="例如 留言騷擾其他顧客" />
-      {info.comments > 0 && (
+      {wipeCount > 0 && (
         <Check checked={wipe} onChange={setWipe}>
-          同時刪掉他所有留言（{info.comments} 則）
+          {owner ? `同時刪掉他所有留言（${wipeCount} 則）` : `同時刪掉他在這館的留言（${wipeCount} 則）`}
         </Check>
       )}
       <Button variant="danger" className="mt-3" disabled={busy} onClick={submit}>

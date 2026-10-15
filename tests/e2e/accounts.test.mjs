@@ -62,6 +62,7 @@ test("停權：店長從人物卡停權、被停權的人看到提示條且不�
   assert.equal(await form.locator('button:text-is("永久")').count(), 0, "店長不能選永久");
   assert.equal(await form.locator('button:text-is("7 天")').getAttribute("aria-pressed"), "true", "預設 7 天");
   assert.ok(await form.locator("input[type=checkbox]").isChecked(), "預設勾選刪掉他的留言");
+  assert.ok((await form.textContent()).includes("同時刪掉他在這館的留言（2 則）"), "店長只刪這館的");
   await form.locator('button:has-text("停權 7 天")').click();
   await m.waitForTimeout(300);
   assert.ok((await toastText(m)).includes("請寫停權原因"), "要寫原因");
@@ -99,6 +100,10 @@ test("停權：店長從人物卡停權、被停權的人看到提示條且不�
   await b.waitForTimeout(800);
   assert.equal(mock.db.likes.filter((l) => l.user_id === bad).length, 0, "按讚被擋");
   assert.ok((await toastText(b)).includes("暫停中"), "按讚被擋，說明原因");
+  // 不能分享影片（不用等壓縮完才被擋）
+  await b.click('[role=dialog] [role=tab]:has-text("影片")');
+  await b.waitForTimeout(300);
+  assert.ok((await b.textContent("[role=dialog]")).includes("帳號暫停中，暫時不能分享影片"));
   // 照常記錄自己的完攀
   await b.click('[role=dialog] [role=tab]:has-text("紀錄")');
   await b.click('[role=dialog] button:has-text("完攀")');
@@ -140,6 +145,7 @@ test("停權：店長從人物卡停權、被停權的人看到提示條且不�
   const mrow = m.locator('[data-account="badguy"]').last();
   await mrow.locator('button:has-text("停權中")').click();
   assert.equal(await mrow.locator('button:has-text("解除停權")').count(), 0, "店長不能解除永久停權");
+  assert.ok((await mrow.textContent()).includes("永久停權只有老闆可以解除"));
 
   assert.deepEqual([...S.errors, ...M.errors, ...B.errors, ...O.errors].filter((e) => !/403/.test(e)), []);
   await Promise.all([S.ctx.close(), M.ctx.close(), B.ctx.close(), O.ctx.close()]);

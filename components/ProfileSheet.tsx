@@ -131,9 +131,9 @@ function StaffBox({ userId, gymId }: { userId: string; gymId: string }) {
   return (
     <div className="mt-4 border-t border-line pt-3">
       <p className="m-0 text-meta text-muted">
-        留言 {info.comments} 則・影片 {info.videos} 支・註冊 {md(new Date(info.created_at).toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" }))}
+        留言 {info.comments} 則（這館 {info.comments_here}）・影片 {info.videos} 支・註冊 {md(new Date(info.created_at).toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" }))}
       </p>
-      <SuspendBox info={info} gymId={gymId} onDone={load} />
+      <SuspendBox key={info.suspension?.at ?? "none"} info={info} gymId={gymId} onDone={load} />
     </div>
   );
 }

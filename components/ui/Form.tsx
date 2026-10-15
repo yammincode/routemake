@@ -94,10 +94,10 @@ export function OptionGrid<T extends string>({
   options: readonly { v: T; label: string; hint?: string }[];
   value: T | null;
   onChange: (v: T | null) => void;
-  cols: 2 | 4;
+  cols: 2 | 3 | 4;
 }) {
   return (
-    <div className={`grid gap-1.5 ${cols === 4 ? "grid-cols-4" : "grid-cols-2"}`}>
+    <div className={`grid gap-1.5 ${cols === 4 ? "grid-cols-4" : cols === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
       {options.map((o) => (
         <button
           key={o.v}

@@ -176,9 +176,11 @@ begin
      set suspended_until = v_until, suspended_reason = v_reason, suspended_by = auth.uid(), suspended_at = now()
    where id = p_user;
 
+  -- 刪留言：店長只刪自己館的（跟 delete_comment 一樣），老闆刪全部
   if p_delete_comments then
     update public.comments set deleted_at = now(), deleted_by = auth.uid()
-     where user_id = p_user and deleted_at is null;
+     where user_id = p_user and deleted_at is null
+       and (public.is_owner() or public.route_gym(route_id) = p_gym);
     get diagnostics v_n = row_count;
   end if;
 
@@ -206,6 +208,10 @@ begin
   if v_until = 'infinity' and not public.is_owner() then
     raise exception '永久停權只有老闆可以解除' using errcode = '42501';
   end if;
+  -- 店長只能解除自己停的（別人停的請找停權的人或老闆）
+  if not public.is_owner() and (select suspended_by from public.profiles where id = p_user) is distinct from auth.uid() then
+    raise exception '只能解除自己停的權，別人停的請找他或老闆' using errcode = '42501';
+  end if;
   update public.profiles
      set suspended_until = null, suspended_reason = null, suspended_by = null, suspended_at = null
    where id = p_user;
@@ -219,7 +225,8 @@ grant execute on function public.unsuspend_user(uuid, text) to authenticated;
 -- ---------------------------------------------------------------------
 -- 帳號管理：員工搜尋（附核對身分用的資料）、停權中名單、某人的留言
 -- ---------------------------------------------------------------------
-create or replace function public.account_row(p_user uuid) returns jsonb
+-- p_gym：搜尋的館（comments_here＝這館的留言數，店長停權時只刪得到這些）
+create or replace function public.account_row(p_user uuid, p_gym text) returns jsonb
 language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
     'id', p.id, 'username', p.username, 'nickname', p.nickname,
@@ -227,6 +234,8 @@ language sql stable security definer set search_path = '' as $$
     'staff', p.is_owner or exists (select 1 from public.staff_roles s where s.user_id = p.id),
     'ascents', (select count(*) from public.ascents a where a.user_id = p.id),
     'comments', (select count(*) from public.comments c where c.user_id = p.id and c.deleted_at is null),
+    'comments_here', (select count(*) from public.comments c where c.user_id = p.id and c.deleted_at is null
+                        and public.route_gym(c.route_id) = p_gym),
     'videos', (select count(*) from public.route_videos v where v.user_id = p.id),
     'recent', coalesce((
       select jsonb_agg(x order by x.at desc) from (
@@ -237,11 +246,11 @@ language sql stable security definer set search_path = '' as $$
          order by a.updated_at desc limit 3) x), '[]'::jsonb),
     'suspension', case when p.suspended_until > now() then jsonb_build_object(
       'until', case when p.suspended_until = 'infinity' then null else p.suspended_until end,
-      'reason', p.suspended_reason, 'at', p.suspended_at,
+      'reason', p.suspended_reason, 'at', p.suspended_at, 'mine', p.suspended_by = auth.uid(),
       'by', (select b.nickname from public.profiles b where b.id = p.suspended_by)) end)
   from public.profiles p where p.id = p_user
 $$;
-revoke execute on function public.account_row(uuid) from public, anon, authenticated;
+revoke execute on function public.account_row(uuid, text) from public, anon, authenticated;
 
 create or replace function public.search_accounts(p_query text, p_gym text) returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
@@ -257,7 +266,7 @@ begin
   end if;
   pat := '%' || replace(replace(replace(q, '\', '\\'), '%', '\%'), '_', '\_') || '%';
   return coalesce((
-    select jsonb_agg(public.account_row(t.id) order by t.ord)
+    select jsonb_agg(public.account_row(t.id, p_gym) order by t.ord)
       from (select p.id, row_number() over (
                      order by (p.username = q or lower(coalesce(p.nickname, '')) = q) desc,
                               (p.username like q || '%' or lower(coalesce(p.nickname, '')) like q || '%') desc,
@@ -275,7 +284,7 @@ begin
   if p_gym is null or not public.is_staff(p_gym) then
     raise exception '沒有權限' using errcode = '42501';
   end if;
-  return public.account_row(p_user);
+  return public.account_row(p_user, p_gym);
 end $$;
 revoke execute on function public.account_info(uuid, text) from public, anon;
 grant execute on function public.account_info(uuid, text) to authenticated;
@@ -287,7 +296,7 @@ begin
     raise exception '沒有權限' using errcode = '42501';
   end if;
   return coalesce((
-    select jsonb_agg(public.account_row(p.id) order by p.suspended_at desc)
+    select jsonb_agg(public.account_row(p.id, p_gym) order by p.suspended_at desc)
       from public.profiles p where p.suspended_until > now()), '[]'::jsonb);
 end $$;
 revoke execute on function public.suspended_accounts(text) from public, anon;
@@ -314,7 +323,7 @@ grant execute on function public.account_comments(uuid, text) to authenticated;
 
 -- ---------------------------------------------------------------------
 -- 刪帳號
--- 影片檔：老闆用 account_video_files()、本人用 delete_my_videos() 拿到檔名，App 從 Storage 刪掉後再刪帳號
+-- 影片檔：老闆用 delete_user_videos()、本人用 delete_my_videos() 先刪影片資料、拿到檔名，App 從 Storage 刪掉後再刪帳號
 -- （中途失敗的話，後台「影片 → 清理漏刪的檔案」照樣補得回來）
 -- ---------------------------------------------------------------------
 -- 刪帳號時，他出的岩友路線要把出題人改成空的（on delete set null），
@@ -326,17 +335,27 @@ language sql set search_path = '' as $$
 $$;
 revoke execute on function public.drop_jwt_for_cascade() from public, anon, authenticated;
 
--- 老闆刪別人：先拿影片檔名，從 Storage 刪掉（員工可以刪任何人的影片檔）
-create or replace function public.account_video_files(p_user uuid) returns text[]
-language plpgsql stable security definer set search_path = '' as $$
+-- 老闆刪別人第一步：檢查可以刪之後，先刪他的影片資料，回傳檔名讓 App 從 Storage 刪（員工可以刪任何人的影片檔）
+create or replace function public.delete_user_videos(p_user uuid) returns text[]
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_paths text[];
 begin
   if not public.is_owner() then
-    raise exception '沒有權限' using errcode = '42501';
+    raise exception '只有老闆可以刪除別人的帳號' using errcode = '42501';
   end if;
-  return coalesce((select array_agg(v.path) from public.route_videos v where v.user_id = p_user), '{}');
+  if not exists (select 1 from public.profiles where id = p_user) then
+    raise exception '找不到這個帳號' using errcode = 'P0002';
+  end if;
+  if public.is_any_staff(p_user) then
+    raise exception '員工和老闆不能刪除，請先移除員工身分' using errcode = '42501';
+  end if;
+  with d as (delete from public.route_videos where user_id = p_user returning path)
+  select coalesce(array_agg(path), '{}') into v_paths from d;
+  return v_paths;
 end $$;
-revoke execute on function public.account_video_files(uuid) from public, anon;
-grant execute on function public.account_video_files(uuid) to authenticated;
+revoke execute on function public.delete_user_videos(uuid) from public, anon;
+grant execute on function public.delete_user_videos(uuid) to authenticated;
 
 -- 密碼對不對（本人，刪帳號用）
 create or replace function public.my_password_ok(p_password text) returns boolean
@@ -355,6 +374,9 @@ declare
 begin
   if auth.uid() is null then
     raise exception '請先登入' using errcode = '42501';
+  end if;
+  if public.is_any_staff(auth.uid()) then
+    raise exception '員工帳號不能自己刪除，請先請老闆移除員工身分' using errcode = '42501';
   end if;
   if not public.my_password_ok(p_password) then
     return null;
@@ -422,6 +444,7 @@ do $do$ begin
   code_hash  text not null,
   expires_at timestamptz not null,
   tries      int not null default 0,
+  gym_id     text references public.gyms (id) on delete set null,   -- 在哪一館產生（用掉時操作紀錄記在這館）
   created_by uuid references public.profiles (id) on delete set null,
   created_at timestamptz not null default now()
 )$t$;
@@ -451,10 +474,10 @@ begin
   end if;
   -- 0～999999 平均分布（取 4 bytes 再取餘數，偏差可忽略）
   v_code := lpad(((('x' || encode(extensions.gen_random_bytes(4), 'hex'))::bit(32)::bigint) % 1000000)::text, 6, '0');
-  insert into public.password_resets (user_id, code_hash, expires_at, tries, created_by, created_at)
-  values (p_user, extensions.crypt(v_code, extensions.gen_salt('bf')), v_exp, 0, auth.uid(), now())
+  insert into public.password_resets (user_id, code_hash, expires_at, tries, gym_id, created_by, created_at)
+  values (p_user, extensions.crypt(v_code, extensions.gen_salt('bf')), v_exp, 0, p_gym, auth.uid(), now())
   on conflict (user_id) do update
-    set code_hash = excluded.code_hash, expires_at = excluded.expires_at, tries = 0,
+    set code_hash = excluded.code_hash, expires_at = excluded.expires_at, tries = 0, gym_id = excluded.gym_id,
         created_by = excluded.created_by, created_at = excluded.created_at;
   perform public.write_audit(p_gym, 'user.reset_code', p_user, jsonb_build_object(
     'nickname', (select nickname from public.profiles where id = p_user),
@@ -471,6 +494,9 @@ begin
   if p_gym is null or not public.is_staff(p_gym) then
     raise exception '沒有權限' using errcode = '42501';
   end if;
+  if public.is_any_staff(p_user) and not public.is_owner() then
+    raise exception '員工的帳號只有老闆可以處理' using errcode = '42501';
+  end if;
   delete from public.password_resets where user_id = p_user;
 end $$;
 revoke execute on function public.cancel_reset_code(uuid, text) from public, anon;
@@ -485,7 +511,8 @@ declare
   v_user uuid;
   r      public.password_resets;
 begin
-  if char_length(coalesce(p_password, '')) not between 8 and 72 then
+  -- bcrypt 只看前 72 bytes（中文一個字 3 bytes），太長的擋下
+  if char_length(coalesce(p_password, '')) < 8 or octet_length(p_password) > 72 then
     return 'short';
   end if;
   v_user := (select id from public.profiles where username = lower(btrim(coalesce(p_username, ''))));
@@ -510,7 +537,7 @@ begin
    where id = v_user;
   delete from auth.sessions where user_id = v_user;   -- 其他手機登出
   delete from public.password_resets where user_id = v_user;
-  perform public.write_audit(null, 'user.password_reset', v_user, jsonb_build_object(
+  perform public.write_audit(r.gym_id, 'user.password_reset', v_user, jsonb_build_object(
     'username', (select username from public.profiles where id = v_user)));
   return 'ok';
 end $$;

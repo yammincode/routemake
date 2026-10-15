@@ -106,7 +106,7 @@ export default function ResetForm({ onBack, onDone }: { onBack: () => void; onDo
           {busy ? "請稍候…" : "設定新密碼並登入"}
         </Button>
       </form>
-      <Tip>設好後，其他手機上的登入都會登出。重設碼打錯 5 次會失效，要再請櫃檯產生。</Tip>
+      <Tip>設好後，其他手機上的登入會在 1 小時內登出。重設碼打錯 5 次會失效，要再請櫃檯產生。</Tip>
     </>
   );
 }

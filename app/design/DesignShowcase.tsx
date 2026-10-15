@@ -28,7 +28,7 @@ import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, RouteTag, Se
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { GymLegend, ProgressCard } from "@/components/ui/Progress";
 import { SlamTicket } from "@/components/ui/Slam";
-import { AccountSummary, ResetCodeBox, SuspendedLine, SuspendNotice } from "@/components/ui/Account";
+import { AccountSummary, ResetCodeBox, SuspendedLine, SuspendNotice, ToggleButton } from "@/components/ui/Account";
 import { CalendarHeat, DailyBars, DaySummary, Delta, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
@@ -663,7 +663,22 @@ export default function DesignShowcase() {
             { gym: "明德館", zone: "A1 區", code: "A1-03", color: "紅", grade: 3 },
           ]}
           suspension={<SuspendedLine until="2027-01-22T10:00:00+08:00" reason="留言騷擾其他顧客" by="王店長" at="2026-10-15T10:00:00+08:00" />}
-        />
+        >
+          <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+            <ToggleButton on={false} onClick={() => undefined}>
+              看留言
+            </ToggleButton>
+            <ToggleButton on warn onClick={() => undefined}>
+              停權中…
+            </ToggleButton>
+            <ToggleButton on={false} onClick={() => undefined}>
+              重設密碼
+            </ToggleButton>
+            <ToggleButton on={false} warn onClick={() => undefined}>
+              刪帳號…
+            </ToggleButton>
+          </div>
+        </AccountSummary>
         <p className="mt-3 mb-1.5 text-meta text-muted">櫃檯產生的重設碼（ResetCodeBox）：大字、倒數、請客人怎麼做</p>
         <ResetCodeBox code="482917" left="14:52 內有效" username="aming88" />
       </Block>

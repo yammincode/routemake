@@ -104,3 +104,17 @@ export function ResetCodeBox({ code, left, username }: { code: string; left: str
     </div>
   );
 }
+
+// 帳號管理每個人下面的動作按鈕（看留言、停權…、重設密碼、刪帳號…）：按了展開那一塊，再按收起；warn 是停權、刪帳號
+export function ToggleButton({ on, warn = false, onClick, children }: { on: boolean; warn?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={`rounded-field border px-1 py-2.5 text-note font-bold aria-pressed:bg-sunk ${warn ? "border-warn text-warn" : "border-line"}`}
+    >
+      {children}
+    </button>
+  );
+}

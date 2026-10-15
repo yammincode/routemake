@@ -512,7 +512,7 @@ export async function removeStaff(userId: string, gym: string) {
 // ---------- 帳號管理（step43）：停權、刪帳號、櫃檯重設密碼 ----------
 export const NO_ACCOUNTS = "資料庫還沒套用 step43（停權、刪帳號、重設密碼），請老闆在 Supabase 執行 step43";
 // until：停權到什麼時候（null＝永久）
-export type Suspension = { until: string | null; reason: string; at?: string; by?: string | null };
+export type Suspension = { until: string | null; reason: string; at?: string; by?: string | null; mine?: boolean }; // mine：是我停的
 export type AccountInfo = {
   id: string;
   username: string;
@@ -521,6 +521,7 @@ export type AccountInfo = {
   staff: boolean; // 員工或老闆：不能停權、刪除，重設密碼只有老闆
   ascents: number;
   comments: number;
+  comments_here: number; // 在這館的留言（店長停權時只刪得到這些）
   videos: number;
   recent: { gym: string; zone: string; code: string; color: HoldColor; grade: number; climbed_on: string }[]; // 最近完攀 3 條（核對身分用）
   suspension: Suspension | null;
@@ -563,10 +564,10 @@ export type ResetResult = "ok" | "bad" | "expired" | "short";
 export async function resetPasswordWithCode(username: string, code: string, password: string): Promise<ResetResult> {
   return mustAccounts(await supabase().rpc("reset_password_with_code", { p_username: username, p_code: code, p_password: password }));
 }
-// 老闆刪別人的帳號：先刪影片檔（員工可以刪任何人的檔），再刪帳號
+// 老闆刪別人的帳號：資料庫先檢查可以刪、刪掉影片資料並回傳檔名 → 刪檔案（員工可以刪任何人的檔）→ 刪帳號
 export async function deleteUser(userId: string) {
-  const paths = mustAccounts(await supabase().rpc("account_video_files", { p_user: userId })) as string[];
-  await removeVideoFiles(paths ?? []);
+  const paths = mustAccounts(await supabase().rpc("delete_user_videos", { p_user: userId })) as string[];
+  await removeVideoFiles(paths ?? []).catch(() => undefined);
   mustAccounts(await supabase().rpc("delete_user", { p_user: userId }));
 }
 // 本人刪帳號：密碼錯回傳 false；先刪自己的影片資料和檔案，再刪帳號

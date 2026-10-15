@@ -92,12 +92,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") void loadAccess(s);
       if (event === "SIGNED_IN") void markOpen(null);
     });
-    return () => sub.subscription.unsubscribe();
+    // 回到 App（從背景切回來）重新讀權限和停權狀態：店長剛停權或解除時，不用把 App 關掉重開
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void sb.auth.getSession().then(({ data }) => data.session && loadAccess(data.session));
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      sub.subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [loadAccess]);
 
   // 第一次登入還沒填暱稱 → 先去填；暱稱跟登入帳號一樣（舊版預設帶入帳號）也請他換一個，帳號不該公開
   useEffect(() => {
-    if (session && access && needsNickname(access) && pathname !== "/welcome" && pathname !== "/login") {
+    // 停權中不能改暱稱：不要帶去取暱稱（會卡住）
+    if (session && access && !access.suspension && needsNickname(access) && pathname !== "/welcome" && pathname !== "/login") {
       router.replace(`/welcome?next=${encodeURIComponent(herePath())}`);
     }
   }, [session, access, pathname, router]);
@@ -164,7 +174,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const check = await supabase().auth.signInWithPassword({ email: usernameToEmail(access.username), password: oldPassword });
       if (check.error) return authErrorMessage(check.error) === "帳號或密碼錯誤" ? "現在的密碼不對" : authErrorMessage(check.error);
       const { error } = await supabase().auth.updateUser({ password: newPassword });
-      if (error) return error.code === "same_password" ? "新密碼跟現在的一樣" : authErrorMessage(error);
+      if (error) {
+        if (error.code === "same_password") return "新密碼跟現在的一樣";
+        if (error.code === "reauthentication_needed") return "請登出後再登入一次，再改密碼";
+        if (/72/.test(error.message ?? "")) return "新密碼太長了";
+        return authErrorMessage(error);
+      }
       return null;
     },
     [session, access]

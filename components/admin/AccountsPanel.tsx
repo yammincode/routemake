@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import SuspendBox from "@/components/admin/SuspendBox";
-import { AccountSummary, ResetCodeBox, SuspendedLine } from "@/components/ui/Account";
+import { AccountSummary, ResetCodeBox, SuspendedLine, ToggleButton } from "@/components/ui/Account";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Empty, SectionTitle, Tip } from "@/components/ui/Card";
 import { Label, TextField } from "@/components/ui/Form";
@@ -18,6 +18,7 @@ import {
   getAccountComments,
   getSuspendedAccounts,
   issueResetCode,
+  NO_ACCOUNTS,
   searchAccounts,
   type AccountComment,
   type AccountInfo,
@@ -50,17 +51,22 @@ export default function AccountsPanel({ gymId }: { gymId: string }) {
     void Promise.resolve().then(loadSuspended);
   }, [loadSuspended]);
 
+  // 只用最新一次搜尋的結果（慢的舊結果晚回來不蓋掉）
+  const latest = useRef("");
   const search = useCallback(
-    (q: string) =>
-      searchAccounts(q, gymId)
-        .then(setHits)
-        .catch((e) => toast((e as Error).message)),
+    (q: string) => {
+      latest.current = q;
+      return searchAccounts(q, gymId)
+        .then((h) => latest.current === q && setHits(h))
+        .catch((e) => latest.current === q && toast((e as Error).message));
+    },
     [gymId, toast]
   );
   // 邊打邊搜（停 0.3 秒才查）；英數至少 2 個字、中文 1 個字
   useEffect(() => {
     const q = query.trim();
     if (!q || (q.length < 2 && /^[ -~]*$/.test(q))) {
+      latest.current = "";
       queueMicrotask(() => setHits(null));
       return;
     }
@@ -74,7 +80,8 @@ export default function AccountsPanel({ gymId }: { gymId: string }) {
     if (query.trim()) void search(query.trim());
   };
 
-  if (error && suspended == null) {
+  // 資料庫還沒套用 step43：整塊只顯示說明
+  if (error === NO_ACCOUNTS) {
     return (
       <>
         <SectionTitle>帳號管理</SectionTitle>
@@ -88,7 +95,7 @@ export default function AccountsPanel({ gymId }: { gymId: string }) {
     const key = `${inList ? "list" : "hit"}:${a.id}`;
     const mode = open?.id === key ? open.mode : null;
     const toggle = (m: Mode) => setOpen(mode === m ? null : { id: key, mode: m });
-    const canReset = !a.staff || owner;
+    const canReset = (!a.staff || owner) && a.id !== access?.id;
     const canDelete = owner && !a.staff;
     return (
       <div key={key} className="mt-2.5" data-account={a.username}>
@@ -101,27 +108,27 @@ export default function AccountsPanel({ gymId }: { gymId: string }) {
           suspension={a.suspension && !(manager && mode === "suspend") ? <SuspendedLine {...a.suspension} /> : undefined}
         >
           <div className="mt-2.5 grid grid-cols-2 gap-1.5">
-            <ModeButton on={mode === "comments"} onClick={() => toggle("comments")}>
+            <ToggleButton on={mode === "comments"} onClick={() => toggle("comments")}>
               看留言
-            </ModeButton>
+            </ToggleButton>
             {manager && !a.staff && (
-              <ModeButton on={mode === "suspend"} warn onClick={() => toggle("suspend")}>
+              <ToggleButton on={mode === "suspend"} warn onClick={() => toggle("suspend")}>
                 {a.suspension ? "停權中…" : "停權…"}
-              </ModeButton>
+              </ToggleButton>
             )}
             {canReset && !inList && (
-              <ModeButton on={mode === "reset"} onClick={() => toggle("reset")}>
+              <ToggleButton on={mode === "reset"} onClick={() => toggle("reset")}>
                 重設密碼
-              </ModeButton>
+              </ToggleButton>
             )}
             {canDelete && !inList && (
-              <ModeButton on={mode === "delete"} warn onClick={() => toggle("delete")}>
+              <ToggleButton on={mode === "delete"} warn onClick={() => toggle("delete")}>
                 刪帳號…
-              </ModeButton>
+              </ToggleButton>
             )}
           </div>
           {mode === "comments" && <CommentsOf info={a} gymId={gymId} onChange={refresh} />}
-          {mode === "suspend" && <SuspendBox info={a} gymId={gymId} onDone={refresh} />}
+          {mode === "suspend" && <SuspendBox key={a.suspension?.at ?? "none"} info={a} gymId={gymId} onDone={refresh} />}
           {mode === "reset" && <ResetBox info={a} gymId={gymId} />}
           {mode === "delete" && <DeleteBox info={a} onDone={() => (setOpen(null), refresh())} />}
         </AccountSummary>
@@ -155,7 +162,12 @@ export default function AccountsPanel({ gymId }: { gymId: string }) {
       </SetBox>
       <SetBox>
         <b className="mt-3 block text-sub">停權中（{suspended?.length ?? "…"}）</b>
-        {suspended == null ? (
+        {error ? (
+          <>
+            <p className="mt-2 mb-0 text-meta text-muted">{error}</p>
+            <LinkButton onClick={loadSuspended}>重新讀取</LinkButton>
+          </>
+        ) : suspended == null ? (
           <p className="mt-2 mb-0 text-meta text-muted">讀取中…</p>
         ) : suspended.length === 0 ? (
           <p className="mt-2 mb-0 text-meta text-muted">目前沒有停權中的帳號。</p>
@@ -167,23 +179,12 @@ export default function AccountsPanel({ gymId }: { gymId: string }) {
   );
 }
 
-function ModeButton({ on, warn = false, onClick, children }: { on: boolean; warn?: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      aria-pressed={on}
-      onClick={onClick}
-      className={`rounded-field border px-1 py-2.5 text-note font-bold aria-pressed:bg-sunk ${warn ? "border-warn text-warn" : "border-line"}`}
-    >
-      {children}
-    </button>
-  );
-}
-
 // 某人的留言：這館的員工可以刪（按兩次）
 function CommentsOf({ info, gymId, onChange }: { info: AccountInfo; gymId: string; onChange: () => void }) {
   const toast = useToast();
   const [list, setList] = useState<AccountComment[] | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const load = useCallback(() => {
     getAccountComments(info.id, gymId)
       .then(setList)
@@ -204,9 +205,11 @@ function CommentsOf({ info, gymId, onChange }: { info: AccountInfo; gymId: strin
           <span className="block text-note break-words">{c.body}</span>
           {c.deletable && (
             <button
-              className={`mt-1 text-meta text-warn ${confirm === c.id ? "font-bold" : ""}`}
+              className={`-mx-1 mt-0.5 px-1 py-2 text-meta text-warn ${confirm === c.id ? "font-bold" : ""}`}
+              disabled={busy}
               onClick={async () => {
                 if (confirm !== c.id) return setConfirm(c.id);
+                setBusy(true);
                 try {
                   await deleteComment(c.id);
                   toast("已刪除留言");
@@ -215,6 +218,8 @@ function CommentsOf({ info, gymId, onChange }: { info: AccountInfo; gymId: strin
                   onChange();
                 } catch (e) {
                   toast((e as Error).message);
+                } finally {
+                  setBusy(false);
                 }
               }}
             >
@@ -233,13 +238,13 @@ function ResetBox({ info, gymId }: { info: AccountInfo; gymId: string }) {
   const [code, setCode] = useState<ResetCode | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!code) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [code]);
   const leftMs = code ? new Date(code.expires_at).getTime() - now : 0;
   const expired = !!code && leftMs <= 0;
+  useEffect(() => {
+    if (!code || expired) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [code, expired]);
   const left = `${Math.floor(Math.max(0, leftMs) / 60000)}:${String(Math.floor((Math.max(0, leftMs) % 60000) / 1000)).padStart(2, "0")} 內有效`;
 
   const make = async () => {
@@ -261,7 +266,7 @@ function ResetBox({ info, gymId }: { info: AccountInfo; gymId: string }) {
         <Button variant="primary" disabled={busy} onClick={() => void make()}>
           產生重設碼
         </Button>
-        <small className="mt-1 block text-center text-tiny text-muted">員工看不到密碼；每次產生都會記在操作紀錄</small>
+        <small className="mt-1 block text-center text-tiny text-muted">員工看不到密碼；每次產生都會記在操作紀錄。收起來就看不到這組碼，要再產生一組（舊的自動作廢）</small>
       </div>
     );
   }
@@ -272,12 +277,15 @@ function ResetBox({ info, gymId }: { info: AccountInfo; gymId: string }) {
         className="mt-2"
         disabled={busy}
         onClick={async () => {
+          setBusy(true);
           try {
             await cancelResetCode(info.id, gymId);
             setCode(null);
             toast("已作廢這組重設碼");
           } catch (e) {
             toast((e as Error).message);
+          } finally {
+            setBusy(false);
           }
         }}
       >

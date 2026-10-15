@@ -7,6 +7,7 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { Check, Label, MultiOptionGrid, OptionGrid, TextField, Toggle } from "@/components/ui/Form";
 import { ClosedNotice } from "@/components/ui/Comments";
+import { suspendActive } from "@/components/ui/Account";
 import { UserAvatar } from "@/components/ui/Mascot";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
@@ -284,6 +285,8 @@ export default function RouteVideos({
         <div className={videos?.length && active ? "mt-3" : ""}>
           {!session ? (
             <Button onClick={onLogin}>登入後分享影片</Button>
+          ) : access?.suspension && suspendActive(access.suspension.until) ? (
+            <ClosedNotice>帳號暫停中，暫時不能分享影片</ClosedNotice>
           ) : !file ? (
             <>
               <VideoPickButton onPick={pick} disabled={busy}>

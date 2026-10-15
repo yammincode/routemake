@@ -85,7 +85,7 @@ export default function AccountCard() {
           onSave={async (o, n) => {
             const err = await changePassword(o, n);
             if (!err) {
-              toast("已改好密碼");
+              toast("已改好密碼，其他手機要用新密碼重新登入");
               setPanel(null);
             }
             return err;
