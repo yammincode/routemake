@@ -147,6 +147,7 @@
   --animate-slam-stripe: slam-stripe 1.2s linear infinite;
   --animate-talk: talk-pop 0.3s ease-out;
   --animate-confetti: confetti-fall 1.4s ease-in forwards;
+  --animate-focus-ring: focus-ring 1.1s ease-out 3;
 
   @keyframes sheet-up {
     from {
@@ -183,6 +184,16 @@
   @keyframes confetti-fall {
     to {
       transform: translateY(105vh) rotate(540deg);
+    }
+  }
+  /* New~「看路線 ›」跳到區域頁：那條路線的黃圈往外擴散三下（停下來後黃圈留著） */
+  @keyframes focus-ring {
+    50% {
+      box-shadow: 0 0 0 10px color-mix(in srgb, var(--flash) 0%, transparent);
+    }
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--flash) 60%, transparent);
     }
   }
   /* 大滿貫兌換卡的條紋一直往右走：截圖的話不會動，櫃檯一眼看得出來 */
@@ -239,7 +250,8 @@
   .animate-zone-prev,
   .animate-slam-stripe,
   .animate-talk,
-  .animate-confetti {
+  .animate-confetti,
+  .animate-focus-ring {
     animation: none;
   }
 }

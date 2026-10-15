@@ -12,6 +12,7 @@ export function Pin({
   grade,
   status,
   dim = false,
+  focus = false,
   label,
   onClick,
 }: {
@@ -21,6 +22,7 @@ export function Pin({
   grade: number;
   status?: Status | null;
   dim?: boolean;
+  focus?: boolean; // New~「看路線 ›」跳過來的那一條：放大、黃圈閃三下
   label: string;
   onClick?: (e: MouseEvent) => void;
 }) {
@@ -29,17 +31,19 @@ export function Pin({
     <button
       aria-label={label}
       onClick={onClick}
-      className={`absolute grid size-[30px] place-items-center rounded-full border-2 border-white font-num text-num-pin font-bold shadow-pin transition-opacity duration-150 ${dim ? "opacity-[0.16]" : ""}`}
+      aria-current={focus || undefined}
+      className={`absolute grid size-[30px] place-items-center rounded-full border-2 border-white font-num text-num-pin font-bold shadow-pin transition-opacity duration-150 ${dim ? "opacity-[0.16]" : ""} ${focus ? "z-10" : ""}`}
       style={{
         left: `${x}%`,
         top: `${y}%`,
-        transform: "translate(-50%, -50%) scale(var(--inv, 1))",
+        transform: `translate(-50%, -50%) scale(calc(var(--inv, 1) * ${focus ? 1.35 : 1}))`,
         background: HOLD_COLORS[color],
         color: holdTextColor(color),
       }}
     >
       <span className={grade >= 100 ? "text-[12px] tracking-[-0.03em]" : undefined}>{gradeShort(grade)}</span>
       {ring && <span aria-hidden className={`pointer-events-none absolute -inset-1.5 rounded-full border-2 border-white ${ring}`} />}
+      {focus && <span aria-hidden className="pointer-events-none absolute -inset-2 animate-focus-ring rounded-full border-[3px] border-flash" />}
     </button>
   );
 }

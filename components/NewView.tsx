@@ -43,14 +43,15 @@ import {
 } from "@/lib/data";
 import { ago, dayStartIso, videoWhen } from "@/lib/date";
 import { feelTagText, videoTagText } from "@/lib/design";
-import { herePath } from "@/lib/nav";
+import { herePath, zoneRoutePath } from "@/lib/nav";
 import { overlayPending } from "@/lib/offline";
 import { loginExpired } from "@/lib/supabase";
 
 // New~：大家最新分享的影片、留言（所有開放的館）
 // - 今天（台北時間）的隨機排、最多 10 筆；今天不到 10 筆用之前最新的補滿
 // - 今天超過 10 筆時可以「↻ 換一批」：先換成還沒看過的，看完一輪才重複
-// - 影片點了全螢幕播放，「看這條路線 ›」在這頁打開那條路線的卡片（停在影片分頁）；留言「看路線 ›」打開卡片停在留言分頁
+// - 影片全螢幕播放的「看這條路線 ›」、留言的「看路線 ›」：跳到那條路線的區域頁（標出那一條、打開卡片停在紀錄）
+//   跳之前記下這一批、分頁、捲動位置，從區域頁回來照原樣（不重新洗牌）；Spray Wall 的路線卡片本來就有照片和圈圈，照舊在這頁打開
 // - 卡片馬上打開；自己的紀錄讀到之前先寫「讀取中…」，讀到才顯示記錄按鈕（不然再點一次狀態會蓋掉原本的心得和日期）
 type Kind = "video" | "comment";
 type Picked<T> = { feed: Feed<T>; shown: T[]; seen: Set<string> };
@@ -64,6 +65,29 @@ const Heading = ({ children }: { children: ReactNode }) => <h3 className="m-0 te
 const already = (e: unknown) => (e as DbError).code === "23505"; // 已經按過讚（別的分頁按的）
 // 讚的人：加上或拿掉自己
 const withMe = (likers: string[], me: string, on: boolean) => (on ? [...likers.filter((u) => u !== me), me] : likers.filter((u) => u !== me));
+
+// 跳去區域頁前記下的這一批（存在這支手機這次打開的 App 裡；回來用一次就丟，30 分鐘後不用）
+const BACK_KEY = "routemake-new-back";
+type Back = { at: number; kind: Kind; v: string[]; c: string[]; vSeen: string[]; cSeen: string[]; y: number };
+function readBack(): Back | null {
+  try {
+    const b = JSON.parse(sessionStorage.getItem(BACK_KEY) ?? "null") as Back | null;
+    return b && Date.now() - b.at < 30 * 60000 ? b : null;
+  } catch {
+    return null;
+  }
+}
+function saveBack(b: Omit<Back, "at">) {
+  try {
+    sessionStorage.setItem(BACK_KEY, JSON.stringify({ ...b, at: Date.now() }));
+  } catch {}
+}
+// 照記下的順序排回來（重讀的列表裡已經被刪掉的就跳過）；一則都不剩就重新洗牌
+function restore<T extends { id: string }>(feed: Feed<T>, ids: string[], seen: string[]): Picked<T> | null {
+  const all = new Map([...feed.today, ...feed.older].map((x) => [x.id, x]));
+  const shown = ids.flatMap((id) => all.get(id) ?? []);
+  return shown.length ? { feed, shown, seen: new Set([...seen, ...shown.map((x) => x.id)]) } : null;
+}
 
 function start<T extends { id: string }>(feed: Feed<T>): Picked<T> {
   const shown = pickFeed(feed);
@@ -111,20 +135,37 @@ export default function NewView() {
   const liking = useRef(new Set<string>()); // 正在送出讚的留言、影片：重讀列表時保留手機上的讚
   const syncSeq = useRef<Record<string, number>>({}); // 每條路線最後一次重讀，舊的回來晚了不用
   const staleOpen = useRef<string | null>(null); // 打開時離線紀錄送出了：這條關掉後要重讀
+  const backY = useRef<number | null>(null); // 從區域頁回來：列表排好後捲回這個位置
 
   useEffect(() => {
     let live = true;
     Promise.all([getFeedVideos(), getFeedComments()])
       .then(([v, c]) => {
         if (!live) return;
-        setVideos(start(v));
-        setComments(start(c));
+        const back = readBack();
+        try {
+          sessionStorage.removeItem(BACK_KEY);
+        } catch {}
+        setVideos((back && restore(v, back.v, back.vSeen)) ?? start(v));
+        setComments((back && restore(c, back.c, back.cSeen)) ?? start(c));
+        if (back) {
+          setKind(back.kind);
+          backY.current = back.y;
+        }
       })
       .catch(() => live && setFailed(true));
     return () => {
       live = false;
     };
   }, []);
+
+  // 從區域頁回來：列表畫好了再捲回剛剛的位置
+  useEffect(() => {
+    if (backY.current == null || !videos || !comments) return;
+    const y = backY.current;
+    backY.current = null;
+    requestAnimationFrame(() => window.scrollTo({ top: y }));
+  }, [videos, comments]);
 
   const o = open?.place ?? null;
   const routeId = o?.route.id ?? null;
@@ -178,6 +219,21 @@ export default function NewView() {
     setReadFailed(null);
     setSpray(null);
     setOpen({ place: p, tab });
+  };
+
+  // 看路線：跳到區域頁標出那一條（Spray Wall 照舊打開卡片）；先記下這一批，回來照原樣
+  const goRoute = (p: FeedPlace, tab: RouteTab) => {
+    if (p.zone.kind === "spray") return openRoute(p, tab);
+    saveBack({
+      kind,
+      v: videos?.shown.map((x) => x.id) ?? [],
+      c: comments?.shown.map((x) => x.id) ?? [],
+      vSeen: [...(videos?.seen ?? [])],
+      cSeen: [...(comments?.seen ?? [])],
+      y: window.scrollY,
+    });
+    setPlayingId(null);
+    router.push(zoneRoutePath(p.zone.id, p.route.id));
   };
 
   // 關掉卡片：重讀這條路線的留言和影片（卡片裡按的讚、改的留言、刪的影片）
@@ -375,7 +431,7 @@ export default function NewView() {
               liked={!!uid && c.likers.includes(uid)}
               onLike={() => void toggleLike(c)}
               place={place(c)}
-              onOpen={() => openRoute(c, "comment")}
+              onOpen={() => goRoute(c, "comment")}
             />
           ),
           (rows) => <CommentList>{rows}</CommentList>
@@ -387,7 +443,7 @@ export default function NewView() {
         index={playing < 0 ? null : playing}
         onIndex={(i) => setPlayingId(i == null ? null : (cards[i]?.key ?? null))}
         actions={(i) => (
-          <button onClick={() => videos && openRoute(videos.shown[i], "video")} className="text-sub font-bold text-white">
+          <button onClick={() => videos && goRoute(videos.shown[i], "video")} className="text-sub font-bold text-white">
             看這條路線 ›
           </button>
         )}

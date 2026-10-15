@@ -195,6 +195,7 @@ export default function DesignShowcase() {
   const [videoTag, setVideoTag] = useState<string | null>(null);
   const [trimDemo, setTrimDemo] = useState<[number, number]>([12, 53.5]);
   const [monthPick, setMonthPick] = useState<string | null>(null);
+  const [pinFocus, setPinFocus] = useState(false);
   const [calDay, setCalDay] = useState<{ d: number; open: boolean } | null>({ d: 23, open: false });
   const [muteDemo, setMuteDemo] = useState(false);
   const [pickHeight, setPickHeight] = useState<HeightBand | null>("170s");
@@ -391,16 +392,18 @@ export default function DesignShowcase() {
 
       <Block title="區域頁：照片、難度色帶、篩選、分段列表（版型固定）">
         <Toggle checked={setter} onChange={setSetter} label="管理模式（點照片新增）" />
+        <Toggle checked={pinFocus} onChange={setPinFocus} label="New~ 看路線跳過來（標出第一條：Pin focus）" />
         <WallPhoto src={wall.uri} alt="A 區照片" setter={setter} hideable={!setter} onPick={(x, y) => setTemp({ x, y })}>
-          {routes.map((r) => (
+          {routes.map((r, i) => (
             <Pin
               key={r.code}
+              focus={pinFocus && i === 0}
               x={r.x}
               y={r.y}
               color={r.color}
               grade={r.grade}
               status={r.status === "project" ? null : r.status}
-              dim={!match(r)}
+              dim={pinFocus ? i !== 0 : !match(r)}
               label={`V${r.grade} ${r.color}色 ${r.code}`}
               onClick={() => openRoute(r)}
             />

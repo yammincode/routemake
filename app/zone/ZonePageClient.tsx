@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import ZoneView, { type ZoneHead } from "@/components/ZoneView";
@@ -8,6 +8,7 @@ import { Empty } from "@/components/ui/Card";
 import { SwipeHint, ZoneNav, type ZoneDir } from "@/components/ui/Gym";
 import { useBand } from "@/lib/band";
 import { readZoneAhead, type ZoneLink } from "@/lib/data";
+import { upTo } from "@/lib/nav";
 import { hasCache, peekCache, useOnline, withCache } from "@/lib/offline";
 import { attachSwipe } from "@/lib/swipe";
 import { useZoneOrder } from "@/lib/zoneOrder";
@@ -17,8 +18,13 @@ import { useZoneOrder } from "@/lib/zoneOrder";
 // - 難度篩選記在這裡：換區後新的區有這個難度就照樣篩；V 級的四格跟館首頁同一個（記在手機），YDS、長耐力的小按鈕只記到離開區域頁
 // - 換區後報讀新區的名字；用按鈕換的，焦點停在同一邊的按鈕
 // - 沒網路時只能換到手機裡存過的區
+// - New~「看路線 ›」跳過來（?route=…&from=new）：標出那條路線；返回寫「‹ New~」，換區後也一樣（上一頁還是 New~）
 export default function ZonePageClient() {
-  const id = useSearchParams().get("id");
+  const params = useSearchParams();
+  const id = params.get("id");
+  const focusRoute = params.get("route");
+  const fromNew = params.get("from") === "new";
+  const router = useRouter();
   const { session } = useAuth();
   const uid = session?.user.id;
   const online = useOnline();
@@ -48,11 +54,11 @@ export default function ZonePageClient() {
       setMoved({ dir, byButton, to: z.id });
       setHere({ ...here, zoneName: z.name });
       setHint(null);
-      window.history.replaceState(null, "", `/zone?id=${encodeURIComponent(z.id)}`);
+      window.history.replaceState(null, "", `/zone?id=${encodeURIComponent(z.id)}${fromNew ? "&from=new" : ""}`);
       window.scrollTo({ top: 0 });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- near 每次重算，看 id 就夠
-    [id, here, prev?.id, next?.id]
+    [id, here, prev?.id, next?.id, fromNew]
   );
 
   // 手指：綁一次就好，用 ref 拿最新的上一區／下一區
@@ -105,6 +111,8 @@ export default function ZonePageClient() {
           onGrade={setGrade}
           head={here && arrived ? here : null}
           onZone={onZone}
+          focus={focusRoute}
+          back={fromNew ? { label: "New~", onClick: () => upTo(router, "/new") } : null}
           nav={<ZoneNav prev={prev?.name} next={next?.name} onGo={(d) => go(d, true)} focus={arrived?.byButton ? arrived.dir : null} />}
         />
       </div>

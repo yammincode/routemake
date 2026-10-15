@@ -1,4 +1,5 @@
-// New~：大家最新的影片、留言（所有開放的館）：今天的隨機排、不到 10 筆用之前的補滿、超過 10 筆可以換一批；點了在這頁打開路線卡片
+// New~：大家最新的影片、留言（所有開放的館）：今天的隨機排、不到 10 筆用之前的補滿、超過 10 筆可以換一批；
+// 看路線跳到區域頁標出那一條、回來照原樣；Spray Wall 的路線照舊在這頁打開卡片
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { BASE, createMock, launch, login, phone, taipeiDay } from "./helpers.mjs";
@@ -16,19 +17,42 @@ const todayMin = () => {
 };
 const within = (i) => Math.min(i, Math.max(0, todayMin() - 1)); // 今天第 i 分鐘前（凌晨也還在今天）
 // 沒開放的館（中壢）加一區一條路線
+// Spray Wall 上岩友出的路線（New~ 點了照舊在這頁打開卡片）
+function sprayRoute(mock, by, name, grade = 4) {
+  const sw = mock.db.zones.find((z) => z.gym_id === "mingde" && z.kind === "spray");
+  const r = mock.addRoute(sw, grade, "白");
+  return Object.assign(r, { kind: "community", name, created_by: by, holds: [{ x: 20, y: 80, t: "s" }, { x: 60, y: 20, t: "t" }] });
+}
+// 跳到區域頁：網址帶那條路線、照片上那個點標出來（其他變淡）、一下子後打開卡片停在紀錄；返回寫「‹ New~」
+async function landedOnZone(c, zone, r) {
+  await c.waitForURL((u) => u.pathname === "/zone");
+  const u = new URL(c.url());
+  assert.deepEqual([u.searchParams.get("id"), u.searchParams.get("route"), u.searchParams.get("from")], [zone.id, r.id, "new"], "跳到那條路線的區域頁");
+  const pin = c.locator('main button[aria-current="true"]');
+  await pin.waitFor();
+  assert.ok((await pin.getAttribute("aria-label")).endsWith(r.code), "照片上標出那一條");
+  const dialog = c.locator("[role=dialog]");
+  await dialog.waitFor({ timeout: 5000 });
+  assert.ok((await dialog.textContent()).includes(r.code), "打開那條路線的卡片");
+  assert.match(await dialog.locator('[role=tab][aria-selected="true"]').textContent(), /紀錄/, "停在紀錄分頁");
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(300);
+  assert.equal(await c.locator('main button[aria-current="true"]').count(), 1, "關掉卡片黃圈還在");
+}
 function closedGymRoute(mock) {
   const z = { ...mock.db.zones[0], id: "00000000-0000-4000-8000-00000000c601", gym_id: "g6", code: "A", name: "A 區", route_seq: 0 };
   mock.db.zones.push(z);
   return mock.addRoute(z, 3, "紅");
 }
 
-test("New~ 影片：今天的隨機排、不到 10 支用之前的補滿；寫店名・區域・路線；看這條路線打開卡片停在影片分頁；沒開放的館不出現；不用登入", async () => {
+test("New~ 影片：今天的隨機排、不到 10 支用之前的補滿；寫店名・區域・路線；看這條路線跳到區域頁標出那一條、返回照原樣；沒開放的館不出現；不用登入", async () => {
   const mock = createMock();
   const other = mock.addUser("other22", "password1", { nickname: "阿明" });
   const mingde = mock.db.zones[0];
   const r1 = mock.addRoute(mingde, 4, "藍");
   const zh = mock.db.zones.find((z) => z.gym_id === "g3" && z.code === "A");
   const r2 = mock.addRoute(zh, 108, "紅");
+  zh.photo_path = "g3/zones/A-1.jpg"; // 有照片才有點可以標
   const xd = mock.db.zones.find((z) => z.gym_id === "g5" && z.code === "A1");
   const r3 = mock.addRoute(xd, 2, "黃");
   mock.addVideo(other, r1, { caption: "今天明德", created_at: ago(within(1)) });
@@ -55,18 +79,22 @@ test("New~ 影片：今天的隨機排、不到 10 支用之前的補滿；寫�
   const zhRow = rows.filter({ hasText: "今天中和" });
   assert.ok((await zhRow.textContent()).includes(`中和館・A 區・${r2.code}`), "寫店名・區域・路線");
 
-  // 點影片全螢幕播放 →「看這條路線 ›」在這頁打開路線卡片、停在影片分頁
+  // 點影片全螢幕播放 →「看這條路線 ›」跳到中和 A 區的區域頁、標出那一條
   await zhRow.click();
   const viewer = c.locator('[aria-label="影片播放"]');
   await viewer.waitFor();
   assert.ok((await viewer.textContent()).includes(`中和館・A 區・${r2.code}`), "播放畫面也寫哪條路線");
   await viewer.locator('button:has-text("看這條路線")').click();
-  await c.waitForTimeout(500);
+  await landedOnZone(c, zh, r2);
   assert.equal(await viewer.count(), 0, "播放關掉");
-  const dialog = c.locator("[role=dialog]");
-  assert.ok((await dialog.textContent()).includes(`中和館 A 區 ${r2.code}`), "打開那條路線的卡片（寫館名，因為 New~ 有各館的路線）");
-  assert.match(await dialog.locator('[role=tab][aria-selected="true"]').textContent(), /影片/, "停在影片分頁");
-  assert.ok(c.url().endsWith("/new"), "還在 New~");
+
+  // 「‹ New~」回來：同一批、同一個順序（不重新洗牌）
+  await c.locator('main button:has-text("New~")').first().click();
+  await c.waitForURL((u) => u.pathname === "/new");
+  await rows.first().waitFor();
+  assert.deepEqual(await rows.allTextContents(), texts, "回來還是同一批、同一個順序");
+  // 再打開一次 New~（不是從區域頁回來）照常重新洗牌：記下的只用一次
+  assert.equal(await c.evaluate(() => sessionStorage.getItem("routemake-new-back")), null, "記下的用過就丟");
   assert.deepEqual(errors, []);
 });
 
@@ -96,11 +124,12 @@ test("New~ 影片：今天超過 10 支時只放今天的、可以換一批（�
   assert.deepEqual(errors, []);
 });
 
-test("New~ 留言：今天的隨機排、不到 10 則用之前補滿；看路線打開卡片停在留言分頁；可以按讚；刪掉的、關留言的、下架的不出現", async () => {
+test("New~ 留言：今天的隨機排、不到 10 則用之前補滿；看路線跳到區域頁、返回停在留言分頁同一批同一個位置；可以按讚；刪掉的、關留言的、下架的不出現", async () => {
   const mock = createMock();
   mock.addUser("climber88", "password1", { nickname: "小安" });
   const other = mock.addUser("other22", "password1", { nickname: "阿明" });
   const zone = mock.db.zones[0];
+  zone.photo_path = "mingde/zones/A1-1.jpg"; // 有照片才有點可以標
   const r1 = mock.addRoute(zone, 4, "藍");
   const closed = mock.addRoute(zone, 3, "紅");
   closed.comments_enabled = false;
@@ -135,24 +164,44 @@ test("New~ 留言：今天的隨機排、不到 10 則用之前補滿；看路�
   await c.waitForTimeout(400);
   assert.equal(mock.db.likes.length, 1, "按讚存起來");
 
-  // 看路線 → 卡片停在留言分頁，看得到同一則
-  await panel.locator("div.bg-sunk", { hasText: "第三手好遠" }).locator('button:text-is("看路線 ›")').click();
-  await c.waitForTimeout(600);
+  // 看路線 → 跳到明德那一區、標出那一條；卡片停在紀錄，留言分頁裡是完整的留言
+  const order = await panel.locator("div.bg-sunk p").allTextContents();
+  await c.evaluate(() => window.scrollTo({ top: 400 }));
+  await c.waitForTimeout(200);
+  const y = await c.evaluate(() => window.scrollY);
+  // 用程式點（不先捲到按鈕那裡），捲動位置才是剛剛的
+  await panel.locator("div.bg-sunk", { hasText: "第三手好遠" }).locator('button:text-is("看路線 ›")').evaluate((b) => b.click());
+  await c.waitForURL((u) => u.pathname === "/zone");
   const dialog = c.locator("[role=dialog]");
-  assert.match(await dialog.locator('[role=tab][aria-selected="true"]').textContent(), /留言/, "停在留言分頁");
+  await dialog.waitFor({ timeout: 5000 });
+  await dialog.locator('[role=tab]:has-text("留言")').click();
   assert.ok((await dialog.textContent()).includes(long), "卡片裡是完整的留言");
+  await c.keyboard.press("Escape");
+  await c.waitForTimeout(300);
+  assert.equal(await c.locator('main button[aria-current="true"]').count(), 1, "照片上標出那一條");
+
+  // 手機的返回：回到留言分頁、同一批同一個順序、捲到剛剛的位置；按過的讚還在
+  await c.goBack();
+  await c.waitForURL((u) => u.pathname === "/new");
+  await panel.locator("div.bg-sunk").first().waitFor();
+  await c.waitForTimeout(400);
+  assert.equal(await c.getAttribute('[role=tab]:has-text("留言")', "aria-selected"), "true", "停在留言分頁");
+  assert.deepEqual(await panel.locator("div.bg-sunk p").allTextContents(), order, "同一批、同一個順序");
+  const y2 = await c.evaluate(() => window.scrollY);
+  assert.ok(Math.abs(y2 - y) < 30, `捲到剛剛的位置（${y} → ${y2}）`);
+  assert.equal(await panel.locator("div.bg-sunk", { hasText: "今天留言2" }).locator('button[aria-pressed="true"]').count(), 1, "按過的讚還在");
   assert.deepEqual(errors, []);
 });
 
-test("New~ 打開自己記錄過的路線：卡片帶著原本的紀錄，再點狀態不會蓋掉心得；卡片裡按讚，關掉後列表也更新", async () => {
+test("New~ 打開自己記錄過的 Spray Wall 路線（照舊在這頁打開卡片）：卡片帶著原本的紀錄，再點狀態不會蓋掉心得；卡片裡按讚，關掉後列表也更新", async () => {
   const mock = createMock();
   const me = mock.addUser("climber88", "password1", { nickname: "小安" });
   const other = mock.addUser("other22", "password1", { nickname: "阿明" });
-  const r = mock.addRoute(mock.db.zones[0], 4, "藍");
+  const r = sprayRoute(mock, other, "阿明的路線");
   mock.addAscent(me, r, "project", taipeiDay(-6), { private_note: "卡在最後一手" });
   mock.addVideo(other, r, { caption: "今天的", created_at: ago(within(1)) });
   mock.addComment(other, r, "先踩右邊那顆", { created_at: ago(within(2)) });
-  mock.addComment(me, mock.addRoute(mock.db.zones[0], 2, "綠"), "我自己的留言", { created_at: ago(within(3)) });
+  mock.addComment(me, sprayRoute(mock, other, "阿明的第二條", 2), "我自己的留言", { created_at: ago(within(3)) });
   const asc = () => mock.db.ascents.find((a) => a.route_id === r.id);
 
   const { page: c, errors } = await phone(browser, mock);
@@ -205,11 +254,11 @@ test("New~ 打開自己記錄過的路線：卡片帶著原本的紀錄，再點
   assert.deepEqual(errors, []);
 });
 
-test("New~ 讀不到自己的紀錄：卡片寫讀不到、不能記錄，可以再試一次；Spray Wall 讀不到讚數時按讚會提示並重讀", async () => {
+test("New~ 讀不到自己的紀錄（Spray Wall 的卡片）：卡片寫讀不到、不能記錄，可以再試一次；Spray Wall 讀不到讚數時按讚會提示並重讀", async () => {
   const mock = createMock();
   const me = mock.addUser("climber88", "password1", { nickname: "小安" });
   const other = mock.addUser("other22", "password1", { nickname: "阿明" });
-  const r = mock.addRoute(mock.db.zones[0], 4, "藍");
+  const r = sprayRoute(mock, other, "阿明的難路線");
   mock.addAscent(me, r, "project", taipeiDay(-6), { private_note: "卡在最後一手" });
   mock.addComment(other, r, "先踩右邊那顆", { created_at: ago(within(2)) });
   const sw = mock.db.zones.find((z) => z.gym_id === "mingde" && z.kind === "spray");
@@ -232,7 +281,7 @@ test("New~ 讀不到自己的紀錄：卡片寫讀不到、不能記錄，可以
   await c.locator('[role=tabpanel]:not([hidden]) button:text-is("看路線 ›")').click();
   await dialog.locator("text=讀不到你在這條路線的紀錄").waitFor({ timeout: 5000 });
   assert.equal(await dialog.locator('button:text-is("完攀")').count(), 0, "讀不到時不能記錄");
-  assert.ok((await dialog.textContent()).includes(`明德館・${mock.db.zones[0].name}・${r.code}`), "寫是哪條路線");
+  assert.ok((await dialog.textContent()).includes("明德館・Spray Wall・阿明的難路線"), "寫是哪條路線");
   mock.state.ascentsReadFail = false;
   await dialog.locator('button:has-text("再試一次")').click();
   await dialog.locator('button[aria-pressed="true"]', { hasText: "嘗試中" }).waitFor({ timeout: 5000 });
@@ -294,11 +343,11 @@ test("New~ 留言：按讚後換一批，再出現時還是按過的", async () 
   assert.deepEqual(errors, []);
 });
 
-test("New~ 訊號差：卡片馬上打開寫讀取中、不能記錄；關掉去看影片，讀到了也不會跳出卡片；上次讀不到、再打開是讀取中；Spray Wall 讚數還沒讀到時按讚提示讀取中", async () => {
+test("New~ 訊號差（Spray Wall 的卡片）：卡片馬上打開寫讀取中、不能記錄；關掉去看影片，讀到了也不會跳出卡片；上次讀不到、再打開是讀取中；Spray Wall 讚數還沒讀到時按讚提示讀取中", async () => {
   const mock = createMock();
   const me = mock.addUser("climber88", "password1", { nickname: "小安" });
   const other = mock.addUser("other22", "password1", { nickname: "阿明" });
-  const r = mock.addRoute(mock.db.zones[0], 4, "藍");
+  const r = sprayRoute(mock, other, "阿明的難路線");
   mock.addAscent(me, r, "project", taipeiDay(-6), { private_note: "卡在最後一手" });
   mock.addComment(other, r, "先踩右邊那顆", { created_at: ago(within(2)) });
   mock.addVideo(other, r, { caption: "藍色今天", created_at: ago(within(1)) });
@@ -366,5 +415,45 @@ test("New~ 訊號差：卡片馬上打開寫讀取中、不能記錄；關掉去
   await like.click();
   await c.waitForTimeout(400);
   assert.equal(mock.db.routeLikes.length, 1, "讀到了才按得到");
+  assert.deepEqual(errors, []);
+});
+
+test("New~ 看路線：改篩選黃圈就拿掉；看的時候剛好下架了，區域頁提示已經下架；從館首頁進區域頁照舊寫館名", async () => {
+  const mock = createMock();
+  const other = mock.addUser("other22", "password1", { nickname: "阿明" });
+  const zone = mock.db.zones[0];
+  zone.photo_path = "mingde/zones/A1-1.jpg";
+  const r = mock.addRoute(zone, 4, "藍");
+  const r2 = mock.addRoute(zone, 2, "綠");
+  mock.addComment(other, r, "藍色好玩", { created_at: ago(within(1)) });
+  mock.addComment(other, r2, "綠色好玩", { created_at: ago(within(2)) });
+
+  const { page: c, errors } = await phone(browser, mock);
+  await c.goto(BASE + "/new", { waitUntil: "networkidle" });
+  await c.click('[role=tab]:has-text("留言")');
+  const panel = c.locator("[role=tabpanel]:not([hidden])");
+  await panel.locator("div.bg-sunk", { hasText: "藍色好玩" }).locator('button:text-is("看路線 ›")').click();
+  await landedOnZone(c, zone, r);
+  assert.ok((await c.locator("main").textContent()).startsWith("‹ New~"), "返回寫「‹ New~」");
+  await c.locator('main button:text-is("綠")').click();
+  await c.waitForTimeout(200);
+  assert.equal(await c.locator('main button[aria-current="true"]').count(), 0, "改篩選黃圈就拿掉");
+
+  // 剛好下架：提示，照片上沒有標
+  await c.goBack();
+  await c.waitForURL((u) => u.pathname === "/new");
+  await panel.locator("div.bg-sunk").first().waitFor();
+  r2.archived_at = ago(1);
+  await panel.locator("div.bg-sunk", { hasText: "綠色好玩" }).locator('button:text-is("看路線 ›")').click();
+  await c.waitForURL((u) => u.pathname === "/zone");
+  await c.locator("[role=status]", { hasText: "這條路線已經下架了" }).waitFor({ timeout: 5000 });
+  assert.equal(await c.locator('main button[aria-current="true"]').count(), 0);
+  await c.waitForTimeout(1200);
+  assert.equal(await c.locator("[role=dialog]").count(), 0, "不會打開卡片");
+
+  // 從館首頁點進來的區域頁：照舊寫館名
+  await c.goto(`${BASE}/zone?id=${zone.id}`, { waitUntil: "networkidle" });
+  await c.waitForTimeout(500);
+  assert.ok((await c.locator("main").textContent()).startsWith("‹ 明德館"), "平常還是「‹ 館名」");
   assert.deepEqual(errors, []);
 });

@@ -71,13 +71,17 @@ test("New~ 影片按讚：列表右下角按讚不會播放、全螢幕播放裡
   assert.deepEqual([...G.errors, ...C.errors], []);
 });
 
-test("路線卡片「影片」分頁按讚；New~ 打開卡片按的讚，關掉後列表也更新", async () => {
+test("路線卡片「影片」分頁按讚；New~ 打開卡片（Spray Wall）按的讚，關掉後列表也更新", async () => {
   const mock = createMock();
   const me = mock.addUser("climber88", "password1", { nickname: "小安" });
   const other = mock.addUser("other22", "password1", { nickname: "阿明" });
   const zone = mock.db.zones[0];
   const r = mock.addRoute(zone, 4, "藍");
   const v = mock.addVideo(other, r, { caption: "卡片裡按讚", created_at: ago(within(1)) });
+  // Spray Wall 上岩友出的路線：New~ 點「看這條路線」照舊在 New~ 打開卡片（牆上的路線改成跳到區域頁）
+  const sw = mock.db.zones.find((z) => z.gym_id === "mingde" && z.kind === "spray");
+  const sr = Object.assign(mock.addRoute(sw, 3, "白"), { kind: "community", name: "阿明的路線", created_by: other, holds: [{ x: 20, y: 80, t: "s" }, { x: 60, y: 20, t: "t" }] });
+  const sv = mock.addVideo(other, sr, { caption: "Spray 卡片", created_at: ago(within(2)) });
 
   const { page: c, errors } = await phone(browser, mock);
   await login(c, "climber88", "password1", `/zone?id=${zone.id}`);
@@ -93,19 +97,21 @@ test("路線卡片「影片」分頁按讚；New~ 打開卡片按的讚，關掉
   assert.equal(await text(card.locator('button[aria-pressed="true"]')), "👍1");
   await c.keyboard.press("Escape");
 
-  // New~：從播放「看這條路線」打開卡片（停在影片分頁），收回讚；關掉後 New~ 列表也是沒按過
+  // New~：牆上那條在卡片裡按的讚，列表也是按過的
   await c.goto(`${BASE}/new`, { waitUntil: "networkidle" });
-  const row = c.locator("[role=tabpanel]:not([hidden]) li", { hasText: "卡片裡按讚" });
-  await row.locator('button[aria-pressed="true"]').waitFor();
+  await c.locator("[role=tabpanel]:not([hidden]) li", { hasText: "卡片裡按讚" }).locator('button[aria-pressed="true"]').waitFor();
+  // Spray Wall 那條：從播放「看這條路線」在 New~ 打開卡片（停在影片分頁）按讚；關掉後 New~ 列表也是按過的
+  const row = c.locator("[role=tabpanel]:not([hidden]) li", { hasText: "Spray 卡片" });
   await row.locator('button[aria-label^="播放"]').click();
   await c.locator('[aria-label="影片播放"] button:has-text("看這條路線")').click();
   const sheet = c.locator("[role=dialog]").filter({ has: c.locator('[role=tab]:has-text("影片")') });
-  await sheet.locator('li button[aria-pressed="true"][aria-label^="收回讚"]').click();
+  await sheet.locator("li", { hasText: "Spray 卡片" }).locator('button[aria-label^="按讚"]').click();
   await c.waitForTimeout(400);
-  assert.equal(mock.db.videoLikes.length, 0, "卡片裡收回");
+  assert.ok(mock.db.videoLikes.some((l) => l.video_id === sv.id && l.user_id === me), "卡片裡按讚有存");
   await c.keyboard.press("Escape");
   await c.waitForTimeout(600);
-  assert.equal(await row.locator('button[aria-pressed="true"]').count(), 0, "關掉後列表也更新");
+  assert.ok(c.url().endsWith("/new"), "Spray Wall 的路線還在 New~");
+  assert.equal(await row.locator('button[aria-pressed="true"]').count(), 1, "關掉後列表也更新");
 
   assert.deepEqual(errors, []);
 });
