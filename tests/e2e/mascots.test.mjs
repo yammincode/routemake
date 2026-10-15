@@ -1,5 +1,6 @@
 // 原岩夥伴：選夥伴、換色、存起來；留言、影片旁的頭像；別人的人物卡；夥伴說話（每頁上面、右下角、做了事情）；閉嘴；幹話模式；還沒套用 step41 照常
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { after, before, test } from "node:test";
 import { BASE, createMock, launch, login, phone, taipeiDay } from "./helpers.mjs";
 
@@ -7,6 +8,8 @@ let browser;
 before(async () => (browser = await launch()));
 after(async () => browser?.close());
 
+// 幹話：直接讀 lib/mascots.ts 的 TROLL_LINES（老闆加句子不用改測試）
+const TROLL = [...fs.readFileSync(new URL("../../lib/mascots.ts", import.meta.url), "utf8").match(/TROLL_LINES = \[([\s\S]*?)\];/)[1].matchAll(/"([^"]*)"/g)].map((m) => m[1]);
 // 每天一句要固定挑哪一句：Math.random 固定成 v（0.3：不講夥伴自己的話、挑第一句紀錄）
 const fixRandom = (ctx, v) => ctx.addInitScript((x) => (Math.random = () => x), v);
 
@@ -105,7 +108,7 @@ test("原岩夥伴：館首頁每次打開說一句（看紀錄）、✕ 關掉�
   await reopen();
   await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
   await bubble.waitFor();
-  const troll = ["站起來就好，完攀很近", "閃電：我阿罵都可以，你也可以", "加油，點很大", "黑：有時間看我講幹話，怎麼不去爬", "啊～你怎麼掉下來了", "用力就抓住了", "不要坐墊子", "宋拔：（眼神凝視）", "攀岩治百病，爬爆", "抓不住就用力", "定線員的60秒，就是你的一分鐘", "用力還抓不住，就是你不夠用力", "站起來就抓到了", "下一顆超大！", "你可以！", "我以為你可以！", "上！", "下一顆口袋！", "下一條走起！", "生命模式！", "Flash的秘訣在於一次就把它爬完", "三日不攀岩就覺得面目可憎", "叫你們定線員出來", "V2 in my gym", "（擊拳）"];
+  const troll = TROLL;
   const said = await bubble.textContent();
   assert.ok(troll.some((t) => said.includes(t)), `講幹話：${said}`);
   assert.equal(await bubble.locator("[data-troll]").count(), 1, "泡泡旁的夥伴也有刀疤");
