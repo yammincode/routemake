@@ -28,7 +28,7 @@ import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, RouteTag, Se
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { GymLegend, ProgressCard } from "@/components/ui/Progress";
 import { SlamTicket } from "@/components/ui/Slam";
-import { CalendarHeat, DailyBars, Delta, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
+import { CalendarHeat, DailyBars, DaySummary, Delta, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
@@ -195,6 +195,7 @@ export default function DesignShowcase() {
   const [videoTag, setVideoTag] = useState<string | null>(null);
   const [trimDemo, setTrimDemo] = useState<[number, number]>([12, 53.5]);
   const [monthPick, setMonthPick] = useState<string | null>(null);
+  const [calDay, setCalDay] = useState<{ d: number; open: boolean } | null>({ d: 23, open: false });
   const [muteDemo, setMuteDemo] = useState(false);
   const [pickHeight, setPickHeight] = useState<HeightBand | null>("170s");
   const [pickMove, setPickMove] = useState<ClimbMove | null>("dynamic");
@@ -206,6 +207,7 @@ export default function DesignShowcase() {
   const ydsGrades = [102, 104, 105, 107, 108];
   const colors = [...new Set(routes.map((r) => r.color))];
   const counts: Record<number, number> = { 2: 1, 5: 3, 9: 5, 12: 2, 16: 4, 19: 1, 23: 6, 26: 2, 29: 3 };
+  const calGyms: Record<number, string[]> = { 2: ["g2"], 5: ["mingde"], 9: ["mingde"], 12: ["g3"], 16: ["mingde"], 19: ["g4"], 23: ["mingde", "g2"], 26: ["g5"], 29: ["mingde"] };
 
   const openRoute = (r: DemoRoute) => {
     setSheetRoute(r);
@@ -508,7 +510,31 @@ export default function DesignShowcase() {
         </StatGrid>
         <Delta diff={4} />
         <SectionTitle>攀爬日</SectionTitle>
-        <CalendarHeat year={2026} month={month} counts={counts} today={month === 9 ? 30 : undefined} />
+        <CalendarHeat
+          year={2026}
+          month={month}
+          counts={counts}
+          today={month === 9 ? 30 : undefined}
+          gyms={calGyms}
+          picked={calDay?.d ?? null}
+          onPick={(d) => setCalDay(d ? { d, open: false } : null)}
+        />
+        {calDay && (
+          <DaySummary
+            title={`9/${calDay.d}（點一天：DaySummary）`}
+            sends={counts[calDay.d] ?? 0}
+            flashes={1}
+            points={86}
+            gyms={calGyms[calDay.d].map((g, i) => ({ gym: g, sends: i ? 1 : (counts[calDay.d] ?? 1) - (calGyms[calDay.d].length - 1), grades: i ? [{ label: "V7", n: 1 }] : [{ label: "V1", n: 2 }, { label: "V2", n: 3 }], more: i ? "岩友路線 1 條" : undefined }))}
+            open={calDay.open}
+            onOpen={() => setCalDay({ d: calDay.d, open: true })}
+            onClose={() => setCalDay(null)}
+          >
+            <RouteList>
+              <RouteRow color="藍" grade={2} title="A 區 藍色" meta="9/23" status="flash" />
+            </RouteList>
+          </DaySummary>
+        )}
         <SectionTitle>本月完攀（MonthGradeChart）</SectionTitle>
         <MonthGradeChart
           title="抱石"

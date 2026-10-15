@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { findGym, GYM_COLORS, gymShort } from "@/lib/gyms";
 import { tapeLook } from "./Gym";
 
 // 月份切換（原型 .month）
@@ -53,7 +54,24 @@ const LEVEL = ["bg-surface text-muted", "bg-accent-soft text-ink", "bg-accent/60
 const level = (c: number) => (c >= 5 ? 3 : c >= 3 ? 2 : c >= 1 ? 1 : 0);
 
 // 攀爬日月曆熱度（原型 .cal）；counts[日] = 當天完攀數
-export function CalendarHeat({ year, month, counts, today }: { year: number; month: number; counts: Record<number, number>; today?: number }) {
+// gyms[日] = 那天爬過的館（格子下方畫各店標準色小圓點）；有 onPick 時有紀錄的日期可以點（picked 加黃框），再點一次取消
+export function CalendarHeat({
+  year,
+  month,
+  counts,
+  today,
+  gyms,
+  picked,
+  onPick,
+}: {
+  year: number;
+  month: number;
+  counts: Record<number, number>;
+  today?: number;
+  gyms?: Record<number, string[]>;
+  picked?: number | null;
+  onPick?: (day: number | null) => void;
+}) {
   const first = new Date(year, month - 1, 1).getDay();
   const days = new Date(year, month, 0).getDate();
   return (
@@ -70,13 +88,30 @@ export function CalendarHeat({ year, month, counts, today }: { year: number; mon
         {Array.from({ length: days }, (_, i) => {
           const d = i + 1;
           const c = counts[d] || 0;
+          const gs = gyms?.[d] ?? [];
+          const cls = `relative grid aspect-square place-items-center rounded-cell font-num text-[15px] leading-none font-semibold ${LEVEL[level(c)]} ${d === today ? "shadow-[inset_0_0_0_2px_var(--ink)]" : ""}`;
+          const dots = gs.length > 0 && (
+            <span aria-hidden className="absolute inset-x-0 bottom-[3px] flex justify-center gap-[2px]">
+              {gs.map((g) => (
+                <i key={g} data-gym={g} className="block size-[6px] rounded-full shadow-[0_0_0_1px_var(--bg)]" style={{ background: GYM_COLORS[g] ?? "var(--muted)" }} />
+              ))}
+            </span>
+          );
+          const label = c ? `${month}/${d} 完攀 ${c} 條` : gs.length ? `${month}/${d}` : undefined;
+          const where = gs.length ? `，${gs.map((g) => gymShort(findGym(g)?.name ?? g)).join("、")}` : "";
+          if (onPick && gs.length) {
+            const on = picked === d;
+            return (
+              <button key={d} aria-pressed={on} aria-label={`${label}${where}`} onClick={() => onPick(on ? null : d)} className={`${cls} ${on ? "outline-2 outline-offset-1 outline-flash" : ""}`}>
+                {d}
+                {dots}
+              </button>
+            );
+          }
           return (
-            <span
-              key={d}
-              aria-label={c ? `${month}/${d} 完攀 ${c} 條` : undefined}
-              className={`grid aspect-square place-items-center rounded-cell font-num text-[15px] leading-none font-semibold ${LEVEL[level(c)]} ${d === today ? "shadow-[inset_0_0_0_2px_var(--ink)]" : ""}`}
-            >
+            <span key={d} aria-label={label ? `${label}${where}` : undefined} className={cls}>
               {d}
+              {dots}
             </span>
           );
         })}
@@ -89,6 +124,84 @@ export function CalendarHeat({ year, month, counts, today }: { year: number; mon
         多
       </div>
     </>
+  );
+}
+
+// 攀爬日點一天：那天完攀幾條、Flash、積分，依館分開（館色點、館名、條數、難度小膠囊）；「看路線 ›」才展開 children（路線列表）
+export type DayGym = { gym: string; sends: number; grades: { label: string; n: number }[]; more?: string };
+export function DaySummary({
+  title,
+  sends,
+  flashes,
+  points,
+  gyms,
+  open,
+  onOpen,
+  onClose,
+  children,
+}: {
+  title: string;
+  sends: number;
+  flashes: number;
+  points?: number;
+  gyms: DayGym[];
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <section aria-label={`${title} 攀爬紀錄`} className="mt-3 rounded-card bg-surface px-4 pt-3 pb-3.5 shadow-card">
+      <div className="flex items-center justify-between">
+        <b className="text-sub">{title}</b>
+        <button aria-label="收起這一天" onClick={onClose} className="-mr-1 px-1 text-sub text-muted">
+          ✕
+        </button>
+      </div>
+      <p className="mt-0.5 mb-2 text-meta text-muted">
+        完攀 <b className="font-num text-num-chip leading-none text-ink">{sends}</b> 條
+        {flashes > 0 && (
+          <>
+            ・<span className="inline-block size-2 rounded-[2px] bg-flash align-middle" /> Flash <b className="font-num text-ink">{flashes}</b>
+          </>
+        )}
+        {points ? (
+          <>
+            ・<b className="font-num text-accent">+{points}</b> 分
+          </>
+        ) : null}
+      </p>
+      <div className="grid gap-2">
+        {gyms.map((g) => (
+          <div key={g.gym} data-day-gym={g.gym}>
+            <div className="flex items-center gap-1.5 text-note font-bold">
+              <i aria-hidden className="inline-block size-2.5 flex-none rounded-full" style={{ background: GYM_COLORS[g.gym] ?? "var(--muted)" }} />
+              {gymShort(findGym(g.gym)?.name ?? g.gym)}
+              <span className="text-meta font-normal text-muted">
+                {g.sends} 條{g.more ? `（${g.more}）` : ""}
+              </span>
+            </div>
+            {g.grades.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {g.grades.map((x) => (
+                  <span key={x.label} className="rounded-full bg-bg px-2 py-px font-num text-meta font-semibold">
+                    {x.label}
+                    {x.n > 1 ? ` ×${x.n}` : ""}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {open ? (
+        <div className="mt-2.5">{children}</div>
+      ) : (
+        <button onClick={onOpen} className="mt-2.5 text-note font-bold text-accent">
+          看路線 ›
+        </button>
+      )}
+    </section>
   );
 }
 

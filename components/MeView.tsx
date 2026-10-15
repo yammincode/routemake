@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Empty, SectionTitle, Tip } from "@/components/ui/Card";
 import { GymLegend, ProgressCard } from "@/components/ui/Progress";
 import { Points, RouteList, RouteRow } from "@/components/ui/Route";
-import { CalendarHeat, Delta, MonthGradeChart, MonthSwitcher, StatGrid, StatTile, TotalRow, type MonthCol } from "@/components/ui/Stats";
+import { CalendarHeat, DaySummary, Delta, MonthGradeChart, MonthSwitcher, StatGrid, StatTile, TotalRow, type DayGym, type MonthCol } from "@/components/ui/Stats";
 import { Tabs } from "@/components/ui/Tabs";
 import {
   getGyms,
@@ -33,6 +33,7 @@ import {
 import { meLines } from "@/lib/cheer";
 import { todayYmd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, GRADES, gradeLabel } from "@/lib/design";
+import { GYMS } from "@/lib/gyms";
 import { overlayPending, withCache } from "@/lib/offline";
 import { myProgress, progressGyms, wallProgress, type ProgressRow } from "@/lib/progress";
 import { ascentPoints } from "@/lib/scoring";
@@ -71,6 +72,8 @@ export default function MeView({ gymId }: { gymId: string }) {
   const [list, setList] = useState<MonthAscent[]>([]);
   // 本月完攀直條圖點了哪一根（v:3＝V3、y:104＝5.10）；換月份就收起來
   const [pick, setPick] = useState<string | null>(null);
+  // 攀爬日點了哪一天、有沒有按「看路線 ›」；換月份就收起來
+  const [day, setDay] = useState<{ d: number; open: boolean } | null>(null);
   // 路線進度：開放的館現在牆上的路線、自己完攀過的岩館路線（done＝牆上進度算完成的路線，含還沒送出的紀錄）
   const [progress, setProgress] = useState<{ routes: WallRoute[]; sends: MySend[]; done: Set<string> } | null>(null);
   const [progressError, setProgressError] = useState<string | null>(null);
@@ -205,8 +208,8 @@ export default function MeView({ gymId }: { gymId: string }) {
     );
 
   const isNow = ym.y === now.y && ym.m === now.m;
-  const prev = () => (setPick(null), setYm(({ y, m }) => (m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 })));
-  const next = () => (setPick(null), setYm(({ y, m }) => (m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 })));
+  const prev = () => (setPick(null), setDay(null), setYm(({ y, m }) => (m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 })));
+  const next = () => (setPick(null), setDay(null), setYm(({ y, m }) => (m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 })));
 
   const counts = stats ? Object.fromEntries(Object.entries(stats.by_day).map(([d, n]) => [+d, n])) : {};
 
@@ -238,6 +241,56 @@ export default function MeView({ gymId }: { gymId: string }) {
   const shown = picked ? list.filter((a) => colKey(a.route.grade) === picked) : [];
   const feelEmoji = (v: number | null) => FEEL.find((o) => o.v === v)?.e ?? "";
   const gradeFeel = (v: number | null) => GRADE_FEEL.find((o) => o.v === v)?.t;
+  const ascentRow = (a: MonthAscent) => {
+    const gf = gradeFeel(a.grade_feel);
+    // 長耐力：不分顏色，寫爬到第幾點（沒爬完的照比例有分數）
+    const n = seqTotal(a.route);
+    const hp = n ? (a.status === "project" ? a.highpoint : n) : null;
+    return (
+      <RouteRow
+        key={a.id}
+        color={n ? undefined : a.route.hold_color}
+        grade={a.route.grade}
+        title={
+          <>
+            {a.route.name ? `${a.route.zone_name}・${a.route.name}` : n ? `${a.route.zone_name} ${a.route.code}` : `${a.route.zone_name} ${a.route.hold_color}色`} {feelEmoji(a.feel)}
+            {rules && a.route.kind !== "community" && <Points prefix="+" n={ascentPoints(a.route.grade, a.route.style_tags, a.status, rules, hp, n)} />}
+          </>
+        }
+        meta={`${+a.climbed_on.slice(5, 7)}/${+a.climbed_on.slice(8, 10)}${hp ? `，爬到 ${hp}／${n} 點` : ""}${gf ? `，體感${gf}` : ""}${a.route.archived_at ? "，已下架" : ""}`}
+        quote={a.private_note ?? undefined}
+        status={a.status}
+        statusOld={!!a.route.archived_at}
+        onClick={() => setOpen(a)}
+      />
+    );
+  };
+
+  // 攀爬日：每天爬過哪幾館（照館的固定順序：明德、萬華…）；點一天列出那天依館分開的完攀數、難度，路線也依館排在一起
+  // 完攀數跟月曆深淺一樣只算岩館路線的完攀，岩友路線、長耐力沒爬完的另外寫、路線照樣列出來（跟本月完攀直條圖一樣）
+  const dayOf = (a: MonthAscent) => +a.climbed_on.slice(8, 10);
+  const gymOrder = (id: string) => GYMS.findIndex((g) => g.id === id) >>> 0;
+  const dayGyms: Record<number, string[]> = {};
+  for (const a of list) {
+    const gs = (dayGyms[dayOf(a)] ??= []);
+    if (!gs.includes(a.route.gym_id)) gs.push(a.route.gym_id);
+  }
+  for (const gs of Object.values(dayGyms)) gs.sort((x, y) => gymOrder(x) - gymOrder(y));
+  const pickedDay = day && dayGyms[day.d] ? day : null;
+  const dayList = pickedDay ? list.filter((a) => dayOf(a) === pickedDay.d).sort((x, y) => gymOrder(x.route.gym_id) - gymOrder(y.route.gym_id)) : [];
+  const counted = (a: MonthAscent) => a.status !== "project" && a.route.kind !== "community";
+  const daySent = dayList.filter(counted);
+  const dayGymRows: DayGym[] = pickedDay
+    ? dayGyms[pickedDay.d].map((gym) => {
+        const mine = dayList.filter((a) => a.route.gym_id === gym);
+        const sent = mine.filter(counted);
+        const grades = chartCols.filter((c) => sent.some((a) => colKey(a.route.grade) === c.key)).map((c) => ({ label: c.label, n: sent.filter((a) => colKey(a.route.grade) === c.key).length }));
+        const community = mine.filter((a) => a.status !== "project" && a.route.kind === "community").length;
+        const projects = mine.filter((a) => a.status === "project").length;
+        const more = [community && `岩友路線 ${community} 條`, projects && `長耐力沒爬完 ${projects} 條`].filter(Boolean).join("，");
+        return { gym, sends: sent.length, grades, more };
+      })
+    : [];
 
   return (
     <>
@@ -257,7 +310,36 @@ export default function MeView({ gymId }: { gymId: string }) {
       <PointsPanel year={ym.y} month={ym.m} isNow={isNow} todayDay={now.d} summary={points} />
 
       <SectionTitle>攀爬日</SectionTitle>
-      <CalendarHeat year={ym.y} month={ym.m} counts={counts} today={isNow ? now.d : undefined} />
+      <CalendarHeat
+        year={ym.y}
+        month={ym.m}
+        counts={counts}
+        today={isNow ? now.d : undefined}
+        gyms={dayGyms}
+        picked={pickedDay?.d ?? null}
+        onPick={(d) => setDay(d ? { d, open: false } : null)}
+      />
+      {pickedDay ? (
+        <DaySummary
+          title={`${ym.m}/${pickedDay.d}（${"日一二三四五六"[new Date(ym.y, ym.m - 1, pickedDay.d).getDay()]}）`}
+          sends={daySent.length}
+          flashes={daySent.filter((a) => a.status === "flash").length}
+          points={points?.by_day[String(pickedDay.d)]}
+          gyms={dayGymRows}
+          open={pickedDay.open}
+          onOpen={() => setDay({ d: pickedDay.d, open: true })}
+          onClose={() => setDay(null)}
+        >
+          <RouteList>{dayList.map(ascentRow)}</RouteList>
+        </DaySummary>
+      ) : (
+        Object.keys(dayGyms).length > 0 && (
+          <>
+            <GymLegend gyms={[...new Set(Object.values(dayGyms).flat())].sort((x, y) => gymOrder(x) - gymOrder(y))} />
+            <Tip>點有顏色的日期，看那天在哪一館、爬了哪些路線。圓點是館的顏色。</Tip>
+          </>
+        )
+      )}
 
       <SectionTitle>本月完攀</SectionTitle>
       {chartCols.some((c) => c.items) ? (
@@ -270,31 +352,7 @@ export default function MeView({ gymId }: { gymId: string }) {
                 <b className="text-ink">{chartCols.find((c) => c.key === picked)?.label}</b>・{shown.length} 條，點路線看心得、改紀錄
               </p>
               <RouteList>
-                {shown.map((a) => {
-                  const gf = gradeFeel(a.grade_feel);
-                  // 長耐力：不分顏色，寫爬到第幾點（沒爬完的照比例有分數）
-                  const n = seqTotal(a.route);
-                  const hp = n ? (a.status === "project" ? a.highpoint : n) : null;
-                  return (
-                    <RouteRow
-                      key={a.id}
-                      color={n ? undefined : a.route.hold_color}
-                      grade={a.route.grade}
-                      title={
-                        <>
-                          {a.route.name ? `${a.route.zone_name}・${a.route.name}` : n ? `${a.route.zone_name} ${a.route.code}` : `${a.route.zone_name} ${a.route.hold_color}色`}{" "}
-                          {feelEmoji(a.feel)}
-                          {rules && a.route.kind !== "community" && <Points prefix="+" n={ascentPoints(a.route.grade, a.route.style_tags, a.status, rules, hp, n)} />}
-                        </>
-                      }
-                      meta={`${+a.climbed_on.slice(5, 7)}/${+a.climbed_on.slice(8, 10)}${hp ? `，爬到 ${hp}／${n} 點` : ""}${gf ? `，體感${gf}` : ""}${a.route.archived_at ? "，已下架" : ""}`}
-                      quote={a.private_note ?? undefined}
-                      status={a.status}
-                      statusOld={!!a.route.archived_at}
-                      onClick={() => setOpen(a)}
-                    />
-                  );
-                })}
+                {shown.map(ascentRow)}
               </RouteList>
             </>
           ) : (
