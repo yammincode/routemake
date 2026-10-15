@@ -170,7 +170,7 @@ test("帳號管理：定線長搜尋核對、看留言刪留言；員工不能�
   assert.ok(text.includes("先跟本人核對") && text.includes("A1 區") && text.includes("V4"), "最近完攀");
   assert.equal(await row.locator('button:has-text("停權")').count(), 0, "定線長不能停權");
   assert.equal(await row.locator('button:has-text("刪帳號")').count(), 0, "定線長不能刪帳號");
-  assert.equal(await row.locator('button:text-is("重設密碼")').count(), 1, "定線長可以重設密碼");
+  assert.equal(await row.locator('button:text-is("重設密碼")').count(), 0, "定線長不能產生重設碼（只有店長、老闆）");
   await row.locator('button:text-is("看留言")').click();
   await s.waitForTimeout(600);
   assert.ok((await row.textContent()).includes("亂留言一") && (await row.textContent()).includes("亂留言二"));
@@ -179,7 +179,7 @@ test("帳號管理：定線長搜尋核對、看留言刪留言；員工不能�
   await row.locator("li", { hasText: "亂留言一" }).locator('button:has-text("確定刪除")').click();
   await s.waitForTimeout(600);
   assert.ok(mock.db.comments.find((c) => c.body === "亂留言一").deleted_at, "刪掉了");
-  // 搜員工：定線長看不到重設密碼（員工的帳號只有老闆能重設）
+  // 搜員工：沒有重設密碼
   await s.fill("#accsearch", "manager1");
   await s.waitForTimeout(800);
   const staffRow = s.locator('[data-account="manager1"]').first();

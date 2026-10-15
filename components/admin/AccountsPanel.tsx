@@ -29,7 +29,7 @@ import { ago, md } from "@/lib/date";
 type Mode = "comments" | "suspend" | "reset" | "delete";
 const taipeiDay = (ts: string) => md(new Date(ts).toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" }));
 
-// 帳號管理（所有員工）：用帳號或暱稱找人 → 看留言、停權（店長、老闆）、產生重設密碼的重設碼、刪帳號（老闆）
+// 帳號管理（所有員工）：用帳號或暱稱找人 → 看留言、停權和產生重設密碼的重設碼（店長、老闆）、刪帳號（老闆）
 // 下面列出停權中的人
 export default function AccountsPanel({ gymId }: { gymId: string }) {
   const { access } = useAuth();
@@ -95,7 +95,8 @@ export default function AccountsPanel({ gymId }: { gymId: string }) {
     const key = `${inList ? "list" : "hit"}:${a.id}`;
     const mode = open?.id === key ? open.mode : null;
     const toggle = (m: Mode) => setOpen(mode === m ? null : { id: key, mode: m });
-    const canReset = (!a.staff || owner) && a.id !== access?.id;
+    // 產生重設碼的人看得到碼（等於能登進那個帳號）：只給店長、老闆；員工的帳號只有老闆
+    const canReset = manager && (!a.staff || owner) && a.id !== access?.id;
     const canDelete = owner && !a.staff;
     return (
       <div key={key} className="mt-2.5" data-account={a.username}>
@@ -157,7 +158,7 @@ export default function AccountsPanel({ gymId }: { gymId: string }) {
             ? "停權、重設密碼、刪帳號都會記在操作紀錄。員工的帳號要先移除員工身分才能停權、刪除。"
             : manager
               ? "店長可以停權 3、7、30 天，永久停權和刪帳號請找老闆。重設密碼前請先跟本人核對。"
-              : "重設密碼前請先跟本人核對暱稱和最近爬的路線；停權請找店長。"}
+              : "可以看留言、刪這館的留言；停權、重設密碼請找店長。"}
         </Tip>
       </SetBox>
       <SetBox>

@@ -14,7 +14,7 @@
 --   停權中可以看路線、記錄自己的完攀；不能留言、改留言、分享影片、上傳檔案、按讚、
 --   出 Spray Wall 路線、改暱稱和人物卡、選夥伴、送意見回饋（在資料庫擋，馬上生效）
 -- - 刪帳號：老闆刪別人、本人輸入密碼刪自己；員工、老闆不能被刪（先移除員工身分）
--- - 重設密碼：員工產生 6 位數重設碼（15 分鐘、只能用一次、打錯 5 次作廢），
+-- - 重設密碼：店長、老闆產生 6 位數重設碼（15 分鐘、只能用一次、打錯 5 次作廢），
 --   客人在登入頁用帳號＋重設碼設新密碼；員工看不到密碼
 -- 舊版 App 照常可用（新欄位都不公開，新函式舊版不會呼叫）
 -- =====================================================================
@@ -462,7 +462,8 @@ end $do$;
 alter table public.password_resets enable row level security;
 revoke all on public.password_resets from anon, authenticated;
 
--- 員工產生重設碼：回傳 6 位數字（只顯示這一次）；同一人的舊碼作廢
+-- 店長、老闆產生重設碼：回傳 6 位數字（只顯示這一次）；同一人的舊碼作廢
+-- （產生的人看得到碼，等於能登進那個帳號，所以只給店長、老闆；每次都記操作紀錄）
 -- 員工、老闆的帳號只有老闆能幫忙重設（避免員工接管別的員工或老闆的帳號）
 create or replace function public.issue_reset_code(p_user uuid, p_gym text) returns jsonb
 language plpgsql security definer set search_path = '' as $$
@@ -470,8 +471,8 @@ declare
   v_code text;
   v_exp  timestamptz := now() + interval '15 minutes';
 begin
-  if p_gym is null or not public.is_staff(p_gym) then
-    raise exception '只有員工可以產生重設碼' using errcode = '42501';
+  if p_gym is null or not public.is_manager(p_gym) then
+    raise exception '只有店長、老闆可以產生重設碼' using errcode = '42501';
   end if;
   if not exists (select 1 from public.profiles where id = p_user) then
     raise exception '找不到這個帳號' using errcode = 'P0002';
@@ -501,8 +502,8 @@ grant execute on function public.issue_reset_code(uuid, text) to authenticated;
 create or replace function public.cancel_reset_code(p_user uuid, p_gym text) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
-  if p_gym is null or not public.is_staff(p_gym) then
-    raise exception '沒有權限' using errcode = '42501';
+  if p_gym is null or not public.is_manager(p_gym) then
+    raise exception '只有店長、老闆可以作廢重設碼' using errcode = '42501';
   end if;
   if public.is_any_staff(p_user) and not public.is_owner() then
     raise exception '員工的帳號只有老闆可以處理' using errcode = '42501';

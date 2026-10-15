@@ -19,13 +19,13 @@ async function fillReset(page, username, code, password) {
 test("忘記密碼：櫃檯產生重設碼、客人在登入頁設新密碼並登入", async () => {
   const mock = createMock();
   const c = mock.addUser("climber88", "oldpass11", { nickname: "小安" });
-  const st = mock.addUser("setter1", "password1", { nickname: "定線阿德" });
-  mock.db.staff_roles.push({ user_id: st, gym_id: "mingde", role: "setter" });
+  const st = mock.addUser("manager1", "password1", { nickname: "王店長" });
+  mock.db.staff_roles.push({ user_id: st, gym_id: "mingde", role: "manager" });
 
-  // 定線長在帳號管理產生重設碼
+  // 店長在帳號管理產生重設碼（定線長沒有這個按鈕，見 accounts）
   const S = await phone(browser, mock);
   const s = S.page;
-  await login(s, "setter1", "password1", "/admin");
+  await login(s, "manager1", "password1", "/admin");
   await s.waitForTimeout(1500);
   await s.fill("#accsearch", "小安");
   await s.waitForTimeout(800);

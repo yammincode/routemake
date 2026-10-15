@@ -49,7 +49,7 @@ export default function ResetForm({ onBack, onDone }: { onBack: () => void; onDo
     <>
       <BackLink onClick={onBack}>回登入</BackLink>
       <PageTitle sub="先到任一館櫃檯拿重設碼，再回來設定新密碼">重設密碼</PageTitle>
-      <Tip>告訴員工你的帳號名稱或暱稱，員工核對後會給你 6 位數重設碼（15 分鐘內有效）。</Tip>
+      <Tip>告訴店長你的帳號名稱或暱稱，店長核對後會給你 6 位數重設碼（15 分鐘內有效）。</Tip>
       <form onSubmit={submit} noValidate>
         <SetBox>
           <Label htmlFor="r-username">帳號名稱</Label>

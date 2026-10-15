@@ -2093,16 +2093,21 @@ reset role;
 
 -- 重設密碼
 set role authenticated; select tests.login(:A);
-select tests.throws('重設碼：顧客不能產生', format('select public.issue_reset_code(%L, ''mingde'')', :X), '員工');
+select tests.throws('重設碼：顧客不能產生', format('select public.issue_reset_code(%L, ''mingde'')', :X), '店長');
 reset role;
 set role authenticated; select tests.login(:ST);
-select tests.throws('重設碼：員工不能幫員工產生', format('select public.issue_reset_code(%L, ''mingde'')', :MG), '老闆');
-select tests.throws('重設碼：不能幫自己產生', format('select public.issue_reset_code(%L, ''mingde'')', :ST), '改密碼');
+select tests.throws('重設碼：定線長不能產生', format('select public.issue_reset_code(%L, ''mingde'')', :X), '店長');
+select tests.throws('重設碼：定線長不能作廢', format('select public.cancel_reset_code(%L, ''mingde'')', :X), '店長');
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.throws('重設碼：店長不能用別館的名義', format('select public.issue_reset_code(%L, ''g2'')', :X), '店長');
+select tests.throws('重設碼：店長不能幫員工產生', format('select public.issue_reset_code(%L, ''mingde'')', :ST), '老闆');
+select tests.throws('重設碼：不能幫自己產生', format('select public.issue_reset_code(%L, ''mingde'')', :MG), '改密碼');
 insert into tests.codes select 'x1', public.issue_reset_code(:X, 'mingde') ->> 'code';
 reset role;
 select tests.ok('重設碼：6 位數字', (select v ~ '^[0-9]{6}$' from tests.codes where k = 'x1'));
 select tests.ok('重設碼：資料庫只存加密後的碼', (select code_hash <> (select v from tests.codes where k = 'x1') and code_hash like '$2%' from public.password_resets where user_id = :X));
-select tests.ok('重設碼：寫進操作紀錄', exists (select 1 from public.audit_log where action = 'user.reset_code' and target_id = :X and user_id = :ST));
+select tests.ok('重設碼：寫進操作紀錄', exists (select 1 from public.audit_log where action = 'user.reset_code' and target_id = :X and user_id = :MG));
 set role authenticated; select tests.login(:B);
 select tests.throws('重設碼：顧客讀不到重設碼', 'select * from public.password_resets');
 reset role;
@@ -2121,7 +2126,7 @@ set role anon; select tests.login(null);
 select tests.ok('重設碼：打錯第 5 次就作廢', public.reset_password_with_code('badguy', case when (select v from tests.codes where k = 'x1') = '111111' then '222222' else '111111' end, 'newpass123') = 'expired');
 select tests.ok('重設碼：作廢後正確的碼也不能用', public.reset_password_with_code('badguy', (select v from tests.codes where k = 'x1'), 'newpass123') = 'expired');
 reset role;
-set role authenticated; select tests.login(:ST);
+set role authenticated; select tests.login(:MG);
 insert into tests.codes select 'x2', public.issue_reset_code(:X, 'mingde') ->> 'code';
 insert into tests.codes select 'x3', public.issue_reset_code(:X, 'mingde') ->> 'code';
 reset role;
@@ -2135,7 +2140,7 @@ select tests.ok('重設碼：密碼真的換了', (select encrypted_password = e
 select tests.ok('重設碼：其他手機都登出', not exists (select 1 from auth.sessions where user_id = :X));
 select tests.ok('重設碼：用過的碼刪掉', not exists (select 1 from public.password_resets where user_id = :X));
 select tests.ok('重設碼：用掉的操作紀錄記在產生的館', exists (select 1 from public.audit_log where action = 'user.password_reset' and target_id = :X and gym_id = 'mingde'));
-set role authenticated; select tests.login(:ST);
+set role authenticated; select tests.login(:MG);
 insert into tests.codes select 'x4', public.issue_reset_code(:X, 'mingde') ->> 'code';
 reset role;
 select tests.login(null);
@@ -2143,15 +2148,15 @@ update public.password_resets set expires_at = now() - interval '1 minute' where
 set role anon; select tests.login(null);
 select tests.ok('重設碼：過期不能用', public.reset_password_with_code('badguy', (select v from tests.codes where k = 'x4'), 'newpass456') = 'expired');
 reset role;
-set role authenticated; select tests.login(:ST);
+set role authenticated; select tests.login(:MG);
 insert into tests.codes select 'x5', public.issue_reset_code(:X, 'mingde') ->> 'code';
-select tests.lives('重設碼：員工可以作廢', format('select public.cancel_reset_code(%L, ''mingde'')', :X));
-select tests.throws('重設碼：員工不能作廢員工的', format('select public.cancel_reset_code(%L, ''mingde'')', :MG), '老闆');
+select tests.lives('重設碼：店長可以作廢', format('select public.cancel_reset_code(%L, ''mingde'')', :X));
+select tests.throws('重設碼：店長不能作廢員工的', format('select public.cancel_reset_code(%L, ''mingde'')', :ST), '老闆');
 reset role;
 select tests.ok('重設碼：作廢後沒有了', not exists (select 1 from public.password_resets where user_id = :X));
 set role authenticated; select tests.login(:OW);
-select tests.lives('重設碼：老闆可以幫員工產生', format('select public.issue_reset_code(%L, ''mingde'')', :MG));
-select tests.lives('重設碼：老闆作廢', format('select public.cancel_reset_code(%L, ''mingde'')', :MG));
+select tests.lives('重設碼：老闆可以幫員工產生', format('select public.issue_reset_code(%L, ''mingde'')', :ST));
+select tests.lives('重設碼：老闆作廢', format('select public.cancel_reset_code(%L, ''mingde'')', :ST));
 reset role;
 
 -- 刪自己的帳號（停權中也可以刪）

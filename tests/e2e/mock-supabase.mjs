@@ -400,7 +400,7 @@ export function createMock() {
       return J(route, 200, null);
     }
     if (fn === "issue_reset_code") {
-      if (!isStaff(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有員工可以產生重設碼" });
+      if (!isMgr(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有店長、老闆可以產生重設碼" });
       if (anyStaff(a.p_user) && !isOwner(uid)) return J(route, 403, { code: "42501", message: "員工的帳號只有老闆可以重設密碼" });
       const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
       const expires_at = new Date(Date.now() + 15 * 60000).toISOString();
@@ -409,7 +409,7 @@ export function createMock() {
       return J(route, 200, { code, expires_at, username: prof(a.p_user).username });
     }
     if (fn === "cancel_reset_code") {
-      if (!isStaff(uid, a.p_gym)) return noPerm();
+      if (!isMgr(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有店長、老闆可以作廢重設碼" });
       if (anyStaff(a.p_user) && !isOwner(uid)) return J(route, 403, { code: "42501", message: "員工的帳號只有老闆可以處理" });
       delete db.resets[a.p_user];
       return J(route, 200, null);
