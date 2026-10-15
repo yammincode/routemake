@@ -8,7 +8,7 @@ import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
 import { Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
 import FloorPlan from "@/components/ui/FloorPlan";
-import { BandPicker, dueText, GoalLine, GradeChart, NewRouteCard, NewRouteRow, ZoneCard, ZoneList, type ZoneReset } from "@/components/ui/Gym";
+import { BandPicker, dueText, GoalLine, GradeChart, NewRouteCard, NewRouteRow, RopeChart, ZoneCard, ZoneList, type ZoneReset } from "@/components/ui/Gym";
 import {
   getGym,
   getGymGrades,
@@ -27,7 +27,7 @@ import {
 } from "@/lib/data";
 import { useBand } from "@/lib/band";
 import { ago, daysUntil, isNew, todayYmd } from "@/lib/date";
-import { GRADE_BANDS, inBand, isYds } from "@/lib/design";
+import { GRADE_BANDS, inBand, isYds, ROPE_BANDS, type BandId } from "@/lib/design";
 import { addDays, resetPhase, resetRange, type ResetEvent } from "@/lib/resets";
 import { PLANS } from "@/lib/floorplan";
 import { saveLastGym, SPRAY_WALLS, sprayPath } from "@/lib/gyms";
@@ -48,7 +48,17 @@ export default function HomeView({ gymId }: { gymId: string }) {
   const [ascents, setAscents] = useState<Record<string, Ascent>>({});
   const [grades, setGrades] = useState<GradeRow[]>([]);
   const [resets, setResets] = useState<ResetEvent[]>([]);
-  const [bandId, pickBand] = useBand(); // 跟區域頁同一個選擇
+  const [bandId, saveBand] = useBand(); // 跟區域頁同一個選擇
+  // 上攀的三段（只在館首頁，不記在手機）；抱石和上攀同時只篩一種，區域卡片才知道照哪一種變淡
+  const [ropeId, setRopeId] = useState<BandId | null>(null);
+  const pickBand = (b: BandId | null) => {
+    saveBand(b);
+    if (b) setRopeId(null);
+  };
+  const pickRope = (b: BandId | null) => {
+    setRopeId(b);
+    if (b) saveBand(null);
+  };
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<(Route & { zone_name: string }) | null>(null);
   const uid = session?.user.id;
@@ -118,9 +128,13 @@ export default function HomeView({ gymId }: { gymId: string }) {
     return m;
   }, [grades]);
   const boulder = useMemo(() => grades.map((r) => r.grade).filter((g) => !isYds(g)), [grades]);
+  // 上攀（YDS，長耐力也算）：有就多一張上攀難度分布
+  const rope = useMemo(() => grades.map((r) => r.grade).filter(isYds), [grades]);
   // 上攀（YDS）為主的館沒有膠帶顏色，不顯示難度分布和篩選
   const showBands = boulder.length > 0 && boulder.length * 2 >= grades.length;
-  const band = showBands ? (GRADE_BANDS.find((b) => b.id === bandId) ?? null) : null;
+  const ropeBand = rope.length ? (ROPE_BANDS.find((b) => b.id === ropeId) ?? null) : null;
+  const band = ropeBand ?? (showBands ? (GRADE_BANDS.find((b) => b.id === bandId) ?? null) : null);
+  const boulderBand = band && !band.rope ? band : null;
 
   if (error && !zones)
     return (
@@ -227,16 +241,34 @@ export default function HomeView({ gymId }: { gymId: string }) {
       <SectionTitle>所有區域</SectionTitle>
       {showBands && (
         <>
-          <GradeChart grades={boulder} band={band} onBand={pickBand} />
+          <GradeChart grades={boulder} band={boulderBand} onBand={pickBand} />
           <div className="mt-3 mb-2">
-            <BandPicker value={band?.id ?? null} onChange={pickBand} />
+            <BandPicker value={boulderBand?.id ?? null} onChange={pickBand} />
           </div>
           <Tip>
-            {!band
+            {!boulderBand
               ? "色帶是牆上的膠帶顏色，數字是這個難度有幾條。"
               : hitZones
-                ? `有 ${hitZones} 個區域有 ${band.range} 的路線，其他區域變淡。`
-                : `目前沒有 ${band.range} 的路線。`}
+                ? `有 ${hitZones} 個區域有 ${boulderBand.range} 的路線，其他區域變淡。`
+                : `目前沒有 ${boulderBand.range} 的路線。`}
+          </Tip>
+        </>
+      )}
+      {/* 上攀難度分布（使用者選的 A 案：抱石下面再一張；只有上攀的館就只有這張） */}
+      {rope.length > 0 && (
+        <>
+          <div className={showBands ? "mt-4" : undefined}>
+            <RopeChart title={showBands ? "上攀難度分布" : "全館難度分布（上攀）"} grades={rope} band={ropeBand} onBand={pickRope} />
+          </div>
+          <div className="mt-3 mb-2">
+            <BandPicker value={ropeBand?.id ?? null} onChange={pickRope} bands={ROPE_BANDS} all="5.6–5.13" />
+          </div>
+          <Tip>
+            {!ropeBand
+              ? "上攀沒有膠帶顏色，數字是這個難度有幾條（長耐力也算）。"
+              : hitZones
+                ? `有 ${hitZones} 個區域有 ${ropeBand.range} 的路線，其他區域變淡。`
+                : `目前沒有 ${ropeBand.range} 的路線。`}
           </Tip>
         </>
       )}

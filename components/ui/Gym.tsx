@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ComponentProps, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
-import { GRADE_BANDS, GRADES, gradeColor, gradeLabel, inBand, type BandId, type GradeBand, type HoldColor } from "@/lib/design";
+import { GRADE_BANDS, GRADES, ROPE_BANDS, gradeColor, gradeLabel, inBand, type BandId, type GradeBand, type HoldColor } from "@/lib/design";
 import { Button } from "./Button";
 import Icon from "./Icon";
 import { HoldDot, NewBadge } from "./Route";
@@ -100,6 +100,56 @@ export function GradeChart({ grades, band, onBand }: { grades: number[]; band: G
   );
 }
 
+// 上攀難度分布（館首頁）：5.6–5.9 每級一根、5.10 以上 a–d 合成一根（跟我的紀錄本月完攀的上攀圖一樣）；上攀沒有膠帶顏色，用主色
+// 下面三段（入門 5.9 以下／進階 5.10／挑戰 5.11+）也能點，等於按上攀的四格
+export const ROPE_COLS = [100, 101, 102, 103, 104, 108, 112, 116];
+export const ropeCol = (g: number) => (g < 104 ? g : Math.min(116, 104 + Math.floor((g - 104) / 4) * 4));
+export function RopeChart({ title, grades, band, onBand }: { title: string; grades: number[]; band: GradeBand | null; onBand: (b: BandId | null) => void }) {
+  const counts = ROPE_COLS.map((c) => grades.filter((g) => ropeCol(g) === c).length);
+  const total = counts.reduce((s, n) => s + n, 0);
+  const max = Math.max(1, ...counts);
+  const picked = band ? grades.filter((g) => inBand(g, band)).length : total;
+  return (
+    <div className="rounded-card bg-surface px-4 pt-3.5 pb-3 shadow-card">
+      <div className="mb-2 flex items-baseline justify-between">
+        <b className="text-note">{title}</b>
+        <span className="text-meta text-muted">
+          {band ? `${band.range} 共 ` : "共 "}
+          <b className="font-num text-num-chip leading-none text-ink">{picked}</b> 條{band ? ` ／ ${total}` : ""}
+        </span>
+      </div>
+      <div className="grid grid-cols-8 items-end gap-1">
+        {ROPE_COLS.map((c, i) => (
+          <div key={c} className={`grid justify-items-center gap-0.5 ${inBand(c, band) ? "" : "opacity-40"}`}>
+            <span className="font-num text-meta leading-none font-semibold text-muted">{counts[i] || ""}</span>
+            <span style={{ height: `${Math.max(4, (counts[i] / max) * 56)}px` }} className={`w-full rounded-tape ${counts[i] ? "bg-accent" : "bg-line"}`} />
+            <span className="font-num text-meta leading-tight font-bold">{c < 104 ? gradeLabel(c) : gradeLabel(c).slice(0, -1)}</span>
+          </div>
+        ))}
+      </div>
+      {/* 三段：5.6–5.9 四欄、5.10 一欄、5.11–5.13 三欄 */}
+      <div className="mt-1.5 grid grid-cols-8 gap-1">
+        {ROPE_BANDS.map((b) => {
+          const on = band?.id === b.id;
+          return (
+            <button
+              key={b.id}
+              aria-pressed={on}
+              aria-label={`上攀${b.name} ${b.range}`}
+              onClick={() => onBand(on ? null : b.id)}
+              className={`border-t-2 pt-0.5 text-center text-tiny ${b.id === "easy" ? "col-span-4" : b.id === "mid" ? "col-span-1" : "col-span-3"} ${
+                on ? "border-ink font-bold text-ink" : "border-line text-muted"
+              }`}
+            >
+              {b.name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // 難度段的三段小色條（四格篩選、區域頁路線分段的標題）
 // onInk：放在選中（ink 底）的格子裡，黑色、螢光黃膠帶要換成淺色細框才看得到
 export function BandSwatch({ grades, onInk = false }: { grades: readonly number[]; onInk?: boolean }) {
@@ -121,8 +171,21 @@ export function BandSwatch({ grades, onInk = false }: { grades: readonly number[
 
 // 難度篩選：全部／入門／進階／挑戰四格一排（360 寬也放得下），每格是三段小色條＋名稱、下面是難度範圍
 // missing：這裡沒有路線的難度段（區域頁：這一區沒有的那段變淡、點不了）
-export function BandPicker({ value, onChange, missing = [] }: { value: BandId | null; onChange: (b: BandId | null) => void; missing?: readonly BandId[] }) {
-  const opts = [{ id: null, name: "全部", range: "VB–V10", swatch: [] as number[] }, ...GRADE_BANDS];
+// bands、all：上攀用 ROPE_BANDS、「5.6–5.13」（館首頁的上攀難度分布）
+export function BandPicker({
+  value,
+  onChange,
+  missing = [],
+  bands = GRADE_BANDS,
+  all = "VB–V10",
+}: {
+  value: BandId | null;
+  onChange: (b: BandId | null) => void;
+  missing?: readonly BandId[];
+  bands?: readonly GradeBand[];
+  all?: string;
+}) {
+  const opts = [{ id: null, name: "全部", range: all, swatch: [] as number[] }, ...bands];
   return (
     <div className="grid grid-cols-4 gap-1.5">
       {opts.map((o) => (

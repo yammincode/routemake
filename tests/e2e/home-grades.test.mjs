@@ -109,17 +109,77 @@ test("館首頁難度色帶：沒登入只寫條數；登入後有完成數、�
   assert.deepEqual([...G.errors, ...C.errors], []);
 });
 
-test("上攀為主的館不顯示難度分布和篩選，區域卡片寫 YDS 難度範圍", async () => {
+test("上攀為主的館：沒有抱石分布和四格，只有上攀難度分布（全館難度分布（上攀））；區域卡片寫 YDS 難度範圍；上攀四格篩選", async () => {
   const mock = createMock();
   const zone = (code) => mock.db.zones.find((z) => z.gym_id === "g3" && z.code === code);
   [104, 108].forEach((g) => mock.addRoute(zone("A"), g, "藍"));
+  [100, 103].forEach((g) => mock.addRoute(zone("AB1"), g, "藍"));
   mock.addRoute(zone("BO"), 3, "紅");
   const { page, errors } = await phone(browser, mock);
   await page.goto(BASE + "/gym/g3", { waitUntil: "networkidle" });
   await page.waitForTimeout(800);
-  assert.ok(!(await page.textContent("main")).includes("全館難度分布"));
-  assert.equal(await page.locator('main button[aria-pressed]:has-text("VB–V10")').count(), 0);
+  const main = async () => (await page.textContent("main")).replace(/\s+/g, "");
+  assert.ok(!(await main()).includes("全館難度分布共"), "沒有抱石的全館難度分布");
+  assert.equal(await page.locator('main button[aria-pressed]:has-text("VB–V10")').count(), 0, "沒有抱石四格");
+  assert.ok((await main()).includes("全館難度分布（上攀）共4條"), "只有上攀那張，標題寫（上攀）");
   assert.ok((await page.locator("main button.rounded-card", { hasText: "A 區" }).textContent()).includes("5.10a–5.11a"));
+  // 上攀四格：選「進階 5.10」→ 有 5.10 的區寫條數，沒有的變淡
+  await page.locator('main button[aria-pressed]:has-text("5.10")').filter({ hasText: "進階" }).click();
+  await page.waitForTimeout(200);
+  assert.match(await page.locator("main button.rounded-card", { hasText: "A 區" }).getAttribute("aria-label"), /5\.10 有 1 條/);
+  assert.match(await page.locator("main button.rounded-card", { hasText: "Auto-Belay 1" }).getAttribute("aria-label"), /沒有 5\.10/);
+  assert.ok((await main()).includes("有1個區域有5.10的路線"));
+  assert.deepEqual(errors, []);
+});
+
+test("抱石＋上攀的館：抱石分布下面多一張上攀難度分布（長耐力也算）；上攀三段篩選區域卡片，跟抱石同時只篩一種；※檢查由上而下的順序", async () => {
+  const mock = createMock();
+  const zone = (code) => mock.db.zones.find((z) => z.gym_id === "g5" && z.code === code);
+  [0, 2, 3, 5, 6].forEach((g) => mock.addRoute(zone("A1"), g, "藍"));
+  [1, 4].forEach((g) => mock.addRoute(zone("B1"), g, "紅"));
+  [101, 103, 105, 110, 117].forEach((g) => mock.addRoute(zone("E"), g, "黃")); // 上攀 E 區：5.7、5.9、5.10b、5.11c、5.13b
+  // 長耐力的區（照順序的點）也是 5.x：算進上攀
+  const d = zone("D");
+  d.grade_system = "endurance";
+  const en = mock.addRoute(d, 108, "白");
+  en.holds = Array.from({ length: 6 }, (_, i) => ({ x: 10 + i * 12, y: 50, t: i ? (i === 5 ? "t" : "h") : "s" }));
+  const { page, errors } = await phone(browser, mock);
+  await page.goto(BASE + "/gym/g5", { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  const main = async () => (await page.textContent("main")).replace(/\s+/g, "");
+  {
+    const text = await main();
+    const steps = ["所有區域", "全館難度分布共7條", "全部VB–V10", "色帶是牆上的膠帶顏色", "上攀難度分布共6條", "全部5.6–5.13", "入門5.9以下", "進階5.10", "挑戰5.11+", "上攀沒有膠帶顏色", "抱石A1區"];
+    let at = -1;
+    for (const [k, step] of steps.entries()) {
+      const i = text.indexOf(step, at + 1);
+      assert.ok(i > at, `「${step}」在「${steps[k - 1] ?? "開頭"}」後面`);
+      at = i;
+    }
+  }
+  // 上攀長條：5.7、5.9 各 1；5.10、5.11（含長耐力 5.11a）、5.13 合成一根
+  const bars = await page.locator("main .grid-cols-8 > div").evaluateAll((els) => els.map((e) => e.textContent.replace(/\s+/g, "")));
+  assert.deepEqual(bars, ["5.6", "15.7", "5.8", "15.9", "15.10", "25.11", "5.12", "15.13"], bars.join("｜"));
+
+  // 先選抱石「進階」，再選上攀「挑戰 5.11+」：抱石回到全部，區域卡片照上攀變淡
+  await page.locator('main button[aria-pressed]:has-text("V3–V5")').click();
+  await page.waitForTimeout(150);
+  await page.locator('main button[aria-pressed]:has-text("5.11+")').click();
+  await page.waitForTimeout(200);
+  assert.equal(await page.getAttribute('main button[aria-pressed]:has-text("VB–V10")', "aria-pressed"), "true", "抱石四格回到全部");
+  assert.match(await page.locator("main button.rounded-card", { hasText: "上攀 E 區" }).getAttribute("aria-label"), /5\.11\+ 有 2 條/);
+  assert.match(await page.locator("main button.rounded-card", { hasText: "D 區" }).getAttribute("aria-label"), /5\.11\+ 有 1 條/, "長耐力也算");
+  assert.match(await page.locator("main button.rounded-card", { hasText: "抱石 A1 區" }).getAttribute("aria-label"), /沒有 5\.11\+/);
+  assert.ok((await main()).includes("有2個區域有5.11+的路線"));
+  assert.equal(await page.evaluate(() => localStorage.getItem("routemake:home-band")), null, "選上攀時抱石的記憶清掉");
+  // 點上攀圖下面的「入門」等於按四格；再按抱石「挑戰」：上攀回到全部
+  await page.locator('main button[aria-label="上攀入門 5.9 以下"]').click();
+  await page.waitForTimeout(150);
+  assert.match(await page.locator("main button.rounded-card", { hasText: "上攀 E 區" }).getAttribute("aria-label"), /5\.9 以下 有 2 條/);
+  await page.locator('main button[aria-pressed]:has-text("V6+")').click();
+  await page.waitForTimeout(150);
+  assert.equal(await page.getAttribute('main button[aria-pressed]:has-text("5.6–5.13")', "aria-pressed"), "true", "上攀四格回到全部");
+  assert.match(await page.locator("main button.rounded-card", { hasText: "抱石 A1 區" }).getAttribute("aria-label"), /V6\+ 有 1 條/);
   assert.deepEqual(errors, []);
 });
 

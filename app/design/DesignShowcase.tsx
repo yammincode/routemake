@@ -21,7 +21,7 @@ import { LogList, LogRow } from "@/components/ui/Log";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import FloorPlan from "@/components/ui/FloorPlan";
 import { Check, ColorPicker, GradePicker, Label, MultiOptionGrid, OptionGrid, Rating, Segmented, TagPicker, TextArea, TextField, Toggle } from "@/components/ui/Form";
-import { BandHeading, BandPicker, GoalLine, GradeChart, GymRow, NewRouteCard, NewRouteRow, SoonBox, SwipeHint, ZoneCard, ZoneGradeCard, ZoneList, ZoneNav } from "@/components/ui/Gym";
+import { BandHeading, BandPicker, GoalLine, GradeChart, GymRow, NewRouteCard, NewRouteRow, RopeChart, SoonBox, SwipeHint, ZoneCard, ZoneGradeCard, ZoneList, ZoneNav } from "@/components/ui/Gym";
 import { GymDot, ResetDateRow, ResetLines, ResetMonth } from "@/components/ui/Resets";
 import { newRoutesText, type ResetEvent } from "@/lib/resets";
 import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, RouteTag, SetterNote, StatusBadge, StatusPicker, Tags, Tape, VideoCount } from "@/components/ui/Route";
@@ -39,6 +39,7 @@ import {
   FEEL_TAG_MAX,
   FEEL_TAGS,
   GRADE_BANDS,
+  ROPE_BANDS,
   GRADE_FEEL,
   GRADES,
   HEIGHT_BANDS,
@@ -190,6 +191,7 @@ export default function DesignShowcase() {
   const [month, setMonth] = useState(9);
   const [pickDay, setPickDay] = useState<number | null>(23);
   const [bandId, setBandId] = useState<BandId | null>("mid");
+  const [ropeId, setRopeId] = useState<BandId | null>(null);
   const [zoneBandId, setZoneBandId] = useState<BandId | null>(null);
   const [resetDay, setResetDay] = useState("2026-10-12");
   const [videoTag, setVideoTag] = useState<string | null>(null);
@@ -202,6 +204,7 @@ export default function DesignShowcase() {
   const [pickMove, setPickMove] = useState<ClimbMove | null>("dynamic");
   const [pickFeel, setPickFeel] = useState<FeelTag[]>(["fingers", "risky"]);
   const band = GRADE_BANDS.find((b) => b.id === bandId) ?? null;
+  const ropeBand = ROPE_BANDS.find((b) => b.id === ropeId) ?? null;
   const zoneBand = GRADE_BANDS.find((b) => b.id === zoneBandId) ?? null;
 
   const match = (r: DemoRoute) => inBand(r.grade, zoneBand) && (color == null || r.color === color);
@@ -331,6 +334,14 @@ export default function DesignShowcase() {
           <ZoneCard photo={fakeWall(104).uri} name="D 區（沒登入）" done={0} total={5} grades={[0, 1, 2, 3, 4]} scale={20} band={band} guest due={{ days: 0, ongoing: true, text: "換線中・今晚起新路線", warn: true }} />
         </ZoneList>
         <p className="mt-2 mb-0 text-meta text-muted">選了難度：範圍內的色段保持粗、寫條數，其他縮成細線；整區沒有這個難度就變淡。NEW＝3 天內有新路線</p>
+      </Block>
+
+      <Block title="上攀難度分布（館首頁，有上攀或長耐力路線的館：RopeChart＋BandPicker bands=ROPE_BANDS）">
+        <RopeChart title="上攀難度分布" grades={[100, 101, 102, 102, 103, 103, 103, 104, 105, 106, 106, 107, 108, 109, 110, 112, 113, 116]} band={ropeBand} onBand={setRopeId} />
+        <div className="mt-3 mb-2">
+          <BandPicker value={ropeId} onChange={setRopeId} bands={ROPE_BANDS} all="5.6–5.13" />
+        </div>
+        <ZoneCard photo={fakeWall(105).uri} name="上攀 E 區" done={2} total={6} grades={[101, 103, 104, 106, 108, 112]} scale={20} band={ropeBand} due={null} />
       </Block>
 
       <Block title="換線日（選館頁、換線行事曆）">
