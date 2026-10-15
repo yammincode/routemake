@@ -19,6 +19,7 @@ export type Access = {
   can_edit_resets?: boolean; // 可以輸入換線日（老闆或老闆授權的人；資料庫還沒套用 step27 時沒有這個欄位）
   usage_gyms?: string[]; // 老闆授權看使用狀況的館（資料庫還沒套用 step28 時沒有這個欄位）
   roles: { gym_id: string; role: Role }[];
+  suspension?: { until: string | null; reason: string } | null; // 停權中（until null＝永久；資料庫還沒套用 step43 時沒有這個欄位）
 };
 // 可以輸入換線日
 export const canEditResets = (a: Access | null) => !!a && (a.is_owner || !!a.can_edit_resets);

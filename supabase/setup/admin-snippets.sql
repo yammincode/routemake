@@ -7,6 +7,7 @@
 update public.profiles set is_owner = true where username = '帳號名稱';
 
 -- 2. 幫忘記密碼的人重設密碼（新密碼至少 8 碼，重設後請對方登入再自行記好）
+--    執行 step43 之後不用再用這段：員工在管理後台「帳號管理 → 重設密碼」產生重設碼，客人自己在登入頁設新密碼
 --    先確認是本人：請對方說出暱稱和最近記錄的 2–3 條路線，用第 3 段的查詢對照
 --    兩行一起執行：第二行把這個帳號在所有手機上的登入都登出（如果有人盜用，最多 1 小時內失效）
 update auth.users
@@ -27,12 +28,15 @@ select p.username as 帳號, p.nickname as 暱稱, p.is_owner as 老闆,
 delete from auth.sessions where user_id = (select id from auth.users where email = '帳號名稱@users.routemake.local');
 
 -- 5. 停權（不能再登入；紀錄、留言都保留）；兩行一起執行，已經登入的最多 1 小時內失效
+--    執行 step43 之後建議改用 App：人物卡或「帳號管理」停權（還能登入看路線，但不能留言、按讚、分享，馬上生效）
+--    這段是完全不能登入，只在很嚴重時用
 --    是員工的話，先到管理後台把員工身分移除
 --    （停權 100 年；不要寫 'infinity'，Supabase 的登入系統讀不了這個值）
 update auth.users set banned_until = now() + interval '100 years' where email = '帳號名稱@users.routemake.local';
 delete from auth.sessions where user_id = (select id from auth.users where email = '帳號名稱@users.routemake.local');
 
 -- 6. 刪除帳號（本人要求刪除時；先用第 2 段的方法確認是本人）
+--    執行 step43 之後：本人可以在「我的紀錄 → 刪除我的帳號」自己刪；老闆可以在「帳號管理 → 刪帳號」刪（影片檔會一起刪）
 --    ① 是員工的話，先到管理後台把員工身分移除
 --    ② 到 Supabase → Authentication → Users，搜尋「帳號名稱@users.routemake.local」→ 刪除
 --       他的紀錄、私人心得、留言、按讚、影片資料、意見回饋會一起刪掉；他出的路線留著（沒有出題者）

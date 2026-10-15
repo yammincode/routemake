@@ -4,6 +4,7 @@ import FeedbackPanel from "@/components/admin/FeedbackPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteEditor, { type EditTarget } from "@/components/admin/RouteEditor";
+import AccountsPanel from "@/components/admin/AccountsPanel";
 import AuditPanel from "@/components/admin/AuditPanel";
 import ScoringPanel from "@/components/admin/ScoringPanel";
 import ShareQr from "@/components/admin/ShareQr";
@@ -448,6 +449,7 @@ export default function AdminView() {
         </SetBox>
       )}
       {gym && <VideoPanel gymId={gymId} gymName={gym.name} />}
+      {gym && <AccountsPanel gymId={gymId} />}
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}
       {manager && gym && <AuditPanel gymId={gymId} gymName={gym.name} />}
       {access.is_owner && <ScoringPanel />}

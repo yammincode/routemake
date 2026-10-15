@@ -13,6 +13,7 @@ import { Label, TextField } from "@/components/ui/Form";
 import Sheet, { SheetTitle } from "@/components/ui/Sheet";
 import { SetBox } from "@/components/ui/Stats";
 import { isValidUsername, PASSWORD_MIN, USERNAME_RULE } from "@/lib/auth";
+import ResetForm from "./ResetForm";
 
 // 只允許站內路徑，避免被導到別的網站
 const safeNext = (n: string | null) => safeInternalPath(n, lastGymPath());
@@ -41,7 +42,10 @@ export default function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const next = safeNext(params.get("next"));
-  const [mode, setMode] = useState<"login" | "signup">(params.get("mode") === "signup" ? "signup" : "login");
+  const initial = params.get("mode");
+  const [mode, setMode] = useState<"login" | "signup">(initial === "signup" ? "signup" : "login");
+  // 忘記密碼：用櫃檯給的重設碼設新密碼
+  const [resetting, setResetting] = useState(initial === "reset");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   // 註冊時預設顯示密碼，看得到自己打了什麼比較不會打錯
@@ -78,6 +82,7 @@ export default function LoginForm() {
     setShowPw(m === "signup");
     setError(null);
   };
+  if (resetting) return <ResetForm onBack={() => setResetting(false)} onDone={() => router.replace(next)} />;
   const uHint = mode === "signup" ? usernameHint(username) : null;
   const pHint = mode === "signup" ? passwordHint(password) : null;
 
@@ -90,7 +95,7 @@ export default function LoginForm() {
       <Tip>
         {mode === "login"
           ? "這是原岩路線專用的帳號，跟入場的會員系統不同；第一次使用請先註冊。"
-          : "這是原岩路線專用的帳號，跟入場的會員系統不同。請記下帳號和密碼，忘記時要請櫃檯協助。"}
+          : "這是原岩路線專用的帳號，跟入場的會員系統不同。請記下帳號和密碼，忘記密碼時可以到櫃檯拿重設碼。"}
       </Tip>
       <ChipRow>
         <Chip pressed={mode === "login"} onClick={() => switchMode("login")}>
@@ -166,7 +171,9 @@ export default function LoginForm() {
           <Button className="mt-3" onClick={() => switchMode("signup")}>
             第一次用？註冊帳號
           </Button>
-          <Tip>忘記密碼請洽櫃檯。</Tip>
+          <button type="button" className="mx-auto mt-2 block p-2.5 text-note font-bold text-accent" onClick={() => (setResetting(true), setError(null))}>
+            忘記密碼？
+          </button>
         </>
       ) : (
         <Tip>

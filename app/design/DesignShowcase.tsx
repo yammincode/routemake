@@ -28,6 +28,7 @@ import { CommentCount, Grade, HoldDot, Points, RouteList, RouteRow, RouteTag, Se
 import Sheet, { SheetSection, SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { GymLegend, ProgressCard } from "@/components/ui/Progress";
 import { SlamTicket } from "@/components/ui/Slam";
+import { AccountSummary, ResetCodeBox, SuspendedLine, SuspendNotice } from "@/components/ui/Account";
 import { CalendarHeat, DailyBars, DaySummary, Delta, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
@@ -646,6 +647,25 @@ export default function DesignShowcase() {
             { grade: 104, done: 3, total: 3, gyms: [{ gym: "g3", done: 2, total: 2 }, { gym: "g5", done: 1, total: 1 }] },
           ]}
         />
+      </Block>
+
+      <Block title="帳號管理（停權、重設密碼）">
+        <p className="mt-0 mb-1.5 text-meta text-muted">被停權的人每一頁最上面的提示條（SuspendNotice，2A 案）；永久停權寫「帳號已停權」</p>
+        <SuspendNotice until="2027-01-22T10:00:00+08:00" reason="留言騷擾其他顧客" />
+        <SuspendNotice until={null} reason="發廣告" />
+        <p className="mt-3 mb-1.5 text-meta text-muted">後台「帳號管理」搜尋結果（AccountSummary）：核對身分用的最近完攀、停權中（SuspendedLine）</p>
+        <AccountSummary
+          nickname="阿明"
+          username="aming88"
+          meta="註冊 10/12・紀錄 14・留言 3・影片 1"
+          recent={[
+            { gym: "明德館", zone: "B 區", code: "B-07", color: "藍", grade: 4 },
+            { gym: "明德館", zone: "A1 區", code: "A1-03", color: "紅", grade: 3 },
+          ]}
+          suspension={<SuspendedLine until="2027-01-22T10:00:00+08:00" reason="留言騷擾其他顧客" by="王店長" at="2026-10-15T10:00:00+08:00" />}
+        />
+        <p className="mt-3 mb-1.5 text-meta text-muted">櫃檯產生的重設碼（ResetCodeBox）：大字、倒數、請客人怎麼做</p>
+        <ResetCodeBox code="482917" left="14:52 內有效" username="aming88" />
       </Block>
 
       <Block title="路線卡片：點一下就記錄＋分頁">

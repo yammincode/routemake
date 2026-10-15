@@ -1959,6 +1959,223 @@ reset role;
 update public.gyms set is_live = false where id = 'g6';
 select tests.throws('夥伴：資料庫也擋不合格的值（check）', $q$update public.profiles set mascot = '{"id":"mingde","bg":"red"}' where id = '00000000-0000-0000-0000-00000000000a'$q$);
 
+-- ---------------------------------------------------------------------
+-- 帳號管理（0049）：停權、刪帳號、櫃檯重設密碼
+-- ---------------------------------------------------------------------
+\set X  '''00000000-0000-0000-0000-0000000005a1'''
+\set Y  '''00000000-0000-0000-0000-0000000005a2'''
+\set Z  '''00000000-0000-0000-0000-0000000005a3'''
+select tests.login(null);
+insert into auth.users (id, email, encrypted_password) values
+  (:X, 'badguy@users.routemake.local', extensions.crypt('oldpass11', extensions.gen_salt('bf'))),
+  (:Y, 'leaver@users.routemake.local', extensions.crypt('mypass123', extensions.gen_salt('bf'))),
+  (:Z, 'spammer@users.routemake.local', extensions.crypt('spampass1', extensions.gen_salt('bf')));
+update public.profiles set nickname = '壞人' where id = :X;
+update public.profiles set nickname = '要走了' where id = :Y;
+update public.profiles set nickname = '廣告' where id = :Z;
+insert into auth.sessions (user_id) values (:X), (:X);
+with r as (insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y) values ((select v from ids where k = 'zoneB'), 3, '綠', 5, 5) returning id)
+insert into ids select 'accR', id from r;
+insert into ids select 'accSpray', id from public.routes where kind = 'community' and archived_at is null limit 1;
+create table tests.codes (k text primary key, v text);
+grant insert, select, update on tests.codes to anon, authenticated;
+
+set role authenticated; select tests.login(:X);
+select tests.lives('帳號：停權前可以留言', format('insert into public.comments (route_id, body) values (%L, ''亂留言'')', (select v from ids where k = 'accR')));
+reset role;
+set role authenticated; select tests.login(:Y);
+select tests.lives('帳號：要走了的人留言', format('insert into public.comments (route_id, body) values (%L, ''掰掰'')', (select v from ids where k = 'accR')));
+select tests.lives('帳號：要走了的人出岩友路線', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, holds) values (%L, 'community', '告別作', 4, '白', 0, 0, %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'ok')));
+reset role;
+
+-- 誰可以停權
+set role authenticated; select tests.login(:A);
+select tests.throws('停權：顧客不能停權', format('select public.suspend_user(%L, ''mingde'', 7, ''亂留言'')', :X), '店長');
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.throws('停權：定線員不能停權', format('select public.suspend_user(%L, ''mingde'', 7, ''亂留言'')', :X), '店長');
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.throws('停權：店長不能用別館的名義', format('select public.suspend_user(%L, ''g2'', 7, ''亂留言'')', :X), '店長');
+select tests.throws('停權：店長不能永久停權', format('select public.suspend_user(%L, ''mingde'', null, ''亂留言'')', :X), '老闆');
+select tests.throws('停權：天數只能 3、7、30', format('select public.suspend_user(%L, ''mingde'', 60, ''亂留言'')', :X), '天數');
+select tests.throws('停權：要寫原因', format('select public.suspend_user(%L, ''mingde'', 7, ''  '')', :X), '原因');
+select tests.throws('停權：不能停員工', format('select public.suspend_user(%L, ''mingde'', 7, ''測試'')', :ST), '員工');
+select tests.throws('停權：不能停老闆', format('select public.suspend_user(%L, ''mingde'', 7, ''測試'')', :OW), '員工');
+select tests.throws('停權：不能停自己', format('select public.suspend_user(%L, ''mingde'', 7, ''測試'')', :MG), '自己');
+select tests.lives('停權：店長停 7 天、刪掉他的留言', format('select public.suspend_user(%L, ''mingde'', 7, ''留言騷擾其他顧客'', true)', :X));
+reset role;
+select tests.ok('停權：到 7 天後、原因、誰停的都記下來', (select suspended_until between now() + interval '6 days 23 hours' and now() + interval '7 days 1 hour'
+  and suspended_reason = '留言騷擾其他顧客' and suspended_by = :MG from public.profiles where id = :X));
+select tests.ok('停權：他的留言都刪了（軟刪除）', not exists (select 1 from public.comments where user_id = :X and deleted_at is null)
+  and exists (select 1 from public.comments where user_id = :X));
+select tests.ok('停權：寫進操作紀錄', exists (select 1 from public.audit_log where action = 'user.suspend' and target_id = :X and gym_id = 'mingde'
+  and (detail ->> 'comments_deleted')::int = 1));
+select tests.login(null);
+update public.comments set deleted_at = null, deleted_by = null where user_id = :X;
+insert into ids select 'accC', id from public.comments where user_id = :X;
+
+-- 停權中的人
+set role authenticated; select tests.login(:X);
+select tests.ok('停權：本人登入時看得到停權到哪天和原因', (public.my_access() -> 'suspension' ->> 'reason') = '留言騷擾其他顧客'
+  and (public.my_access() -> 'suspension' ->> 'until') is not null);
+select tests.throws('停權中：不能留言', format('insert into public.comments (route_id, body) values (%L, ''再來'')', (select v from ids where k = 'r1')), '暫停中');
+select tests.throws('停權中：不能改留言（edit_comment）', format('select public.edit_comment(%L, ''改過'')', (select v from ids where k = 'accC')), '暫停中');
+select tests.throws('停權中：不能按留言讚', format('insert into public.comment_likes (comment_id) values (%L)', (select v from ids where k = 'cB')), '暫停中');
+select tests.throws('停權中：不能按影片讚', format('insert into public.video_likes (video_id) values (%L)', (select v from ids where k = 'likeV')), '暫停中');
+select tests.throws('停權中：不能按岩友路線讚', format('insert into public.route_likes (route_id) values (%L)', (select v from ids where k = 'accSpray')), '暫停中');
+select tests.throws('停權中：不能分享影片', format('insert into public.route_videos (route_id, path) values (%L, %L)', (select v from ids where k = 'v70'), format('mingde/%s/%s/x.mp4', (select v from ids where k = 'v70'), :X)), '暫停中');
+select tests.throws('停權中：不能上傳影片檔', format('insert into storage.objects (bucket_id, name, metadata) values (''route-videos'', %L, ''{"size":1000}'')', format('mingde/%s/%s/x.mp4', (select v from ids where k = 'v70'), :X)), 'row-level security');
+select tests.throws('停權中：不能出岩友路線', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, holds) values (%L, 'community', '再出一條', 4, '白', 0, 0, %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'ok')), '暫停中');
+select tests.throws('停權中：不能送意見回饋', $q$insert into public.feedback (kind, body) values ('idea', '放我出來')$q$, '暫停中');
+select tests.throws('停權中：不能改暱稱', $q$update public.profiles set nickname = '好人' where id = auth.uid()$q$, '暫停中');
+select tests.throws('停權中：不能改人物卡', $q$select public.save_my_card(true, '我是好人', null, null, null)$q$, '暫停中');
+select tests.throws('停權中：不能換夥伴', $q$select public.save_my_mascot('{"id":"wanhua"}')$q$, '暫停中');
+select tests.lives('停權中：照常記錄自己的完攀', format('insert into public.ascents (route_id, status) values (%L, ''send'')', (select v from ids where k = 'accR')));
+select tests.lives('停權中：可以刪自己的留言', format('select public.delete_comment(%L)', (select v from ids where k = 'accC')));
+select tests.throws('停權中：不能自己解除', format('select public.unsuspend_user(%L, ''mingde'')', :X), '店長');
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.throws('停權：別人讀不到停權原因', 'select suspended_reason from public.profiles limit 1');
+select tests.throws('停權：別人不能查誰被停權', format('select public.is_suspended(%L)', :X));
+select tests.ok('停權：沒停權的人 my_access 沒有 suspension', public.my_access() -> 'suspension' = 'null'::jsonb);
+reset role;
+
+-- 永久停權、改短、解除
+set role authenticated; select tests.login(:OW);
+select tests.lives('停權：老闆可以永久停權', format('select public.suspend_user(%L, ''mingde'', null, ''屢勸不聽'')', :X));
+reset role;
+set role authenticated; select tests.login(:X);
+select tests.ok('停權：永久停權 until 是 null', (public.my_access() -> 'suspension') ? 'until' and (public.my_access() -> 'suspension' ->> 'until') is null);
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.throws('停權：店長不能把老闆的永久停權改短', format('select public.suspend_user(%L, ''mingde'', 3, ''改短'')', :X), '更晚');
+select tests.throws('停權：店長不能解除永久停權', format('select public.unsuspend_user(%L, ''mingde'')', :X), '老闆');
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.lives('停權：老闆可以解除', format('select public.unsuspend_user(%L, ''mingde'')', :X));
+reset role;
+select tests.ok('停權：解除寫進操作紀錄', exists (select 1 from public.audit_log where action = 'user.unsuspend' and target_id = :X));
+set role authenticated; select tests.login(:X);
+select tests.lives('停權：解除後可以留言', format('insert into public.comments (route_id, body) values (%L, ''我會乖'')', (select v from ids where k = 'accR')));
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.lives('停權：店長停 3 天', format('select public.suspend_user(%L, ''mingde'', 3, ''再犯'')', :X));
+select tests.lives('停權：店長可以提早解除自己停的', format('select public.unsuspend_user(%L, ''mingde'')', :X));
+reset role;
+
+-- 帳號管理：搜尋、名單、留言
+set role authenticated; select tests.login(:A);
+select tests.throws('帳號管理：顧客不能搜尋', $q$select public.search_accounts('壞人', 'mingde')$q$, '權限');
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.throws('帳號管理：定線員不能用別館搜尋', $q$select public.search_accounts('壞人', 'g2')$q$, '權限');
+select tests.ok('帳號管理：定線員搜得到，有留言數、最近完攀、是不是員工', (select (x ->> 'username') = 'badguy' and (x ->> 'comments')::int = 1
+  and jsonb_array_length(x -> 'recent') = 1 and (x ->> 'staff')::boolean = false
+  from jsonb_array_elements(public.search_accounts('壞人', 'mingde')) x limit 1));
+select tests.ok('帳號管理：搜員工會標出是員工', (select (x ->> 'staff')::boolean from jsonb_array_elements(public.search_accounts('店長', 'mingde')) x limit 1));
+select tests.ok('帳號管理：看得到某人的留言', jsonb_array_length(public.account_comments(:X, 'mingde')) = 1);
+select tests.ok('帳號管理：停權中名單（現在沒有）', public.suspended_accounts('mingde') = '[]'::jsonb);
+reset role;
+
+-- 重設密碼
+set role authenticated; select tests.login(:A);
+select tests.throws('重設碼：顧客不能產生', format('select public.issue_reset_code(%L, ''mingde'')', :X), '員工');
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.throws('重設碼：員工不能幫員工產生', format('select public.issue_reset_code(%L, ''mingde'')', :MG), '老闆');
+select tests.throws('重設碼：不能幫自己產生', format('select public.issue_reset_code(%L, ''mingde'')', :ST), '改密碼');
+insert into tests.codes select 'x1', public.issue_reset_code(:X, 'mingde') ->> 'code';
+reset role;
+select tests.ok('重設碼：6 位數字', (select v ~ '^[0-9]{6}$' from tests.codes where k = 'x1'));
+select tests.ok('重設碼：資料庫只存加密後的碼', (select code_hash <> (select v from tests.codes where k = 'x1') and code_hash like '$2%' from public.password_resets where user_id = :X));
+select tests.ok('重設碼：寫進操作紀錄', exists (select 1 from public.audit_log where action = 'user.reset_code' and target_id = :X and user_id = :ST));
+set role authenticated; select tests.login(:B);
+select tests.throws('重設碼：顧客讀不到重設碼', 'select * from public.password_resets');
+reset role;
+set role anon; select tests.login(null);
+select tests.throws('重設碼：沒登入讀不到重設碼', 'select * from public.password_resets');
+select tests.ok('重設碼：帳號不存在', public.reset_password_with_code('nobody', '123456', 'newpass123') = 'bad');
+select tests.ok('重設碼：新密碼太短', public.reset_password_with_code('badguy', (select v from tests.codes where k = 'x1'), 'short') = 'short');
+select tests.ok('重設碼：打錯第 1 次', public.reset_password_with_code('badguy', '000000x', 'newpass123') = 'bad');
+select tests.ok('重設碼：打錯第 2～4 次', public.reset_password_with_code('badguy', '00000a', 'newpass123') = 'bad'
+  and public.reset_password_with_code(' BadGuy ', '999999', 'newpass123') in ('bad', 'ok') is not null);
+reset role;
+select tests.login(null);
+update public.password_resets set tries = 4 where user_id = :X;
+set role anon; select tests.login(null);
+select tests.ok('重設碼：打錯第 5 次就作廢', public.reset_password_with_code('badguy', case when (select v from tests.codes where k = 'x1') = '111111' then '222222' else '111111' end, 'newpass123') = 'expired');
+select tests.ok('重設碼：作廢後正確的碼也不能用', public.reset_password_with_code('badguy', (select v from tests.codes where k = 'x1'), 'newpass123') = 'expired');
+reset role;
+set role authenticated; select tests.login(:ST);
+insert into tests.codes select 'x2', public.issue_reset_code(:X, 'mingde') ->> 'code';
+insert into tests.codes select 'x3', public.issue_reset_code(:X, 'mingde') ->> 'code';
+reset role;
+set role anon; select tests.login(null);
+select tests.ok('重設碼：再產生一次，舊的碼作廢', (select v from tests.codes where k = 'x2') = (select v from tests.codes where k = 'x3')
+  or public.reset_password_with_code('badguy', (select v from tests.codes where k = 'x2'), 'newpass123') = 'bad');
+select tests.ok('重設碼：正確的碼可以設新密碼（帳號大小寫、空白都可以）', public.reset_password_with_code(' BadGuy ', (select v from tests.codes where k = 'x3'), 'newpass123') = 'ok');
+select tests.ok('重設碼：用過就不能再用', public.reset_password_with_code('badguy', (select v from tests.codes where k = 'x3'), 'again12345') = 'bad');
+reset role;
+select tests.ok('重設碼：密碼真的換了', (select encrypted_password = extensions.crypt('newpass123', encrypted_password) from auth.users where id = :X));
+select tests.ok('重設碼：其他手機都登出', not exists (select 1 from auth.sessions where user_id = :X));
+select tests.ok('重設碼：用過的碼刪掉', not exists (select 1 from public.password_resets where user_id = :X));
+set role authenticated; select tests.login(:ST);
+insert into tests.codes select 'x4', public.issue_reset_code(:X, 'mingde') ->> 'code';
+reset role;
+select tests.login(null);
+update public.password_resets set expires_at = now() - interval '1 minute' where user_id = :X;
+set role anon; select tests.login(null);
+select tests.ok('重設碼：過期不能用', public.reset_password_with_code('badguy', (select v from tests.codes where k = 'x4'), 'newpass456') = 'expired');
+reset role;
+set role authenticated; select tests.login(:ST);
+insert into tests.codes select 'x5', public.issue_reset_code(:X, 'mingde') ->> 'code';
+select tests.lives('重設碼：員工可以作廢', format('select public.cancel_reset_code(%L, ''mingde'')', :X));
+reset role;
+select tests.ok('重設碼：作廢後沒有了', not exists (select 1 from public.password_resets where user_id = :X));
+set role authenticated; select tests.login(:OW);
+select tests.lives('重設碼：老闆可以幫員工產生', format('select public.issue_reset_code(%L, ''mingde'')', :MG));
+select tests.lives('重設碼：老闆作廢', format('select public.cancel_reset_code(%L, ''mingde'')', :MG));
+reset role;
+
+-- 刪自己的帳號（停權中也可以刪）
+select tests.login(null);
+insert into tests.codes select 'yv', format('mingde/%s/%s/bye.mp4', (select v from ids where k = 'v70'), :Y);
+insert into storage.objects (bucket_id, name, owner) values ('route-videos', (select v from tests.codes where k = 'yv'), :Y);
+insert into public.route_videos (route_id, user_id, path) values ((select v from ids where k = 'v70'), :Y, (select v from tests.codes where k = 'yv'));
+set role authenticated; select tests.login(:OW);
+select tests.lives('刪帳號：先把要走的人停權', format('select public.suspend_user(%L, ''mingde'', 7, ''測試'')', :Y));
+reset role;
+set role authenticated; select tests.login(:Y);
+select tests.ok('刪帳號：密碼錯不會刪', public.delete_my_account('wrongpass') = false);
+select tests.ok('刪帳號：空白密碼不會刪', public.delete_my_account('') = false);
+select tests.throws('刪帳號：顧客拿不到別人的影片檔名', format('select public.account_video_files(%L)', :X), '權限');
+select tests.ok('刪帳號：先刪影片，密碼錯拿不到', public.delete_my_videos('wrongpass') is null);
+select tests.ok('刪帳號：先刪影片，密碼對回傳自己的影片檔名', public.delete_my_videos('mypass123') = array[(select v from tests.codes where k = 'yv')]);
+select tests.ok('刪帳號：影片資料刪了', not exists (select 1 from public.route_videos where user_id = :Y));
+select tests.lives('刪帳號：影片資料刪了以後，本人可以刪自己的影片檔', format('delete from storage.objects where bucket_id = ''route-videos'' and name = %L', (select v from tests.codes where k = 'yv')));
+select tests.ok('刪帳號：密碼對就刪掉', public.delete_my_account('mypass123'));
+reset role;
+select tests.ok('刪帳號：帳號、留言都沒了', not exists (select 1 from auth.users where id = :Y) and not exists (select 1 from public.profiles where id = :Y)
+  and not exists (select 1 from public.comments where user_id = :Y));
+select tests.ok('刪帳號：岩友路線留著，沒有出題人', exists (select 1 from public.routes where name = '告別作' and created_by is null));
+set role authenticated; select tests.login(:ST);
+select tests.throws('刪帳號：員工不能自己刪', $q$select public.delete_my_account('x')$q$, '員工');
+reset role;
+
+-- 老闆刪別人的帳號
+set role authenticated; select tests.login(:MG);
+select tests.throws('刪帳號：店長不能刪別人', format('select public.delete_user(%L)', :Z), '老闆');
+select tests.throws('刪帳號：店長拿不到別人的影片檔名', format('select public.account_video_files(%L)', :Z), '權限');
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.throws('刪帳號：員工不能被刪', format('select public.delete_user(%L)', :ST), '員工');
+select tests.ok('刪帳號：老闆拿得到別人的影片檔名', public.account_video_files(:Z) = '{}');
+select tests.lives('刪帳號：老闆可以刪別人', format('select public.delete_user(%L)', :Z));
+reset role;
+select tests.ok('刪帳號：真的刪掉了', not exists (select 1 from auth.users where id = :Z));
+select tests.ok('刪帳號：操作紀錄留著帳號名稱', exists (select 1 from public.audit_log where action = 'user.delete' and detail ->> 'username' = 'spammer'));
+
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));
 

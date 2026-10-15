@@ -17,13 +17,27 @@ create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
   phone text unique,
   email text unique,
+  encrypted_password text,
+  banned_until timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+-- 登入中的手機（Supabase 刪掉這裡的資料就等於登出）
+create table if not exists auth.sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
   created_at timestamptz default now()
 );
 
+-- Supabase 把 pgcrypto 裝在 extensions schema
+create schema if not exists extensions;
+create extension if not exists pgcrypto schema extensions;
+grant usage on schema extensions to anon, authenticated, service_role;
+
 -- 與 Supabase 相同：從 JWT claims 取出使用者 id
 create or replace function auth.uid() returns uuid language sql stable as $$
-  select nullif(coalesce(current_setting('request.jwt.claim.sub', true),
-                         (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')), '')::uuid
+  select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
+                  (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid
 $$;
 
 create table if not exists storage.buckets (

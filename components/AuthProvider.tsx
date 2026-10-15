@@ -3,7 +3,7 @@
 import type { Session } from "@supabase/supabase-js";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { authErrorMessage, usernameToEmail, type Access } from "@/lib/auth";
+import { authErrorMessage, PASSWORD_MIN, usernameToEmail, type Access } from "@/lib/auth";
 import { herePath } from "@/lib/nav";
 import { clearCache } from "@/lib/offline";
 import { AUTH_STORAGE_KEY, storedLogin, supabase, supabaseConfigured } from "@/lib/supabase";
@@ -21,6 +21,7 @@ type AuthState = {
   signUp: (username: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   setNickname: (nickname: string) => Promise<string | null>;
+  changePassword: (oldPassword: string, newPassword: string) => Promise<string | null>; // 回傳錯誤訊息，成功為 null
   refresh: () => Promise<void>;
 };
 
@@ -155,9 +156,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [session, loadAccess]
   );
 
+  // 改密碼：先用現在的密碼登入一次確認是本人，再改成新密碼
+  const changePassword = useCallback(
+    async (oldPassword: string, newPassword: string) => {
+      if (!session || !access?.username) return "請先登入";
+      if (newPassword.length < PASSWORD_MIN) return `新密碼至少 ${PASSWORD_MIN} 碼`;
+      const check = await supabase().auth.signInWithPassword({ email: usernameToEmail(access.username), password: oldPassword });
+      if (check.error) return authErrorMessage(check.error) === "帳號或密碼錯誤" ? "現在的密碼不對" : authErrorMessage(check.error);
+      const { error } = await supabase().auth.updateUser({ password: newPassword });
+      if (error) return error.code === "same_password" ? "新密碼跟現在的一樣" : authErrorMessage(error);
+      return null;
+    },
+    [session, access]
+  );
+
   const refresh = useCallback(() => loadAccess(session), [loadAccess, session]);
 
-  return <Ctx.Provider value={{ ready, session, access, signIn, signUp, signOut, setNickname, refresh }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ ready, session, access, signIn, signUp, signOut, setNickname, changePassword, refresh }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {

@@ -97,7 +97,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -242,6 +242,52 @@ export function createMock() {
   };
   const audit = (uid, gym, action, target, detail) => db.audit.push({ id: ++auditSeq, user_id: uid, gym_id: gym, action, target_id: target, detail, created_at: now() });
 
+  // ---- 帳號管理（step43）：停權、刪帳號、重設密碼 ----
+  // suspended_until：ISO 時間或 "infinity"（永久）
+  const suspended = (uid) => {
+    const u = prof(uid)?.suspended_until;
+    return !state.noAccounts && !!u && (u === "infinity" || u > now());
+  };
+  const SUSPENDED = { code: "42501", message: "帳號暫停中，暫時不能留言、分享或按讚" };
+  const suspensionOf = (p) =>
+    p && suspended(p.id) ? { until: p.suspended_until === "infinity" ? null : p.suspended_until, reason: p.suspended_reason } : null;
+  const anyStaff = (id) => isOwner(id) || db.staff_roles.some((s) => s.user_id === id);
+  const accountRow = (id) => {
+    const p = prof(id);
+    const s = suspensionOf(p);
+    return {
+      id: p.id, username: p.username, nickname: p.nickname, created_at: p.created_at ?? now(), staff: anyStaff(id),
+      ascents: db.ascents.filter((a) => a.user_id === id).length,
+      comments: db.comments.filter((c) => c.user_id === id && !c.deleted_at).length,
+      videos: db.videos.filter((v) => v.user_id === id).length,
+      recent: db.ascents
+        .filter((a) => a.user_id === id && ["flash", "send"].includes(a.status))
+        .sort((x, y) => y.updated_at.localeCompare(x.updated_at))
+        .slice(0, 3)
+        .map((a) => {
+          const r = db.routes.find((x) => x.id === a.route_id);
+          const z = zoneOf(r.zone_id);
+          return { gym: db.gyms.find((g) => g.id === z.gym_id).name, zone: z.name, code: r.code, color: r.hold_color, grade: r.grade, climbed_on: a.climbed_on };
+        }),
+      suspension: s ? { ...s, at: p.suspended_at, by: prof(p.suspended_by)?.nickname ?? null } : null,
+    };
+  };
+  // 刪帳號：同 on delete cascade／set null
+  const dropUser = (id) => {
+    const email = Object.keys(db.users).find((e) => db.users[e].id === id);
+    if (email) delete db.users[email];
+    db.profiles = db.profiles.filter((p) => p.id !== id);
+    db.ascents = db.ascents.filter((a) => a.user_id !== id);
+    db.comments = db.comments.filter((c) => c.user_id !== id);
+    db.likes = db.likes.filter((l) => l.user_id !== id);
+    db.videoLikes = db.videoLikes.filter((l) => l.user_id !== id);
+    db.routeLikes = db.routeLikes.filter((l) => l.user_id !== id);
+    db.videos = db.videos.filter((v) => v.user_id !== id);
+    db.feedback = db.feedback.filter((f) => f.user_id !== id);
+    db.routes.filter((r) => r.created_by === id).forEach((r) => (r.created_by = null));
+  };
+  db.resets = {}; // 重設碼：user_id -> { code, expires_at, tries }
+
   // PostgREST 篩選（eq、is、in、gte、lt、or）
   const cond = (r, k, v) => {
     const [op, ...rest] = v.split(".");
@@ -303,7 +349,107 @@ export function createMock() {
   async function rpc(route, fn, a, uid) {
     if (fn === "my_access") {
       const p = prof(uid);
-      return J(route, 200, p ? { id: p.id, username: p.username, nickname: p.nickname, avatar_url: null, is_owner: p.is_owner, ...(state.noResets ? {} : { can_edit_resets: canEditResets(uid) }), ...(noOps() ? {} : { usage_gyms: usageGyms(uid) }), roles: db.staff_roles.filter((s) => s.user_id === uid).map((s) => ({ gym_id: s.gym_id, role: s.role })) } : null);
+      return J(route, 200, p ? { id: p.id, username: p.username, nickname: p.nickname, avatar_url: null, is_owner: p.is_owner, ...(state.noResets ? {} : { can_edit_resets: canEditResets(uid) }), ...(noOps() ? {} : { usage_gyms: usageGyms(uid) }), roles: db.staff_roles.filter((s) => s.user_id === uid).map((s) => ({ gym_id: s.gym_id, role: s.role })), ...(state.noAccounts ? {} : { suspension: suspensionOf(p) }) } : null);
+    }
+    // 帳號管理（step43）：state.noAccounts 模擬資料庫還沒套用（沒有這些函式）
+    const ACCOUNT_FNS = ["search_accounts", "account_info", "suspended_accounts", "account_comments", "suspend_user", "unsuspend_user", "issue_reset_code", "cancel_reset_code", "reset_password_with_code", "account_video_files", "delete_user", "delete_my_videos", "delete_my_account"];
+    if (state.noAccounts && ACCOUNT_FNS.includes(fn)) return J(route, 404, { code: "PGRST202", message: `Could not find the function public.${fn} in the schema cache` });
+    if (["edit_comment", "save_my_card", "save_my_mascot"].includes(fn) && suspended(uid)) return J(route, 403, SUSPENDED);
+    const noPerm = () => J(route, 403, { code: "42501", message: "沒有權限" });
+    if (["search_accounts", "account_info", "suspended_accounts", "account_comments"].includes(fn) && !isStaff(uid, a.p_gym)) return noPerm();
+    if (fn === "search_accounts") {
+      const q = (a.p_query ?? "").trim().toLowerCase();
+      if (!q || (q.length < 2 && /^[ -~]*$/.test(q))) return J(route, 200, []);
+      return J(route, 200, db.profiles.filter((p) => p.username.includes(q) || (p.nickname ?? "").toLowerCase().includes(q)).slice(0, 5).map((p) => accountRow(p.id)));
+    }
+    if (fn === "account_info") return J(route, 200, prof(a.p_user) ? accountRow(a.p_user) : null);
+    if (fn === "suspended_accounts") return J(route, 200, db.profiles.filter((p) => suspended(p.id)).map((p) => accountRow(p.id)));
+    if (fn === "account_comments") {
+      return J(route, 200, db.comments
+        .filter((c) => c.user_id === a.p_user && !c.deleted_at)
+        .sort((x, y) => y.created_at.localeCompare(x.created_at))
+        .map((c) => {
+          const r = db.routes.find((x) => x.id === c.route_id);
+          const z = zoneOf(r.zone_id);
+          return { id: c.id, body: c.body, created_at: c.created_at, gym: db.gyms.find((g) => g.id === z.gym_id).name, zone: z.name, code: r.code, deletable: isStaff(uid, z.gym_id) };
+        }));
+    }
+    if (fn === "suspend_user") {
+      if (!isMgr(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有店長、老闆可以停權" });
+      if (a.p_days == null && !isOwner(uid)) return J(route, 403, { code: "42501", message: "永久停權只有老闆可以設定" });
+      if (!(a.p_reason ?? "").trim()) return J(route, 400, { code: "22023", message: "請寫停權原因（60 字以內）" });
+      if (anyStaff(a.p_user)) return J(route, 403, { code: "42501", message: "員工和老闆不能停權，請先移除員工身分" });
+      const p = prof(a.p_user);
+      const until = a.p_days == null ? "infinity" : new Date(Date.now() + a.p_days * 86400000).toISOString();
+      if (!isOwner(uid) && suspended(p.id) && (p.suspended_until === "infinity" || p.suspended_until > until))
+        return J(route, 403, { code: "42501", message: "他已經停權到更晚的時間，要改請找老闆" });
+      Object.assign(p, { suspended_until: until, suspended_reason: a.p_reason.trim(), suspended_by: uid, suspended_at: now() });
+      let n = 0;
+      if (a.p_delete_comments) db.comments.filter((c) => c.user_id === p.id && !c.deleted_at).forEach((c) => ((c.deleted_at = now()), n++));
+      audit(uid, a.p_gym, "user.suspend", p.id, { days: a.p_days, reason: a.p_reason.trim(), comments_deleted: n, nickname: p.nickname, username: p.username });
+      return J(route, 200, { until: a.p_days == null ? null : until, comments_deleted: n });
+    }
+    if (fn === "unsuspend_user") {
+      if (!isMgr(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有店長、老闆可以解除停權" });
+      const p = prof(a.p_user);
+      if (p.suspended_until === "infinity" && !isOwner(uid)) return J(route, 403, { code: "42501", message: "永久停權只有老闆可以解除" });
+      Object.assign(p, { suspended_until: null, suspended_reason: null, suspended_by: null, suspended_at: null });
+      audit(uid, a.p_gym, "user.unsuspend", p.id, { nickname: p.nickname, username: p.username });
+      return J(route, 200, null);
+    }
+    if (fn === "issue_reset_code") {
+      if (!isStaff(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有員工可以產生重設碼" });
+      if (anyStaff(a.p_user) && !isOwner(uid)) return J(route, 403, { code: "42501", message: "員工的帳號只有老闆可以重設密碼" });
+      const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+      const expires_at = new Date(Date.now() + 15 * 60000).toISOString();
+      db.resets[a.p_user] = { code, expires_at, tries: 0 };
+      audit(uid, a.p_gym, "user.reset_code", a.p_user, { nickname: prof(a.p_user).nickname, username: prof(a.p_user).username });
+      return J(route, 200, { code, expires_at, username: prof(a.p_user).username });
+    }
+    if (fn === "cancel_reset_code") {
+      if (!isStaff(uid, a.p_gym)) return noPerm();
+      delete db.resets[a.p_user];
+      return J(route, 200, null);
+    }
+    if (fn === "reset_password_with_code") {
+      if ((a.p_password ?? "").length < 8 || a.p_password.length > 72) return J(route, 200, "short");
+      const p = db.profiles.find((x) => x.username === (a.p_username ?? "").trim().toLowerCase());
+      const r = p && db.resets[p.id];
+      if (!r) return J(route, 200, "bad");
+      if (r.expires_at <= now() || r.tries >= 5) return (delete db.resets[p.id], J(route, 200, "expired"));
+      if (a.p_code !== r.code) return (r.tries++, J(route, 200, r.tries >= 5 ? "expired" : "bad"));
+      const email = Object.keys(db.users).find((e) => db.users[e].id === p.id);
+      db.users[email].password = a.p_password;
+      delete db.resets[p.id];
+      audit(null, null, "user.password_reset", p.id, { username: p.username });
+      return J(route, 200, "ok");
+    }
+    if (fn === "account_video_files") {
+      if (!isOwner(uid)) return noPerm();
+      return J(route, 200, db.videos.filter((v) => v.user_id === a.p_user).map((v) => v.path));
+    }
+    if (fn === "delete_user") {
+      if (!isOwner(uid)) return J(route, 403, { code: "42501", message: "只有老闆可以刪除別人的帳號" });
+      if (anyStaff(a.p_user)) return J(route, 403, { code: "42501", message: "員工和老闆不能刪除，請先移除員工身分" });
+      audit(uid, null, "user.delete", a.p_user, { username: prof(a.p_user)?.username, nickname: prof(a.p_user)?.nickname });
+      dropUser(a.p_user);
+      return J(route, 200, null);
+    }
+    const passwordOk = () => {
+      const email = Object.keys(db.users).find((e) => db.users[e].id === uid);
+      return !!email && !!a.p_password && db.users[email].password === a.p_password;
+    };
+    if (fn === "delete_my_videos") {
+      if (!passwordOk()) return J(route, 200, null);
+      const paths = db.videos.filter((v) => v.user_id === uid).map((v) => v.path);
+      db.videos = db.videos.filter((v) => v.user_id !== uid);
+      return J(route, 200, paths);
+    }
+    if (fn === "delete_my_account") {
+      if (anyStaff(uid)) return J(route, 403, { code: "42501", message: "員工帳號不能自己刪除，請先請老闆移除員工身分" });
+      if (!passwordOk()) return J(route, 200, false);
+      dropUser(uid);
+      return J(route, 200, true);
     }
     // state.noResets：模擬資料庫還沒套用 step27（沒有換線公告的函式），跟 PostgREST 一樣回 PGRST202
     if (state.noResets && ["reset_calendar", "reset_editor_list", "set_reset_editor"].includes(fn))
@@ -719,6 +865,16 @@ export function createMock() {
       return J(route, 200, session(body.email, u));
     }
     if (p === "/auth/v1/logout") return empty(route);
+    // 改密碼（supabase.auth.updateUser）
+    if (p === "/auth/v1/user" && m === "PUT") {
+      const email = Object.keys(db.users).find((e) => db.users[e].id === uid);
+      if (!email) return J(route, 401, { error_code: "bad_jwt", msg: "invalid JWT" });
+      if (body?.password) {
+        if (db.users[email].password === body.password) return J(route, 422, { error_code: "same_password", msg: "New password should be different from the old password." });
+        db.users[email].password = body.password;
+      }
+      return J(route, 200, { id: uid, aud: "authenticated", role: "authenticated", email, app_metadata: {}, user_metadata: {}, created_at: now() });
+    }
 
     // Storage
     if (p.startsWith("/storage/v1/object/public/zone-photos/")) {
@@ -742,6 +898,7 @@ export function createMock() {
       return f ? route.fulfill({ status: 200, headers: { ...cors, "content-type": "video/mp4" }, body: f.buf }) : route.fulfill({ status: 404 });
     }
     if (p.startsWith("/storage/v1/object/route-videos/") && m === "POST") {
+      if (suspended(uid)) return J(route, 403, { statusCode: "403", error: "Unauthorized", message: "new row violates row-level security policy" });
       const path = decodeURIComponent(p.replace("/storage/v1/object/route-videos/", ""));
       const routeId = path.split("/")[1];
       const dayAgo = new Date(Date.now() - 86400000).toISOString();
@@ -762,6 +919,7 @@ export function createMock() {
       return f ? route.fulfill({ status: 200, headers: { ...cors, "content-type": f.type, "cache-control": `max-age=${f.cache ?? 3600}` }, body: f.buf }) : route.fulfill({ status: 404 });
     }
     if (p.startsWith("/storage/v1/object/video-thumbs/") && m === "POST") {
+      if (suspended(uid)) return J(route, 403, { statusCode: "403", error: "Unauthorized", message: "new row violates row-level security policy" });
       if (state.noVideoThumb) return noBucket();
       const path = decodeURIComponent(p.replace("/storage/v1/object/video-thumbs/", ""));
       const routeId = path.split("/")[1];
@@ -793,6 +951,9 @@ export function createMock() {
 
     const t = p.replace("/rest/v1/", "");
     const sel = sp.get("select") || "";
+    // 停權中（step43）：不能留言、按讚、分享影片、送回饋、改暱稱（同 0049 的觸發器）
+    if (suspended(uid) && ((m === "POST" && ["comments", "comment_likes", "video_likes", "route_likes", "route_videos", "feedback"].includes(t)) || (m === "POST" && t === "routes" && body?.kind === "community") || (m === "PATCH" && t === "profiles")))
+      return J(route, 403, t === "profiles" ? { code: "42501", message: "帳號暫停中，暫時不能修改暱稱和人物卡" } : SUSPENDED);
     // state.readDelay：讀某張表要等幾毫秒（模擬訊號差），例如 { ascents: 1500 }
     if (m === "GET" && state.readDelay[t]) await new Promise((r) => setTimeout(r, state.readDelay[t]));
     if (t === "gyms") {

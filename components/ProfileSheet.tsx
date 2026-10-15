@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { LinkButton } from "@/components/ui/Button";
 import { CharacterTop } from "@/components/ui/Mascot";
@@ -8,7 +8,9 @@ import { HexChart, ProfileCardView } from "@/components/ui/Profile";
 import Sheet from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/Toast";
 import { isManagerOf } from "@/lib/auth";
-import { cardGyms, clearCardBio, getProfileCard, type ProfileCard } from "@/lib/data";
+import SuspendBox from "@/components/admin/SuspendBox";
+import { cardGyms, clearCardBio, getAccountInfo, getProfileCard, NO_ACCOUNTS, type AccountInfo, type ProfileCard } from "@/lib/data";
+import { md } from "@/lib/date";
 import { ABILITY_AXES, CLIMBING_YEARS, gradeLabel } from "@/lib/design";
 import { GYMS } from "@/lib/gyms";
 import { useMascot, useTroll } from "@/lib/mascot-store";
@@ -64,8 +66,14 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
 
   // 角色卡上半段：夥伴（所有人都看得到，跟留言旁的頭像一樣）；還在讀先空著
   const top = <CharacterTop pick={pick} troll={troll} />;
+  // 店長、老闆：人物卡下面可以停權（1A 案）；沒公開人物卡也一樣
+  const staffBox = !card.self && isManagerOf(access, gymId) ? <StaffBox userId={userId} gymId={gymId} /> : null;
   if (!card.public && !card.self) {
-    return <ProfileCardView name={name} meta="還沒有公開人物卡" top={top} />;
+    return (
+      <ProfileCardView name={name} meta="還沒有公開人物卡" top={top}>
+        {staffBox}
+      </ProfileCardView>
+    );
   }
 
   const clear = async () => {
@@ -101,6 +109,31 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
           {confirm ? "確定清除這段自我介紹？再按一次" : "清除不當的自我介紹（店長）"}
         </LinkButton>
       )}
+      {staffBox}
     </ProfileCardView>
+  );
+}
+
+// 員工看別人的人物卡：留言、影片數、註冊日，和停權（資料庫還沒套用 step43 時不顯示）
+function StaffBox({ userId, gymId }: { userId: string; gymId: string }) {
+  const [info, setInfo] = useState<AccountInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => {
+    getAccountInfo(userId, gymId)
+      .then(setInfo)
+      .catch((e) => setError((e as Error).message));
+  }, [userId, gymId]);
+  useEffect(() => {
+    void Promise.resolve().then(load);
+  }, [load]);
+  if (error) return error === NO_ACCOUNTS ? null : <p className="mt-3 mb-0 text-meta text-muted">{error}</p>;
+  if (!info) return null;
+  return (
+    <div className="mt-4 border-t border-line pt-3">
+      <p className="m-0 text-meta text-muted">
+        留言 {info.comments} 則・影片 {info.videos} 支・註冊 {md(new Date(info.created_at).toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" }))}
+      </p>
+      <SuspendBox info={info} gymId={gymId} onDone={load} />
+    </div>
   );
 }

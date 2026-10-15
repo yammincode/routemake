@@ -11,6 +11,7 @@ export const AUDIT_FILTERS = [
   { key: "video", label: "影片", actions: ["video.delete"] },
   { key: "card", label: "人物卡", actions: ["card.clear"] },
   { key: "staff", label: "員工", actions: ["staff.assign", "staff.remove"] },
+  { key: "account", label: "帳號", actions: ["user.suspend", "user.unsuspend", "user.delete", "user.reset_code", "user.password_reset"] },
   { key: "scoring", label: "計分／統計", actions: ["scoring.update", "usage.reset"] },
   { key: "reset", label: "換線日", actions: ["reset.add", "reset.update", "reset.delete"] },
   { key: "ops", label: "營運權限", actions: ["reset_editor.grant", "reset_editor.revoke", "usage_viewer.grant", "usage_viewer.revoke"] },
@@ -45,6 +46,18 @@ export function describeAudit(a: AuditEntry): string {
       return `指派 ${person} 為${ROLE_NAME[(str(d.role) || "setter") as Role]}`;
     case "staff.remove":
       return `移除${ROLE_NAME[(str(d.role) || "setter") as Role]} ${person}`;
+    case "user.suspend": {
+      const n = typeof d.comments_deleted === "number" ? d.comments_deleted : 0;
+      return `停權 ${person}（${typeof d.days === "number" ? `${d.days} 天` : "永久"}）：${str(d.reason)}${n > 0 ? `，刪掉 ${n} 則留言` : ""}`;
+    }
+    case "user.unsuspend":
+      return `解除 ${person} 的停權`;
+    case "user.delete":
+      return `刪除帳號 ${person}${str(d.username) && str(d.nickname) ? `（${str(d.username)}）` : ""}`;
+    case "user.reset_code":
+      return `幫 ${person} 產生重設密碼的重設碼`;
+    case "user.password_reset":
+      return `${str(d.username) || "顧客"} 用重設碼設了新密碼`;
     case "scoring.update":
       return `修改計分規則（Flash ×${d.flash_multiplier ?? "–"}、風格加成上限 ${d.max_style_bonus ?? "–"}%）`;
     case "reset.add":

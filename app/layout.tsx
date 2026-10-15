@@ -5,6 +5,7 @@ import TabBar from "@/components/TabBar";
 import { ToastProvider } from "@/components/ui/Toast";
 import InstallHelp from "@/components/InstallHelp";
 import MascotBuddy, { MascotToast } from "@/components/MascotBuddy";
+import SuspendBanner from "@/components/SuspendBanner";
 import SyncManager from "@/components/SyncManager";
 import UpdateWatcher from "@/components/UpdateWatcher";
 import "./globals.css";
@@ -63,6 +64,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             {/* 下面留給底部分頁和右下角的小夥伴（iPhone 底部橫條另外加），最後一列捲得上來不被擋 */}
             <main className="mx-auto max-w-page px-4 pt-3 pb-[calc(10rem+env(safe-area-inset-bottom,0px))]">
               <SyncManager />
+              <SuspendBanner />
               {children}
             </main>
             <TabBar />

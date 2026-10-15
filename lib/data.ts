@@ -509,6 +509,74 @@ export async function removeStaff(userId: string, gym: string) {
   must(await supabase().rpc("remove_staff", { p_user: userId, p_gym: gym }));
 }
 
+// ---------- 帳號管理（step43）：停權、刪帳號、櫃檯重設密碼 ----------
+export const NO_ACCOUNTS = "資料庫還沒套用 step43（停權、刪帳號、重設密碼），請老闆在 Supabase 執行 step43";
+// until：停權到什麼時候（null＝永久）
+export type Suspension = { until: string | null; reason: string; at?: string; by?: string | null };
+export type AccountInfo = {
+  id: string;
+  username: string;
+  nickname: string | null;
+  created_at: string;
+  staff: boolean; // 員工或老闆：不能停權、刪除，重設密碼只有老闆
+  ascents: number;
+  comments: number;
+  videos: number;
+  recent: { gym: string; zone: string; code: string; color: HoldColor; grade: number; climbed_on: string }[]; // 最近完攀 3 條（核對身分用）
+  suspension: Suspension | null;
+};
+export type AccountComment = { id: string; body: string; created_at: string; gym: string; zone: string; code: string; deletable: boolean };
+function mustAccounts<T>(r: { data: T | null; error: { message?: string; code?: string } | null }): T {
+  if (r.error?.code === "PGRST202") throw new Error(NO_ACCOUNTS);
+  return must(r);
+}
+export async function searchAccounts(query: string, gym: string): Promise<AccountInfo[]> {
+  return mustAccounts(await supabase().rpc("search_accounts", { p_query: query, p_gym: gym })) ?? [];
+}
+export async function getAccountInfo(userId: string, gym: string): Promise<AccountInfo | null> {
+  return mustAccounts(await supabase().rpc("account_info", { p_user: userId, p_gym: gym }));
+}
+export async function getSuspendedAccounts(gym: string): Promise<AccountInfo[]> {
+  return mustAccounts(await supabase().rpc("suspended_accounts", { p_gym: gym })) ?? [];
+}
+export async function getAccountComments(userId: string, gym: string): Promise<AccountComment[]> {
+  return mustAccounts(await supabase().rpc("account_comments", { p_user: userId, p_gym: gym })) ?? [];
+}
+// days：3、7、30；null＝永久（只有老闆）
+export async function suspendUser(userId: string, gym: string, days: number | null, reason: string, deleteComments: boolean) {
+  return mustAccounts(
+    await supabase().rpc("suspend_user", { p_user: userId, p_gym: gym, p_days: days, p_reason: reason, p_delete_comments: deleteComments })
+  ) as { until: string | null; comments_deleted: number };
+}
+export async function unsuspendUser(userId: string, gym: string) {
+  mustAccounts(await supabase().rpc("unsuspend_user", { p_user: userId, p_gym: gym }));
+}
+export type ResetCode = { code: string; expires_at: string; username: string };
+export async function issueResetCode(userId: string, gym: string): Promise<ResetCode> {
+  return mustAccounts(await supabase().rpc("issue_reset_code", { p_user: userId, p_gym: gym }));
+}
+export async function cancelResetCode(userId: string, gym: string) {
+  mustAccounts(await supabase().rpc("cancel_reset_code", { p_user: userId, p_gym: gym }));
+}
+// 客人用重設碼設新密碼（沒登入）：ok／bad（帳號或重設碼不對）／expired（過期或打錯太多次）／short（密碼長度不對）
+export type ResetResult = "ok" | "bad" | "expired" | "short";
+export async function resetPasswordWithCode(username: string, code: string, password: string): Promise<ResetResult> {
+  return mustAccounts(await supabase().rpc("reset_password_with_code", { p_username: username, p_code: code, p_password: password }));
+}
+// 老闆刪別人的帳號：先刪影片檔（員工可以刪任何人的檔），再刪帳號
+export async function deleteUser(userId: string) {
+  const paths = mustAccounts(await supabase().rpc("account_video_files", { p_user: userId })) as string[];
+  await removeVideoFiles(paths ?? []);
+  mustAccounts(await supabase().rpc("delete_user", { p_user: userId }));
+}
+// 本人刪帳號：密碼錯回傳 false；先刪自己的影片資料和檔案，再刪帳號
+export async function deleteMyAccount(password: string): Promise<boolean> {
+  const paths = mustAccounts(await supabase().rpc("delete_my_videos", { p_password: password })) as string[] | null;
+  if (paths == null) return false;
+  await removeVideoFiles(paths).catch(() => undefined);
+  return mustAccounts(await supabase().rpc("delete_my_account", { p_password: password })) as boolean;
+}
+
 // ---------- 我的紀錄 ----------
 export type MonthStats = {
   sends: number;
