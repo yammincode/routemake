@@ -31,7 +31,8 @@ import { GRADE_BANDS, inBand, isYds } from "@/lib/design";
 import { addDays, resetPhase, resetRange, type ResetEvent } from "@/lib/resets";
 import { PLANS } from "@/lib/floorplan";
 import { saveLastGym, SPRAY_WALLS, sprayPath } from "@/lib/gyms";
-import { overlayPending, withCache } from "@/lib/offline";
+import { zoneRoutePath } from "@/lib/nav";
+import { hasCache, overlayPending, withCache } from "@/lib/offline";
 
 const PLACEHOLDER =
   "data:image/svg+xml," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'><rect width='4' height='3' fill='#D2D7D2'/></svg>");
@@ -149,6 +150,11 @@ export default function HomeView({ gymId }: { gymId: string }) {
   };
   const zoneResets = new Map(zones.map((z) => [z.zone_id, resetOf(z)]));
   const goZone = (id: string) => router.push(`/zone?id=${id}`);
+  // 最新路線：跳到區域頁標出那一條（跟 New~ 看路線一樣）；沒網路又沒存過那一區就照舊在這頁打開卡片
+  const goRoute = (r: Route & { zone_name: string }) => {
+    if (!navigator.onLine && !hasCache(`zone:${r.zone_id}:${uid ?? "guest"}`)) return setOpen(r);
+    router.push(zoneRoutePath(r.zone_id, r.id, false));
+  };
   // 提醒：最快換線（7 天內、還沒開始換）、而且還有沒完攀路線的區；正在換的牆不提醒
   const guest = !session;
   const goal = zones
@@ -193,7 +199,7 @@ export default function HomeView({ gymId }: { gymId: string }) {
           <SectionTitle>最新路線</SectionTitle>
           <NewRouteRow>
             {fresh.map((r) => (
-              <NewRouteCard key={r.id} color={seqTotal(r) ? undefined : r.hold_color} grade={r.grade} zone={r.zone_name} ago={ago(r.created_at)} onClick={() => setOpen(r)} />
+              <NewRouteCard key={r.id} color={seqTotal(r) ? undefined : r.hold_color} grade={r.grade} zone={r.zone_name} ago={ago(r.created_at)} onClick={() => goRoute(r)} />
             ))}
           </NewRouteRow>
         </>

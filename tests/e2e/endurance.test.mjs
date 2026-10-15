@@ -165,7 +165,7 @@ test("長耐力：顧客記錄最高爬到第幾點、照比例算分、完攀�
   assert.deepEqual(errors, []);
 });
 
-test("長耐力：館首頁「最新路線」打開也有照片和點；下架後區域換了照片，我的紀錄不畫對不上的點", async () => {
+test("長耐力：館首頁「最新路線」跳到區域頁，打開的卡片也有照片和點；下架後區域換了照片，我的紀錄不畫對不上的點", async () => {
   const { mock, z } = setup();
   const uid = mock.addUser("climber88", "password1", { nickname: "小安" });
   const r = addEndurance(mock, z, 10);
@@ -175,7 +175,7 @@ test("長耐力：館首頁「最新路線」打開也有照片和點；下架�
   await c.locator("main button", { hasText: "訓練區" }).filter({ hasText: "設定" }).first().click();
   const sheet = c.locator("[role=dialog]");
   await sheet.waitFor();
-  assert.equal(await sheet.locator('img[alt$="10 個點"]').count(), 1, "最新路線打開也有照片和點");
+  assert.equal(await sheet.locator('img[alt$="10 個點"]').count(), 1, "最新路線跳到區域頁，卡片也有照片和點");
   await c.keyboard.press("Escape");
 
   // 嘗試中爬到第 3 點，路線下架（整區換線）

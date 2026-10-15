@@ -27,8 +27,9 @@ export function upTo(router: ReturnType<typeof useRouter>, target: string) {
 }
 type NavLike = { currentEntry: { index: number } | null; entries(): { url: string | null }[] };
 
-// New~「看路線 ›」：跳到那條路線的區域頁，標出那一條（route）、返回寫「‹ New~」（from=new）
-export const zoneRoutePath = (zoneId: string, routeId: string) => `/zone?id=${encodeURIComponent(zoneId)}&route=${encodeURIComponent(routeId)}&from=new`;
+// 跳到那條路線的區域頁，標出那一條（route）；New~「看路線 ›」來的返回寫「‹ New~」（from=new），館首頁「最新路線」來的照舊寫館名
+export const zoneRoutePath = (zoneId: string, routeId: string, fromNew = true) =>
+  `/zone?id=${encodeURIComponent(zoneId)}&route=${encodeURIComponent(routeId)}${fromNew ? "&from=new" : ""}`;
 
 // 目前頁面的網址（含 ?id= 這類參數），給「登入後回到這頁」用；區域頁 /zone?id=… 少了參數會找不到區域
 export function herePath(): string {

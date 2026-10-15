@@ -108,3 +108,31 @@ test("館首頁：最新路線在平面圖下面、所有區域上面；這週�
     assert.deepEqual(errors, []);
   }
 });
+
+test("館首頁：最新路線點了跳到區域頁，標出那一條、卡片停在紀錄；返回照舊寫館名、回到館首頁", async () => {
+  const mock = createMock();
+  const zone = mock.db.zones.find((z) => z.gym_id === "mingde" && z.code === "A2");
+  zone.photo_path = "mingde/zones/A2-1.jpg"; // 有照片才有點可以標
+  mock.addRoute(zone, 2, "綠", [], 30, 40, new Date(Date.now() - 30 * 86400000).toISOString());
+  const r = mock.addRoute(zone, 5, "紅", [], 60, 30);
+  const { page, errors } = await phone(browser, mock);
+  await page.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  const card = page.locator("main button", { hasText: "A2 區" }).filter({ hasText: "設定" }).first();
+  await card.click();
+  await page.waitForURL((u) => u.pathname === "/zone");
+  const u = new URL(page.url());
+  assert.deepEqual([u.searchParams.get("id"), u.searchParams.get("route"), u.searchParams.get("from")], [zone.id, r.id, null], "跳到那一區、標那一條，不是從 New~ 來的");
+  const pin = page.locator('main button[aria-current="true"]');
+  await pin.waitFor();
+  assert.ok((await pin.getAttribute("aria-label")).endsWith(r.code), "照片上標出那一條");
+  const dialog = page.locator("[role=dialog]");
+  await dialog.waitFor({ timeout: 5000 });
+  assert.match(await dialog.locator('[role=tab][aria-selected="true"]').textContent(), /紀錄/, "卡片停在紀錄分頁");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  assert.ok((await page.locator("main").textContent()).startsWith("‹ 明德館"), "返回照舊寫館名");
+  await page.locator('main button:has-text("明德館")').first().click();
+  await page.waitForURL((x) => x.pathname === "/gym/mingde");
+  assert.deepEqual(errors, []);
+});
