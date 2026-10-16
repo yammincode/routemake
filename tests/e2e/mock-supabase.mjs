@@ -820,10 +820,11 @@ export function createMock() {
         } else {
           const r = db.routes.find((x) => x.id === a.p_route);
           const z = r && zoneOf(r.zone_id);
-          if (!r || r.archived_at || (r.kind ?? "gym") !== "gym" || !db.gyms.find((g) => g.id === z.gym_id)?.is_live) return err("這條路線不能回報（可能已經下架）");
+          if (!r || r.archived_at || (r.kind ?? "gym") !== "gym" || z.kind === "spray" || seqN(r) || !db.gyms.find((g) => g.id === z.gym_id)?.is_live) return err("這條路線不能回報（可能已經下架）");
           zid = r.zone_id;
         }
         if (["missing", "color"].includes(k) && !a.p_color) return err("請選岩點顏色");
+        if (k === "missing" && a.p_grade != null && !(zoneOf(zid).grade_system === "v" ? a.p_grade >= -1 && a.p_grade <= 10 : a.p_grade >= 100 && a.p_grade <= 119)) return err("難度不對");
         if (["missing", "pin"].includes(k) && (a.p_x == null || a.p_y == null)) return err("請在照片上點出起步點");
         const note = (a.p_note ?? "").trim() || null;
         if (note && (note.length > 100 || hasLink(note))) return err("補充說明最多 100 字，不能放網址");
@@ -858,6 +859,7 @@ export function createMock() {
       }
       if (fn === "handle_route_reports") {
         if (!["added", "rejected", "fixed", "ok"].includes(a.p_status)) return err("處理狀態不對");
+        if (a.p_route && a.p_status === "rejected") return err("「不是路線」不用選路線");
         let n = 0;
         for (const x of db.reports.filter((y) => (a.p_ids ?? []).includes(y.id) && y.status === "new")) {
           const z = zoneOf(x.zone_id);

@@ -17,7 +17,7 @@ do $do$ begin
   route_id        uuid references public.routes (id) on delete cascade,
   kind            text not null check (kind in ('missing', 'color', 'pin', 'gone')),
   hold_color      text check (hold_color is null or hold_color in ('紅','橙','黃','綠','藍','紫','粉','咖啡','黑','白','灰','蒂芬妮')),
-  grade_guess     int check (grade_guess is null or grade_guess between -1 and 10 or grade_guess between 100 and 130),
+  grade_guess     int check (grade_guess is null or grade_guess between -1 and 10 or grade_guess between 100 and 119),
   pin_x           real check (pin_x is null or pin_x between 0 and 100),
   pin_y           real check (pin_y is null or pin_y between 0 and 100),
   note            text check (note is null or char_length(note) <= 100),
@@ -68,8 +68,10 @@ begin
     end if;
   else
     -- 路線有問題：岩館路線、還在牆上；區域用路線所在的那一區
+    -- 一般岩牆（不是 Spray Wall）、不是長耐力（照順序標點）的路線
     select r.zone_id into v_zone from public.routes r join public.zones z on z.id = r.zone_id join public.gyms g on g.id = z.gym_id
-      where r.id = p_route and coalesce(r.kind, 'gym') = 'gym' and r.archived_at is null and g.is_live;
+      where r.id = p_route and coalesce(r.kind, 'gym') = 'gym' and r.archived_at is null and g.is_live
+        and z.kind = 'wall' and coalesce(jsonb_array_length(r.holds), 0) < 2;
     if v_zone is null then raise exception '這條路線不能回報（可能已經下架）' using errcode = '22023'; end if;
   end if;
   if p_kind in ('missing', 'color') and p_color is null then
@@ -81,6 +83,14 @@ begin
   if v_note is not null and (char_length(v_note) > 100 or not public.link_free(v_note)) then
     raise exception '補充說明最多 100 字，不能放網址' using errcode = '22023';
   end if;
+  -- 猜的難度要跟這一區的難度制一樣（抱石 VB–V10、上攀／長耐力 5.6–5.13d）
+  if p_kind = 'missing' and p_grade is not null and not exists (
+    select 1 from public.zones z where z.id = v_zone
+      and (case when z.grade_system = 'v' then p_grade between -1 and 10 else p_grade between 100 and 119 end)) then
+    raise exception '難度不對' using errcode = '22023';
+  end if;
+  -- 同一個人同時送很多則時一則一則算，才不會超過 10 則
+  perform pg_advisory_xact_lock(hashtext('route_report:' || v_uid::text));
   if (select count(*) from public.route_reports r where r.user_id = v_uid and r.created_at > now() - interval '1 day') >= 10 then
     raise exception '今天已經回報 10 則了，明天再來，謝謝你！' using errcode = '54000';
   end if;
@@ -146,6 +156,9 @@ begin
             where x.id = any(coalesce(p_ids, '{}')) and x.status = 'new' for update of x loop
     if not public.is_staff(r.gym_id) then
       raise exception '只有這間館的員工可以處理回報' using errcode = '42501';
+    end if;
+    if p_route is not null and p_status not in ('added', 'fixed', 'ok') then
+      raise exception '「不是路線」不用選路線' using errcode = '22023';
     end if;
     if p_route is not null and not exists (select 1 from public.routes t where t.id = p_route and t.zone_id = r.zone_id) then
       raise exception '路線不在回報的那一區' using errcode = '22023';

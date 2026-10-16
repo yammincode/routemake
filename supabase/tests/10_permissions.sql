@@ -2304,6 +2304,9 @@ select tests.throws('回報：說明不能放網址', format($q$select public.su
 select tests.throws('回報：說明最多 100 字', format($q$select public.submit_route_report(%L, null, 'missing', '紅', null, 40, 60, %L)$q$, (select v from ids where k = 'rpZone'), repeat('長', 101)), '100');
 select tests.throws('回報：Spray Wall 不能回報沒標到的路線', format($q$select public.submit_route_report(%L, null, 'missing', '紅', null, 40, 60, null)$q$, (select id from public.zones where gym_id = 'mingde' and kind = 'spray' limit 1)), '不能回報');
 select tests.throws('回報：沒開放的館不能回報', format($q$select public.submit_route_report(%L, null, 'missing', '紅', null, 40, 60, null)$q$, (select id from public.zones where gym_id = 'g6' limit 1)));
+select tests.throws('回報：猜的難度要跟區域的難度制一樣', format($q$select public.submit_route_report(%L, null, 'missing', '紅', 104, 40, 60, null)$q$, (select v from ids where k = 'rpZone')), '難度');
+select tests.throws('回報：Spray Wall 的路線不能回報有問題', format($q$select public.submit_route_report(null, %L, 'gone', null, null, null, null, null)$q$,
+  (select r.id from public.routes r join public.zones z on z.id = r.zone_id where z.kind = 'spray' limit 1)));
 select tests.throws('回報：不能直接寫資料表', format($q$insert into public.route_reports (user_id, zone_id, kind, hold_color, pin_x, pin_y) values (%L, %L, 'missing', '紅', 1, 1)$q$, :A, (select v from ids where k = 'rpZone')));
 select tests.ok('回報：看得到自己送的（說明去掉前後空白、區域照路線所在那一區）',
   (select count(*) = 3 and bool_and(user_id = :A) and bool_or(note = '中間那條紅的')
