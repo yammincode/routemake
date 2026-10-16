@@ -263,7 +263,24 @@ test("影片加小貼紙（B2）：老闆上傳時順便做 IG 版（開關預�
   assert.equal(shared[0].name, "routemake-A1-01.webm");
   assert.ok(shared[0].size > 5000, `加上標記的影片（${shared[0].size}）`);
   assert.equal(mock.db.videos.length, 1, "原岩 App 裡只有一支（IG 版不上傳）");
-  assert.ok(mock.db.vfiles[mock.db.videos[0].path].buf.length > 1000, "上傳的是沒有標記的那份");
+  assert.ok(mock.db.vfiles[mock.db.videos[0].path].buf.length > 1000);
+  // 上傳到原岩的那份沒有貼紙：它的縮圖（壓縮時從同一張畫面擷取）左下角跟右上角一樣顏色
+  const up = mock.db.tfiles[mock.db.videos[0].thumb_path ?? ""];
+  assert.ok(up, "上傳的影片有縮圖");
+  const plain = await page.evaluate(async (src) => {
+    const i = new Image();
+    i.src = src;
+    await i.decode();
+    const c = document.createElement("canvas");
+    c.width = i.naturalWidth;
+    c.height = i.naturalHeight;
+    const g = c.getContext("2d");
+    g.drawImage(i, 0, 0);
+    const at = (x, y) => [...g.getImageData(x, y, 1, 1).data.slice(0, 3)];
+    const [bl, tr] = [at(30, c.height - 22), at(c.width - 10, 10)];
+    return Math.abs(bl[0] - tr[0]) + Math.abs(bl[1] - tr[1]) + Math.abs(bl[2] - tr[2]) <= 40;
+  }, `data:${up.type};base64,${up.buf.toString("base64")}`);
+  assert.ok(plain, "上傳的是沒有標記的那份");
   await sheet.locator('button:text-is("關閉")').click();
   assert.equal(await dialog.locator("video").count(), 0, "影片列表沒有 <video>");
 

@@ -112,6 +112,9 @@ export default function RouteVideos({
   const [igPrep, setIgPrep] = useState(readIgPrep);
   const [igReady, setIgReady] = useState<{ src: File; file: File; thumb: Blob | null } | null>(null);
   const [prepping, setPrepping] = useState(false); // 這次上傳有順便做 IG 版（按鈕寫「壓縮中（順便做 IG 版）」）
+  const [prepMiss, setPrepMiss] = useState(false); // 有順便做、但沒做成（例如這支手機不能同時錄兩份）
+  // 開關打開時要等小貼紙準備好才能按「分享影片」（不然這次就沒順便做到）
+  const prepWait = igOk && igPrep && !!compressType() && sticker === undefined;
   const igRun = useRef<AbortController | null>(null); // 正在重錄的那一次：關掉預覽、關掉卡片就停
   const [confirmDel, setConfirmDel] = useState<string | null>(null); // 刪除要按兩次（刪了不能復原）；換到別支影片就重來
 
@@ -193,6 +196,7 @@ export default function RouteVideos({
   const pick = async (f: File) => {
     setIgSrc(null); // 選了新的影片：上一支就不提供分享到 IG 了
     setIgReady(null);
+    setPrepMiss(false);
     igRun.current?.abort();
     try {
       const d = await checkPickedVideo(f, !!compressType(), lim);
@@ -266,6 +270,7 @@ export default function RouteVideos({
         const src = small ?? file;
         setIgSrc(src);
         setIgReady(took.v ? { src, ...took.v } : null);
+        setPrepMiss(!!extra && !took.v);
       }
       reset();
       setFilter(null); // 回到全部，剛分享的才看得到
@@ -394,7 +399,7 @@ export default function RouteVideos({
                     igReady?.src === igSrc
                       ? "上傳時已經做好（左下角加上難度和館名），按了馬上可以分享；關掉路線卡片後就不能分享到 IG 了"
                       : compressType()
-                        ? "左下角加上難度和館名，要在手機上重新處理一次，大約等影片的長度；關掉路線卡片後就不能分享到 IG 了"
+                        ? `${prepMiss ? "上傳時沒有順便做成 IG 版；" : ""}左下角加上難度和館名，要在手機上重新處理一次，大約等影片的長度；關掉路線卡片後就不能分享到 IG 了`
                         : "這支手機加不了原岩標記，會分享原本的影片；關掉路線卡片後就不能分享到 IG 了"
                   }
                   onClick={() => void makeIg()}
@@ -453,7 +458,7 @@ export default function RouteVideos({
                   "你還沒記錄這條，影片上不會顯示紀錄"
                 )}
               </p>
-              {igOk && !!compressType() && (
+              {igOk && !!compressType() && sticker !== null && (
                 <Toggle
                   checked={igPrep}
                   onChange={(on) => (setIgPrep(on), writeIgPrep(on))}
@@ -468,8 +473,8 @@ export default function RouteVideos({
                   分享規範
                 </Link>
               </Check>
-              <Button variant="primary" className="mt-3.5" disabled={!consent || busy} onClick={upload}>
-                {squeeze != null ? `${editing ? "剪輯中" : "壓縮中"}${prepping ? "（順便做 IG 版）" : ""} ${Math.round(squeeze * 100)}%，請不要關閉畫面…` : busy ? "上傳中，請不要關閉畫面…" : "分享影片"}
+              <Button variant="primary" className="mt-3.5" disabled={!consent || busy || prepWait} onClick={upload}>
+                {prepWait && !busy ? "準備原岩標記中…" : squeeze != null ? `${editing ? "剪輯中" : "壓縮中"}${prepping ? "（順便做 IG 版）" : ""} ${Math.round(squeeze * 100)}%，請不要關閉畫面…` : busy ? "上傳中，請不要關閉畫面…" : "分享影片"}
               </Button>
               {!busy && <LinkButton onClick={reset}>取消</LinkButton>}
             </>
