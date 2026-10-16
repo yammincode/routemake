@@ -127,7 +127,7 @@ export async function sourceFps(file: Blob): Promise<number | null> {
       };
       video.requestVideoFrameCallback(cb);
     });
-    await video.play(); // 靜音允許自動播放
+    await Promise.race([video.play(), got]); // 靜音允許自動播放；一直播不起來也最多等 3 秒
     await got;
     const gaps = times
       .slice(1)
@@ -238,7 +238,7 @@ export async function compressVideo(
 
     const fps = edit?.fps60 ? 60 : 30;
     const bps = edit?.fps60 ? HI_BPS : VIDEO_BPS;
-    stream = canvas.captureStream(fps);
+    stream = canvas.captureStream(); // 不給格數：每畫一次就是一格（畫的節奏由 draw 控制，給格數會跟畫的時間錯開又掉格）
     // 聲音：影片的聲音只送進錄影，不從喇叭播出；靜音就不錄
     if (!edit?.mute) {
       const src = ac.createMediaElementSource(video);
@@ -263,7 +263,7 @@ export async function compressVideo(
       c2.width = canvas.width;
       c2.height = canvas.height;
       draw2();
-      stream2 = c2.captureStream(fps);
+      stream2 = c2.captureStream();
       stream.getAudioTracks().forEach((t) => stream2!.addTrack(t.clone()));
       try {
         rec2 = new MediaRecorder(stream2, { mimeType: type, videoBitsPerSecond: bps, ...(edit?.mute ? {} : { audioBitsPerSecond: AUDIO_BPS }) });
@@ -289,12 +289,14 @@ export async function compressVideo(
     const shotAt = thumbAt(from, to);
     let shot = !onThumb;
     // 照原影片的時間平均取格：比上一格晚不到 1/fps 秒就不畫（畫布沒變就不會多錄一格）
+    // 有 requestVideoFrameCallback 時只用它給的畫面時間（第一次呼叫沒有，照畫但不記，iPhone 的 currentTime 會比畫面早）
+    const rvfc = typeof video.requestVideoFrameCallback === "function";
     let last = -Infinity;
     const draw = (_now?: number, m?: VideoFrameCallbackMetadata) => {
       if (done) return;
-      const at = m?.mediaTime ?? video.currentTime;
-      if (at - last >= 1 / fps - 0.004) {
-        last = at;
+      const at = m ? m.mediaTime : rvfc ? null : video.currentTime;
+      if (at == null || at - last >= 1 / fps - 0.004) {
+        if (at != null) last = at;
         g.drawImage(video, 0, 0, canvas.width, canvas.height);
         overlay?.(g, canvas.width, canvas.height);
         if (rec2) draw2();
@@ -306,7 +308,7 @@ export async function compressVideo(
       }
       onProgress(Math.min(1, (video.currentTime - from) / (to - from)));
       if (video.currentTime >= to - 0.02) return reached();
-      if ("requestVideoFrameCallback" in video) video.requestVideoFrameCallback(draw);
+      if (rvfc) video.requestVideoFrameCallback(draw);
       else requestAnimationFrame(() => draw());
     };
     video.addEventListener("ended", () => reached(), { once: true });

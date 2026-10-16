@@ -240,6 +240,7 @@ export default function RouteVideos({
   const hiShown = editable && (srcFps ?? 0) >= 45;
   const hiOk = seg != null && Math.round(seg) <= hiMaxSeconds(); // 跟畫面上寫的秒數一致
   const useHi = hiShown && hiOk && hi;
+  if (hi && !hiOk) setHi(false); // 拉到超過上限就關掉（再剪短不會自己打開）
   const edit: VideoEdit | undefined =
     editable && (trimmed || mute || useHi) ? { start: trimmed ? trim![0] : 0, end: trimmed ? trim![1] : dur!, mute, ...(useHi ? { fps60: true } : {}) } : undefined;
   const upload = async () => {
@@ -260,7 +261,9 @@ export default function RouteVideos({
       const small = willSqueeze ? await compressVideo(file, setSqueeze, edit, (b) => (thumb = b), undefined, undefined, extra) : null;
       setSqueeze(null);
       if (edit && !small)
-        throw new Error(trimmed ? "剪輯沒有成功，請再試一次，或先在手機相簿剪短再分享" : mute ? "靜音沒有成功，請再試一次" : "高畫質 60 fps 沒有成功，請關掉高畫質再試一次");
+        throw new Error(
+          useHi ? "高畫質 60 fps 沒有成功，請關掉高畫質再試一次" : trimmed ? "剪輯沒有成功，請再試一次，或先在手機相簿剪短再分享" : "靜音沒有成功，請再試一次"
+        );
       thumb ??= await captureThumb(small ?? file).catch(() => null);
       await uploadVideo(
         session.user.id,

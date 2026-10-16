@@ -702,6 +702,7 @@ test("高畫質 60 fps：原影片 60 fps 才有開關、預設關、超過 20 �
   const zone = mock.db.zones[0];
   mock.addRoute(zone, 4, "藍");
   const original = await realClip(5);
+  const secs = await clipSeconds(original); // 電腦忙時可能不是剛好 5 秒
   // fps：假裝原影片幾 fps（null＝真的去量，這支是 30 fps）；hiMax：高畫質長度上限（正式 20 秒）
   const open = async (fps, hiMax) => {
     const C = await phone(browser, mock);
@@ -718,7 +719,7 @@ test("高畫質 60 fps：原影片 60 fps 才有開關、預設關、超過 20 �
     const dialog = C.page.locator("[role=dialog]");
     await dialog.locator('[role=tab]:has-text("影片")').click().catch(() => {});
     await dialog.locator("input[type=file]").setInputFiles({ name: "climb.webm", mimeType: "video/webm", buffer: original });
-    await C.page.waitForTimeout(1500); // 量 fps 要播一下
+    await C.page.waitForTimeout(fps ? 1000 : 4500); // 真的量 fps 最多播 3 秒
     return { ...C, dialog, hi: dialog.locator('button[role=switch][aria-label="高畫質 60 fps"]') };
   };
 
@@ -732,15 +733,19 @@ test("高畫質 60 fps：原影片 60 fps 才有開關、預設關、超過 20 �
   const B = await open(60, 3);
   assert.equal(await B.hi.getAttribute("aria-checked"), "false", "預設關");
   assert.ok(await B.hi.isDisabled(), "超過上限點不了");
-  assert.ok((await B.dialog.textContent()).includes("影片 5 秒，剪到 3 秒內才能開"));
+  assert.ok((await B.dialog.textContent()).includes(`影片 ${Math.round(secs)} 秒，剪到 3 秒內才能開`));
   await B.dialog.locator('button:has-text("剪輯長度")').click();
-  for (let i = 0; i < 4; i++) await B.dialog.locator('button[aria-label="結束往前 0.5 秒"]').click();
+  for (let i = 0; i < Math.ceil((secs - 3.4) / 0.5); i++) await B.dialog.locator('button[aria-label="結束往前 0.5 秒"]').click();
   assert.ok(!(await B.hi.isDisabled()), "剪到 3 秒可以開");
   await B.hi.click();
   assert.equal(await B.hi.getAttribute("aria-checked"), "true");
-  // 再拉長到超過上限：自動變成關
+  // 再拉長到超過上限：自動變成關；再剪短也不會自己打開
   await B.dialog.locator('button:has-text("不剪了")').click();
   assert.equal(await B.hi.getAttribute("aria-checked"), "false", "超過上限就不用高畫質");
+  await B.dialog.locator('button:has-text("剪輯長度")').click();
+  for (let i = 0; i < Math.ceil((secs - 3.4) / 0.5); i++) await B.dialog.locator('button[aria-label="結束往前 0.5 秒"]').click();
+  assert.ok(!(await B.hi.isDisabled()));
+  assert.equal(await B.hi.getAttribute("aria-checked"), "false", "剪短後不會自己打開");
   await B.ctx.close();
 
   // 3. 60 fps、上限 10 秒：直接開、不剪 → 重錄（寫「壓縮中」）後上傳，長度是整支
