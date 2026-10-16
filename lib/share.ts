@@ -4,8 +4,8 @@
 // 圖、影片都在手機上做，不從伺服器多下載東西（省流量）；圖上不放私人心得
 import type { Access } from "@/lib/auth";
 
-// 先只給老闆試（10/16 使用者說：老闆試過沒問題再開放）；開放給大家時改成 true
-export const SHARE_IG_PUBLIC = false;
+// 10/16 先只給老闆試；老闆試過沒問題，10/16 使用者說開放給全部使用 App 的人（要關掉只給老闆時改回 false）
+export const SHARE_IG_PUBLIC = true;
 export const canShareIg = (a: Access | null) => SHARE_IG_PUBLIC || !!a?.is_owner;
 
 type ShareNav = Navigator & { canShare?: (d: ShareData) => boolean };

@@ -18,7 +18,7 @@ import { Tabs } from "@/components/ui/Tabs";
 import { HoldMarks } from "@/components/ui/Spray";
 import { useToast } from "@/components/ui/Toast";
 import { Pin, WallPhoto } from "@/components/ui/Wall";
-import { ShareButton, SharePreview } from "@/components/ui/Share";
+import { ShareButton, SharePicker, SharePreview } from "@/components/ui/Share";
 import { isStaffOf } from "@/lib/auth";
 import {
   clearAscent,
@@ -40,6 +40,8 @@ import { ago, md, todayYmd, ymd } from "@/lib/date";
 import { findGym } from "@/lib/gyms";
 import { canShareIg, shareUrl } from "@/lib/share";
 import { drawSendCard } from "@/lib/share-cards";
+import { loadShow, saveShow, type SendShow } from "@/lib/share-options";
+import { useMascot } from "@/lib/mascot-store";
 import { FEEL, GRADE_FEEL, STATUS_LABEL, type Status } from "@/lib/design";
 import { herePath, zoneRoutePath } from "@/lib/nav";
 import { cheerComment, cheerSend } from "@/lib/mascot-events";
@@ -184,6 +186,8 @@ function RouteBody({
   // 分享到 IG（A3 完攀圖）：按了先打開預覽、在手機上畫圖，畫好再按「分享到 IG」
   const [card, setCard] = useState<{ file: File | null; url: string | null } | null>(null);
   const cardRun = useRef(0); // 第幾次按：關掉又打開時，前一次慢做好的圖不要塞進來
+  const [sendShow, setSendShow] = useState<SendShow | null>(null); // 勾選要放的資料（打開預覽時從手機讀）
+  const myMascot = useMascot(session?.user.id); // 圖上的原岩夥伴（讀過會記在手機）
   const onVideoCount = useCallback((n: number) => setVideoCount(n), []);
 
   const commentsOpen = gymCommentsOn && r.comments_enabled;
@@ -404,10 +408,12 @@ function RouteBody({
   };
 
   // A3 完攀圖：卡片最上面那張照片（起步點、Spray Wall 圈圈、長耐力的點）＋難度、區域、館名、攀爬日、QR code（打開這條路線）
-  const openCard = async () => {
+  // show：勾選要放的資料；改勾選時預覽先留著舊的圖，畫好再換
+  const openCard = async (show: SendShow = sendShow ?? loadShow("send")) => {
     if (!status || status === "project") return;
     const run = ++cardRun.current;
-    setCard({ file: null, url: null });
+    setSendShow(show);
+    setCard((c) => ({ file: null, url: c?.url ?? null }));
     try {
       const gym = findGym(gymId)?.name ?? "";
       const day = date || todayYmd();
@@ -419,8 +425,11 @@ function RouteBody({
         grade: r.grade,
         status,
         title: r.name ? r.name : total > 0 ? `${zoneName} ${r.code}・${total} 點` : `${zoneName} ${r.code}・${r.hold_color}色`,
-        sub: [gym, `${+day.slice(0, 4)}.${day.slice(5, 7)}.${day.slice(8, 10)}`].filter(Boolean).join("・"),
+        gym,
+        date: `${+day.slice(0, 4)}.${day.slice(5, 7)}.${day.slice(8, 10)}`,
         nickname: access?.nickname ?? "",
+        mascot: myMascot ?? { id: "mingde" },
+        show,
         // Spray Wall 的路線沒有區域頁可以標出來：QR code 打開首頁
         url: shareUrl(r.name ? "/" : zoneRoutePath(r.zone_id, r.id, null)),
       });
@@ -437,7 +446,12 @@ function RouteBody({
     cardRun.current++;
     setCard(null);
   };
-  useEffect(() => () => void (card?.url && URL.revokeObjectURL(card.url)), [card]);
+  const cardUrl = card?.url ?? null;
+  useEffect(() => () => void (cardUrl && URL.revokeObjectURL(cardUrl)), [cardUrl]);
+  const pickSend = (next: SendShow) => {
+    saveShow("send", next);
+    void openCard(next);
+  };
 
   // 卡片是全螢幕、多記了一筆瀏覽紀錄（網址一樣）：換掉那一筆，登入回來按返回不用多按一次
   const toLogin = () => router.replace(`/login?next=${encodeURIComponent(herePath())}`);
@@ -662,7 +676,16 @@ function RouteBody({
         )}
       </div>
       <ProfileSheet userId={profile} gymId={gymId} onClose={() => setProfile(null)} />
-      <SharePreview open={!!card} onClose={closeCard} title="分享完攀到 IG" what="圖片" file={card?.file ?? null} image={card?.url ?? null} note="圖上有難度、區域、館名、攀爬日、你的暱稱和 QR code，不會有私人心得。" />
+      <SharePreview
+        open={!!card}
+        onClose={closeCard}
+        title="分享完攀到 IG"
+        what="圖片"
+        file={card?.file ?? null}
+        image={card?.url ?? null}
+        picker={sendShow && <SharePicker kind="send" show={sendShow} onChange={pickSend} />}
+        note="勾選會記在這支手機，下次照這樣做；私人心得不會出現在圖上。"
+      />
     </>
   );
 }

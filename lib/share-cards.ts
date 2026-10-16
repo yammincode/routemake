@@ -9,6 +9,7 @@ import { BRAND_MARK, GYM_COLORS, GYMS, gymShort } from "@/lib/gyms";
 import { MASCOT_ART } from "@/lib/mascot-art";
 import { mascotInfo, tint, type MascotPick } from "@/lib/mascots";
 import type { Hold } from "@/lib/data";
+import type { MonthShow, SendShow, VideoShow } from "@/lib/share-options";
 
 const W = 1080;
 const H = 1920;
@@ -162,19 +163,23 @@ export type SendCardInfo = {
   grade: number;
   status: Status; // flash、send
   title: string; // 區域・顏色・編號（或 Spray Wall 路線名稱）
-  sub: string; // 館名・日期
+  gym: string; // 館名
+  date: string; // 攀爬日（2026.10.16）
   nickname: string;
   url: string | null; // QR code：打開這條路線（試用版在自己電腦跑時不放，免得印出區網位址）
+  mascot: MascotPick;
+  show: SendShow; // 客人勾選要放的資料（lib/share-options.ts）
 };
 
 export async function drawSendCard(info: SendCardInfo): Promise<Blob> {
-  const f = await loadFonts(`原岩攀岩館完攀${info.title}${info.sub}${info.nickname}掃看這條路線`);
+  const on = info.show;
+  const f = await loadFonts(`原岩攀岩館完攀${info.title}${info.gym}${info.date}${info.nickname}掃看這條路線`);
   const { c, g } = canvas();
   const t = tape(info.grade);
 
-  // 照片：已經在卡片上顯示過（手機裡有），用同一個網址再讀一次；讀不到（或畫不上去）就用膠帶色底
-  let img = info.photo ? await loadImg(info.photo.src, true) : null;
-  if (!img && info.photo?.fallback) img = await loadImg(info.photo.fallback, true);
+  // 照片：已經在卡片上顯示過（手機裡有），用同一個網址再讀一次；讀不到（或畫不上去）、背景選膠帶色就用膠帶色底
+  let img = info.photo && on.bg === "photo" ? await loadImg(info.photo.src, true) : null;
+  if (!img && info.photo?.fallback && on.bg === "photo") img = await loadImg(info.photo.fallback, true);
   let photoOk = false;
   if (img && img.naturalWidth) {
     // 照片要對準的點：起步點；Spray Wall、長耐力是所有點的中間
@@ -202,7 +207,7 @@ export async function drawSendCard(info: SendCardInfo): Promise<Blob> {
       if (info.pin) {
         const [px, py] = at(info.pin);
         g.lineWidth = 10;
-        g.strokeStyle = info.status === "flash" ? C.flash : "#fff";
+        g.strokeStyle = info.status === "flash" && on.status ? C.flash : "#fff";
         g.beginPath();
         g.arc(px, py, 96, 0, Math.PI * 2);
         g.stroke();
@@ -217,7 +222,7 @@ export async function drawSendCard(info: SendCardInfo): Promise<Blob> {
         g.font = `700 ${info.grade >= 100 ? 44 : 60}px ${f.num}`;
         g.textAlign = "center";
         g.textBaseline = "middle";
-        g.fillText(gradeShort(info.grade), px, py + 3);
+        if (on.grade) g.fillText(gradeShort(info.grade), px, py + 3);
         g.textAlign = "left";
       }
       for (const h of info.holds ?? []) {
@@ -250,15 +255,17 @@ export async function drawSendCard(info: SendCardInfo): Promise<Blob> {
     }
   }
   if (!photoOk) {
-    // 沒有照片：膠帶色底＋大大的難度
+    // 沒有照片：膠帶色底＋大大的難度（沒勾難度就只有底色）
     g.fillStyle = t.bg;
     g.fillRect(0, 0, W, H);
-    g.fillStyle = t.fg;
-    g.font = `700 ${info.grade >= 100 ? 340 : 460}px ${f.num}`;
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText(gradeLabel(info.grade), W / 2, H * 0.42);
-    g.textAlign = "left";
+    if (on.grade) {
+      g.fillStyle = t.fg;
+      g.font = `700 ${info.grade >= 100 ? 340 : 460}px ${f.num}`;
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillText(gradeLabel(info.grade), W / 2, H * 0.42);
+      g.textAlign = "left";
+    }
   }
 
   // 上下加一點暗，字和貼紙才看得清楚
@@ -274,52 +281,69 @@ export async function drawSendCard(info: SendCardInfo): Promise<Blob> {
   g.fillRect(0, H - 560, W, 560);
 
   await brand(g, f, 56, 110, "#fff");
-  statusPill(g, f, info.status, W - 56, 110);
+  if (on.status) statusPill(g, f, info.status, W - 56, 110);
 
-  // 下方白色貼紙
+  // 下方白色貼紙：只放勾選的；什麼都沒勾就不放貼紙
+  const lines: { text: string; bold: boolean }[] = [];
+  if (on.route) lines.push({ text: info.title, bold: true });
+  const sub = [on.gym && info.gym, on.date && info.date].filter(Boolean).join("・");
+  if (sub) lines.push({ text: sub, bold: false });
+  if (on.nick && info.nickname) lines.push({ text: info.nickname, bold: false });
+  const qr = on.qr && info.url ? await qrImage(info.url, 220) : null;
+  const sticker = on.grade || lines.length > 0 || !!qr;
   const sx = 48;
   const sw = W - 96;
   const sh = 320;
   const sy = H - 72 - sh;
-  g.save();
-  g.shadowColor = "rgba(0,0,0,0.3)";
-  g.shadowBlur = 30;
-  g.shadowOffsetY = 8;
-  rrect(g, sx, sy, sw, sh, 44);
-  g.fillStyle = "#fff";
-  g.fill();
-  g.restore();
-  // 膠帶色難度
-  rrect(g, sx + 36, sy + 40, 240, 240, 28);
-  g.fillStyle = t.bg;
-  g.fill();
-  if (t.bg === gradeColor(-1)?.bg) {
-    g.lineWidth = 3;
-    g.strokeStyle = C.line;
-    g.stroke();
+  if (on.mascot) {
+    const m = await mascotImage(info.mascot);
+    if (m) g.drawImage(m, W - 48 - 280, (sticker ? sy : H - 72) - 280 - 16, 280, 280);
   }
-  g.fillStyle = t.fg;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  fitText(g, gradeLabel(info.grade), sx + 156, sy + 166, 210, "700", 150, f.num);
-  g.textAlign = "left";
-  // 文字
-  const qr = info.url ? await qrImage(info.url, 220) : null;
-  const tx = sx + 312;
-  const tmax = sw - 312 - (qr ? 260 : 40);
-  g.textBaseline = "alphabetic";
-  g.fillStyle = C.ink;
-  fitText(g, info.title, tx, sy + 128, tmax, "900", 60, f.sans);
-  g.fillStyle = C.muted;
-  fitText(g, info.sub, tx, sy + 196, tmax, "500", 40, f.sans);
-  fitText(g, info.nickname, tx, sy + 256, tmax, "500", 38, f.sans);
-  if (qr) {
-    g.drawImage(qr, sx + sw - 256, sy + 40, 220, 220);
-    g.fillStyle = C.muted;
-    g.font = `500 26px ${f.sans}`;
-    g.textAlign = "center";
-    g.fillText("掃 QR 看這條路線", sx + sw - 146, sy + 296);
-    g.textAlign = "left";
+  if (sticker) {
+    g.save();
+    g.shadowColor = "rgba(0,0,0,0.3)";
+    g.shadowBlur = 30;
+    g.shadowOffsetY = 8;
+    rrect(g, sx, sy, sw, sh, 44);
+    g.fillStyle = "#fff";
+    g.fill();
+    g.restore();
+    let tx = sx + 48;
+    if (on.grade) {
+      // 膠帶色難度
+      rrect(g, sx + 36, sy + 40, 240, 240, 28);
+      g.fillStyle = t.bg;
+      g.fill();
+      if (t.bg === gradeColor(-1)?.bg) {
+        g.lineWidth = 3;
+        g.strokeStyle = C.line;
+        g.stroke();
+      }
+      g.fillStyle = t.fg;
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      fitText(g, gradeLabel(info.grade), sx + 156, sy + 166, 210, "700", 150, f.num);
+      g.textAlign = "left";
+      tx = sx + 312;
+    }
+    // 文字：一到三行，垂直置中
+    const tmax = sx + sw - tx - (qr ? 260 : 40);
+    g.textBaseline = "alphabetic";
+    const gap = 66;
+    let y = sy + sh / 2 - ((lines.length - 1) * gap) / 2 + 18;
+    for (const l of lines) {
+      g.fillStyle = l.bold ? C.ink : C.muted;
+      fitText(g, l.text, tx, y, tmax, l.bold ? "900" : "500", l.bold ? 60 : 40, f.sans);
+      y += gap;
+    }
+    if (qr) {
+      g.drawImage(qr, sx + sw - 256, sy + 40, 220, 220);
+      g.fillStyle = C.muted;
+      g.font = `500 26px ${f.sans}`;
+      g.textAlign = "center";
+      g.fillText("掃 QR 看這條路線", sx + sw - 146, sy + 296);
+      g.textAlign = "left";
+    }
   }
   return toJpeg(c);
 }
@@ -338,16 +362,24 @@ export type MonthCardInfo = {
   rope: { label: string; n: number }[]; // 上攀（沒有就空的）
   mascot: MascotPick;
   nickname: string;
+  mainGym: string | null; // 這個月最常去的館（背景選「館的顏色」用）
+  show: MonthShow;
 };
 
 export async function drawMonthCard(info: MonthCardInfo): Promise<Blob> {
+  const on = info.show;
   const gymNames = info.gyms.map((id) => gymShort(GYMS.find((g) => g.id === id)?.name ?? ""));
   const f = await loadFonts(`原岩攀岩館年月條完攀積分Flash攀爬天數最高難度去了間館抱石上攀本月${info.nickname}${gymNames.join("")}`);
   const { c, g } = canvas();
-  g.fillStyle = C.surface;
+  // 背景：白底，或這個月最常去那間館的標準色（字改白色）
+  const dark = on.bg === "gym";
+  const ink = dark ? "#fff" : C.ink;
+  const muted = dark ? "rgba(255,255,255,0.78)" : C.muted;
+  const tileBg = dark ? "rgba(255,255,255,0.14)" : C.sunk;
+  g.fillStyle = dark ? (GYM_COLORS[info.mainGym ?? ""] ?? C.accent) : C.surface;
   g.fillRect(0, 0, W, H);
-  // 上方一條酒紅色帶
-  g.fillStyle = C.accent;
+  // 上方色帶（白底時酒紅，館色時加深一點）
+  g.fillStyle = dark ? "rgba(0,0,0,0.22)" : C.accent;
   g.fillRect(0, 0, W, 220);
   await brand(g, f, 56, 110, "#fff");
   g.fillStyle = "#fff";
@@ -357,75 +389,92 @@ export async function drawMonthCard(info: MonthCardInfo): Promise<Blob> {
   g.textAlign = "left";
 
   // 原岩夥伴放右上（大數字旁邊）
-  const m = await mascotImage(info.mascot);
-  if (m) g.drawImage(m, W - 40 - 260, 290, 260, 260);
-  // 大數字：完攀條數
+  if (on.mascot) {
+    const m = await mascotImage(info.mascot);
+    if (m) g.drawImage(m, W - 40 - 260, 290, 260, 260);
+  }
+  const right = on.mascot ? W - 320 : W - 56;
+  let y = 300;
   g.textBaseline = "alphabetic";
-  g.fillStyle = C.ink;
-  const big = String(info.sends);
-  g.font = `700 ${big.length <= 2 ? 340 : big.length === 3 ? 250 : 190}px ${f.num}`; // 三位數以上縮小，不撞到夥伴
-  g.fillText(big, 56, 590);
-  const bw = g.measureText(big).width;
-  g.font = `900 64px ${f.sans}`;
-  g.fillText("條完攀", 56 + bw + 28, 500);
-  g.fillStyle = C.muted;
-  fitText(g, info.nickname, 56 + bw + 28, 576, W - 320 - (56 + bw + 28), "500", 44, f.sans);
+  if (on.sends) {
+    // 大數字：完攀條數（三位數以上縮小，不撞到夥伴）
+    g.fillStyle = ink;
+    const big = String(info.sends);
+    g.font = `700 ${big.length <= 2 ? 340 : big.length === 3 ? 250 : 190}px ${f.num}`;
+    g.fillText(big, 56, 590);
+    const bw = g.measureText(big).width;
+    g.font = `900 64px ${f.sans}`;
+    g.fillText("條完攀", 56 + bw + 28, 500);
+    if (on.nick) {
+      g.fillStyle = muted;
+      fitText(g, info.nickname, 56 + bw + 28, 576, right - (56 + bw + 28), "500", 44, f.sans);
+    }
+    y = 650;
+  } else if (on.nick && info.nickname) {
+    g.fillStyle = ink;
+    fitText(g, info.nickname, 56, 450, right - 56, "900", 80, f.sans);
+    y = 560;
+  } else if (on.mascot) y = 580;
 
-  // 三格：積分、Flash、攀爬天數
-  const tiles: [string, string, string][] = [
-    [info.points != null ? info.points.toLocaleString("en-US") : "–", "積分", C.ink],
-    [String(info.flashes), "Flash", "#B58800"],
-    [String(info.days), "攀爬天數", C.ink],
-  ];
-  const tw = (W - 112 - 2 * 24) / 3;
-  tiles.forEach(([v, l, col], i) => {
-    const x = 56 + i * (tw + 24);
-    rrect(g, x, 650, tw, 200, 28);
-    g.fillStyle = C.sunk;
-    g.fill();
-    g.fillStyle = col;
-    fitText(g, v, x + 30, 770, tw - 60, "700", 110, f.num);
-    g.fillStyle = C.muted;
-    g.font = `500 34px ${f.sans}`;
-    g.fillText(l, x + 30, 822);
-  });
-  g.fillStyle = C.muted;
-  g.font = `500 38px ${f.sans}`;
-  const line = [info.top && `最高 ${info.top}`, info.gyms.length > 0 && `去了 ${info.gyms.length} 間館`].filter(Boolean).join("・");
-  if (line) g.fillText(line, 56, 920);
+  // 小格：積分、Flash、攀爬天數（只放勾選的）
+  const tiles: [string, string, string][] = [];
+  if (on.points) tiles.push([info.points != null ? info.points.toLocaleString("en-US") : "–", "積分", ink]);
+  if (on.flash) tiles.push([String(info.flashes), "Flash", dark ? "#FFD34D" : "#B58800"]);
+  if (on.days) tiles.push([String(info.days), "攀爬天數", ink]);
+  if (tiles.length) {
+    const tw = (W - 112 - (tiles.length - 1) * 24) / tiles.length;
+    tiles.forEach(([v, l, col], i) => {
+      const x = 56 + i * (tw + 24);
+      rrect(g, x, y, tw, 200, 28);
+      g.fillStyle = tileBg;
+      g.fill();
+      g.fillStyle = col;
+      fitText(g, v, x + 30, y + 120, tw - 60, "700", 110, f.num);
+      g.fillStyle = muted;
+      g.font = `500 34px ${f.sans}`;
+      g.fillText(l, x + 30, y + 172);
+    });
+    y += 270;
+  }
+  const line = [on.top && info.top && `最高 ${info.top}`, on.gyms && info.gyms.length > 0 && `去了 ${info.gyms.length} 間館`].filter(Boolean).join("・");
+  if (line) {
+    g.fillStyle = muted;
+    g.font = `500 38px ${f.sans}`;
+    g.fillText(line, 56, y);
+    y += 80;
+  }
 
-  // 本月完攀直條圖（只畫有完攀的那一段難度：最低到最高，少於 6 根補到 6 根）
-  const chart = (title: string, cols: { label: string; n: number; color: string; fg?: string }[], y: number, hgt: number) => {
-    g.fillStyle = C.ink;
+  // 本月完攀直條圖（只畫有完攀的那一段難度：最低到最高，少於 6 根補到 6 根）；高度用剩下的空間
+  const chart = (title: string, cols: { label: string; n: number; color: string }[], top: number, hgt: number) => {
+    g.fillStyle = ink;
     g.font = `900 40px ${f.sans}`;
-    g.fillText(title, 56, y);
+    g.fillText(title, 56, top);
     const max = Math.max(1, ...cols.map((x) => x.n));
     const gap = 14;
     const cw = (W - 112 - gap * (cols.length - 1)) / cols.length;
-    const base = y + 80 + hgt;
+    const base = top + 80 + hgt;
     cols.forEach((col, i) => {
       const x = 56 + i * (cw + gap);
       const h = col.n ? Math.max(16, (col.n / max) * hgt) : 6;
       rrect(g, x, base - h, cw, h, 8);
-      g.fillStyle = col.n ? col.color : C.line;
+      g.fillStyle = col.n ? col.color : dark ? "rgba(255,255,255,0.25)" : C.line;
       g.fill();
-      if (col.n && col.color === gradeColor(-1)?.bg) {
+      if (col.n && (dark || col.color === gradeColor(-1)?.bg)) {
         g.lineWidth = 3;
-        g.strokeStyle = C.line;
+        g.strokeStyle = dark ? "rgba(255,255,255,0.45)" : C.line;
         g.stroke();
       }
       g.textAlign = "center";
       if (col.n) {
-        g.fillStyle = C.ink;
+        g.fillStyle = ink;
         g.font = `700 ${cw > 90 ? 52 : 42}px ${f.num}`;
         g.fillText(String(col.n), x + cw / 2, base - h - 14);
       }
-      g.fillStyle = C.muted;
+      g.fillStyle = muted;
       g.font = `700 ${cw > 90 ? 40 : 32}px ${f.num}`;
       g.fillText(col.label, x + cw / 2, base + 46);
       g.textAlign = "left";
     });
-    return base + 46;
   };
   const span = <T extends { n: number }>(cols: T[], min = 6) => {
     const has = cols.map((x, i) => (x.n ? i : -1)).filter((i) => i >= 0);
@@ -438,68 +487,114 @@ export async function drawMonthCard(info: MonthCardInfo): Promise<Blob> {
     }
     return cols.slice(a, b + 1);
   };
-  const boulder = span(info.boulder).map((x) => ({ label: x.label, n: x.n, color: tape(x.grade).bg }));
-  const rope = span(info.rope, 4).map((x) => ({ label: x.label, n: x.n, color: C.accent }));
-  let y = 1000;
-  if (boulder.length) y = chart("抱石", boulder, y, rope.length ? 240 : 480) + 70;
-  if (rope.length) chart("上攀", rope, y, boulder.length ? 170 : 480);
+  if (on.chart) {
+    const boulder = span(info.boulder).map((x) => ({ label: x.label, n: x.n, color: tape(x.grade).bg }));
+    const rope = span(info.rope, 4).map((x) => ({ label: x.label, n: x.n, color: dark ? "#fff" : C.accent }));
+    const n = (boulder.length ? 1 : 0) + (rope.length ? 1 : 0);
+    const room = (on.gyms ? H - 190 : H - 90) - y - n * 196; // 每張圖的標題、數字、難度字大約 196
+    const hb = Math.max(120, Math.min(480, n === 2 ? room * 0.58 : room));
+    const hr = Math.max(100, Math.min(480, n === 2 ? room * 0.42 : room));
+    if (boulder.length) {
+      chart("抱石", boulder, y, hb);
+      y += 196 + hb;
+    }
+    if (rope.length) chart("上攀", rope, y, hr);
+  }
 
-  // 下方：去過的館（各店標準色）
-  let gx = 56;
-  g.font = `700 36px ${f.sans}`;
-  info.gyms.forEach((id, i) => {
-    g.beginPath();
-    g.arc(gx + 14, H - 112, 14, 0, Math.PI * 2);
-    g.fillStyle = GYM_COLORS[id] ?? C.accent;
-    g.fill();
-    g.fillStyle = C.ink;
-    g.fillText(gymNames[i], gx + 38, H - 99);
-    gx += 38 + g.measureText(gymNames[i]).width + 34;
-  });
+  // 最下面：去過的館（各店標準色）
+  if (on.gyms) {
+    let gx = 56;
+    g.font = `700 36px ${f.sans}`;
+    info.gyms.forEach((id, i) => {
+      g.beginPath();
+      g.arc(gx + 14, H - 112, 14, 0, Math.PI * 2);
+      g.fillStyle = GYM_COLORS[id] ?? C.accent;
+      g.fill();
+      if (dark) {
+        g.lineWidth = 3;
+        g.strokeStyle = "#fff";
+        g.stroke();
+      }
+      g.fillStyle = ink;
+      g.fillText(gymNames[i], gx + 38, H - 99);
+      gx += 38 + g.measureText(gymNames[i]).width + 34;
+    });
+  }
   return toJpeg(c);
 }
 
 // ---------- B2 影片角落小貼紙 ----------
-// 先畫好一張小圖（要先等字型），壓縮影片時每一格縮放貼到左下角
+// 先畫好一張小圖（要先等字型），壓縮影片時每一格縮放貼到左下角；只放勾選的資料，什麼都沒勾回傳 null（不貼）
 export type VideoSticker = (g: CanvasRenderingContext2D, w: number, h: number) => void;
-export async function makeVideoSticker(info: { grade: number; gymName: string; zone: string }): Promise<VideoSticker> {
-  const line1 = `原岩 ${gymShort(info.gymName)}`;
-  const f = await loadFonts(line1 + info.zone);
-  const { c, g } = canvas(720, 180);
-  rrect(g, 0, 0, 720, 180, 36);
+export type VideoStickerInfo = { grade: number; gymName: string; zone: string; status: Status | null; date: string | null; nickname: string; show: VideoShow };
+export async function makeVideoSticker(info: VideoStickerInfo): Promise<VideoSticker | null> {
+  const on = info.show;
+  const top = [on.gym && info.gymName && `原岩 ${gymShort(info.gymName)}`, on.nick && info.nickname].filter(Boolean).join("・");
+  const bottom = [on.zone && info.zone, on.status && info.status && info.status !== "project" && (info.status === "flash" ? "Flash" : "完攀"), on.date && info.date].filter(Boolean).join("・");
+  // 只有一行時放大字
+  const [line1, line2] = top ? [top, bottom] : [bottom, ""];
+  if (!on.grade && !line1) return null;
+  const f = await loadFonts(line1 + line2);
+  const { c, g } = canvas(900, 180);
+  rrect(g, 0, 0, 900, 180, 36);
   g.fillStyle = "rgba(0,0,0,0.55)";
   g.fill();
-  const t = tape(info.grade);
-  rrect(g, 20, 20, 140, 140, 24);
-  g.fillStyle = t.bg;
-  g.fill();
-  g.fillStyle = t.fg;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  fitText(g, gradeLabel(info.grade), 90, 94, 124, "700", 92, f.num);
-  g.textAlign = "left";
+  let tx = 36;
+  if (on.grade) {
+    const t = tape(info.grade);
+    rrect(g, 20, 20, 140, 140, 24);
+    g.fillStyle = t.bg;
+    g.fill();
+    g.fillStyle = t.fg;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    fitText(g, gradeLabel(info.grade), 90, 94, 124, "700", 92, f.num);
+    g.textAlign = "left";
+    tx = 188;
+  }
   g.textBaseline = "alphabetic";
   g.fillStyle = "#fff";
-  fitText(g, line1, 188, 84, 500, "900", 54, f.sans);
-  g.fillStyle = "rgba(255,255,255,0.85)";
-  fitText(g, info.zone, 188, 142, 500, "500", 40, f.sans);
+  if (line1) fitText(g, line1, tx, line2 ? 84 : 112, 900 - tx - 36, "900", 54, f.sans);
+  if (line2) {
+    g.fillStyle = "rgba(255,255,255,0.85)";
+    fitText(g, line2, tx, 142, 900 - tx - 36, "500", 40, f.sans);
+  }
   // 貼紙實際的寬度（右邊多出來的透明部分不畫）
   g.font = `500 40px ${f.sans}`;
-  const w2 = g.measureText(info.zone).width;
+  const w2 = line2 ? g.measureText(line2).width : 0;
   g.font = `900 54px ${f.sans}`;
-  const w1 = g.measureText(line1).width;
-  const used = Math.round(Math.min(720, 188 + Math.max(w1, w2) + 36));
+  const w1 = line1 ? g.measureText(line1).width : 0;
+  const used = Math.round(Math.min(900, line1 ? tx + Math.max(w1, w2) + 36 : 180));
   const { c: s, g: sg } = canvas(used, 180);
   sg.drawImage(c, 0, 0);
   sg.globalCompositeOperation = "destination-in";
   rrect(sg, 0, 0, used, 180, 36);
   sg.fill();
-  // 大小照影片的長邊算（橫的影片放到限時動態會縮小，貼紙不會小到看不清楚）；貼在左下角，下面和左邊留一樣的邊（10/16 使用者說低一點）
+  // 大小照影片的長邊算（橫的影片放到限時動態會縮小，貼紙不會小到看不清楚）；
+  // 左下角，離左邊 7%、離下面 8%（10/16 使用者說往右上一點點）
   return (dg, w, h) => {
     const sh0 = Math.max(w, h) * 0.07;
-    const sw = Math.min(w * 0.62, (used / 180) * sh0);
+    const sw = Math.min(w * 0.7, (used / 180) * sh0);
     const sh = (sw * 180) / used;
-    const m = Math.round(Math.min(w, h) * 0.04);
-    dg.drawImage(s, m, h - m - sh, sw, sh);
+    dg.drawImage(s, Math.round(w * 0.07), Math.round(h - h * 0.08 - sh), sw, sh);
   };
+}
+
+// 影片 IG 版的預覽：第 1 秒的畫面（沒有貼紙的那張）加上現在勾選的小貼紙；改勾選時馬上重畫，不用重錄影片
+export async function composeFrame(base: Blob | null, sticker: VideoSticker | null): Promise<string | null> {
+  if (!base) return null;
+  const url = URL.createObjectURL(base);
+  try {
+    const img = await loadImg(url, false);
+    if (!img?.naturalWidth) return null;
+    const { c, g } = canvas(img.naturalWidth, img.naturalHeight);
+    g.drawImage(img, 0, 0);
+    sticker?.(g, c.width, c.height);
+    const b = await toJpeg(c);
+    return URL.createObjectURL(b);
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }

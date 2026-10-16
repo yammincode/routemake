@@ -1,7 +1,7 @@
-// 分享到 IG（10/16 使用者選 A3、B2、C1；先只給老闆試）：
+// 分享到 IG（10/16 使用者選 A3、B2、C1；10/16 開放給全部使用 App 的人）：
 // A3 路線卡片記錄 Flash／完攀後「分享到 IG」→ 岩牆照片完攀圖；C1 我的紀錄「分享 ○ 月成績到 IG」→ 本月完攀圖；
-// B2 分享影片後「也分享到 IG（加上原岩標記）」→ 重錄一次、左下角加小貼紙；
-// 交給手機的分享選單（navigator.share），叫不出選單就存到手機；顧客（不是老闆）看不到
+// B2 分享影片後「也分享到 IG（加上原岩標記）」→ 左下角加小貼紙（上傳時順便做或按了才重錄）；
+// 預覽下面勾選要放的資料（A 案：背景｜資料大方塊，記在手機）；交給手機的分享選單（navigator.share），叫不出選單就存到手機
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { after, before, test } from "node:test";
@@ -38,7 +38,7 @@ async function previewSize(page) {
   return img.evaluate((i) => [i.naturalWidth, i.naturalHeight]);
 }
 
-test("完攀圖（A3）：老闆記 Flash 後分享到 IG，1080×1920、用區域照片、只交出圖片；嘗試中沒有；顧客看不到；沒有分享選單改存到手機", async () => {
+test("完攀圖（A3）：顧客記 Flash 後分享到 IG，1080×1920、用區域照片、只交出圖片；勾選背景和資料、記在手機；嘗試中沒有；沒有分享選單改存到手機", async () => {
   const mock = createMock();
   mock.addUser("bossman", "password1", { nickname: "老闆", is_owner: true });
   const me = mock.addUser("climber88", "password1", { nickname: "小安" });
@@ -49,13 +49,13 @@ test("完攀圖（A3）：老闆記 Flash 後分享到 IG，1080×1920、用區�
   mock.addRoute(zA, 3, "藍", [], 60, 40);
   mock.addAscent(me, r1, "send", taipeiDay(0));
 
-  // ---- 老闆 ----
+  // ---- 顧客（開放給大家）----
   const B = await phone(browser, mock);
   await fakeShare(B.ctx);
   const page = B.page;
-  await login(page, "bossman", "password1", `/zone?id=${zA.id}`);
+  await login(page, "climber88", "password1", `/zone?id=${zA.id}`);
   const dlg = page.locator("[role=dialog]").first();
-  await page.locator("main ul li button", { hasText: "紅色" }).click();
+  await page.locator("main ul li button", { hasText: "藍色" }).click();
   await page.waitForTimeout(500);
   const shareBtn = dlg.locator('button:has-text("分享到 IG")');
   assert.equal(await shareBtn.count(), 0, "還沒記錄：沒有分享");
@@ -75,13 +75,47 @@ test("完攀圖（A3）：老闆記 Flash 後分享到 IG，1080×1920、用區�
   });
   assert.notDeepEqual(px, [0xd9, 0x40, 0x2f], `用區域照片當底（${px}）`);
   const sheet = page.locator("[role=dialog]").last();
-  assert.match(await sheet.textContent(), /不會有私人心得/);
+  assert.match(await sheet.textContent(), /私人心得不會出現/);
+  // 勾選：資料分頁預設全部勾
+  const picker = sheet.getByTestId("share-picker");
+  const tile = (label) => picker.locator("button[aria-pressed]", { hasText: label });
+  assert.equal(await picker.locator('button[aria-pressed="true"]').count(), 8, "預設全部勾");
+  const pv = () => sheet.locator('[data-testid="share-preview"] img').getAttribute("src");
+  const before = await pv();
+  await tile("QR code").click();
+  await page.waitForFunction((b) => document.querySelector('[data-testid="share-preview"] img')?.src !== b, before, { timeout: 15000 });
+  assert.equal(await tile("QR code").getAttribute("aria-pressed"), "false");
+  // 背景改成膠帶色：底色變成 V3 膠帶色（藍 #2E86C8）
+  await sheet.locator('[role=tab]:has-text("背景")').click();
+  const b2 = await pv();
+  await tile("膠帶色").click();
+  await page.waitForFunction((b) => document.querySelector('[data-testid="share-preview"] img')?.src !== b, b2, { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('[data-testid="share-preview"] img')?.naturalWidth > 0);
+  const tapePx = await sheet.locator('[data-testid="share-preview"] img').evaluate((i) => {
+    const c = document.createElement("canvas");
+    c.width = 1080;
+    c.height = 1920;
+    const g = c.getContext("2d");
+    g.drawImage(i, 0, 0);
+    return [...g.getImageData(60, 700, 1, 1).data.slice(0, 3)];
+  });
+  assert.ok(Math.abs(tapePx[0] - 0x2e) + Math.abs(tapePx[1] - 0x86) + Math.abs(tapePx[2] - 0xc8) < 30, `膠帶色底（${tapePx}）`);
+  const saved = JSON.parse(await page.evaluate(() => localStorage.getItem("routemake:share-show:send")));
+  assert.equal(saved.qr, false);
+  assert.equal(saved.bg, "tape");
+  await page.waitForFunction(() => [...document.querySelectorAll("[role=dialog] button")].some((b) => b.textContent === "分享到 IG" && !b.disabled));
   await sheet.locator('button:text-is("分享到 IG")').click();
   await page.waitForTimeout(400);
   const shared = await page.evaluate(() => window.__shared);
   assert.equal(shared.length, 1, `只交出一張圖、不帶文字（${JSON.stringify(shared)}）`);
   assert.equal(shared[0].type, "image/jpeg");
   assert.match(shared[0].name, /^routemake-.+\.jpg$/);
+  await sheet.locator('button:text-is("關閉")').click();
+  await page.waitForTimeout(300);
+  // 再打開：照上次的勾選
+  await shareBtn.click();
+  await previewSize(page);
+  assert.equal(await tile("QR code").getAttribute("aria-pressed"), "false", "勾選記在手機");
   await sheet.locator('button:text-is("關閉")').click();
   await page.waitForTimeout(300);
   // 改成嘗試中：沒有分享
@@ -91,14 +125,13 @@ test("完攀圖（A3）：老闆記 Flash 後分享到 IG，1080×1920、用區�
   assert.deepEqual(B.errors, []);
   await B.ctx.close();
 
-  // ---- 顧客：看不到 ----
-  const C = await phone(browser, mock);
-  await login(C.page, "climber88", "password1", `/zone?id=${zA.id}`);
-  await C.page.locator("main ul li button", { hasText: "紅色" }).click();
-  await C.page.waitForTimeout(600);
-  assert.match(await C.page.locator("[role=dialog]").textContent(), /已記錄/);
-  assert.equal(await C.page.locator('[role=dialog] button:has-text("分享到 IG")').count(), 0, "先只給老闆試");
-  await C.ctx.close();
+  // ---- 之前記過完攀的路線，打開卡片就能分享 ----
+  const O = await phone(browser, mock);
+  await login(O.page, "climber88", "password1", `/zone?id=${zA.id}`);
+  await O.page.locator("main ul li button", { hasText: "紅色" }).click();
+  await O.page.waitForTimeout(600);
+  assert.equal(await O.page.locator('[role=dialog] button:has-text("分享到 IG")').count(), 1, "記過的路線也能分享");
+  await O.ctx.close();
 
   // ---- 沒有分享選單：改存到手機；沒有照片的區域用膠帶色底 ----
   zA.photo_path = null;
@@ -120,7 +153,7 @@ test("完攀圖（A3）：老闆記 Flash 後分享到 IG，1080×1920、用區�
   await N.ctx.close();
 });
 
-test("本月完攀圖（C1）：老闆在我的紀錄分享這個月成績；沒有完攀的月份不能按；顧客看不到", async () => {
+test("本月完攀圖（C1）：顧客在我的紀錄分享這個月成績；背景可以選館的顏色、資料可以拿掉；沒有完攀的月份不能按", async () => {
   const mock = createMock();
   const boss = mock.addUser("bossman", "password1", { nickname: "老闆", is_owner: true });
   const me = mock.addUser("climber88", "password1", { nickname: "小安" });
@@ -133,13 +166,39 @@ test("本月完攀圖（C1）：老闆在我的紀錄分享這個月成績；沒
   const B = await phone(browser, mock);
   await fakeShare(B.ctx);
   const page = B.page;
-  await login(page, "bossman", "password1", "/me");
+  await login(page, "climber88", "password1", "/me");
   await page.waitForTimeout(800);
   const m = +taipeiDay(0).slice(5, 7);
   const btn = page.locator(`main button:has-text("分享 ${m} 月成績到 IG")`);
   await btn.click();
   assert.deepEqual(await previewSize(page), [1080, 1920]);
   const sheet = page.locator("[role=dialog]").last();
+  const corner = () =>
+    sheet.locator('[data-testid="share-preview"] img').evaluate((i) => {
+      const c = document.createElement("canvas");
+      c.width = 1080;
+      c.height = 1920;
+      const g = c.getContext("2d");
+      g.drawImage(i, 0, 0);
+      return [...g.getImageData(1060, 1900, 1, 1).data.slice(0, 3)];
+    });
+  const white = await corner();
+  assert.ok(Math.abs(white[0] - 0xfa) + Math.abs(white[1] - 0xfb) + Math.abs(white[2] - 0xf9) < 12, `預設白底（${white}）`);
+  const picker = sheet.getByTestId("share-picker");
+  assert.equal(await picker.locator('button[aria-pressed="true"]').count(), 9, "預設全部勾");
+  // 背景選館的顏色：這個月都在明德（#6D3540）
+  await sheet.locator('[role=tab]:has-text("背景")').click();
+  const before = await sheet.locator('[data-testid="share-preview"] img').getAttribute("src");
+  await picker.locator("button", { hasText: "館的顏色" }).click();
+  await page.waitForFunction((b) => document.querySelector('[data-testid="share-preview"] img')?.src !== b, before, { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('[data-testid="share-preview"] img')?.naturalWidth > 0);
+  const px = await corner();
+  assert.ok(Math.abs(px[0] - 0x6d) + Math.abs(px[1] - 0x35) + Math.abs(px[2] - 0x40) < 30, `館的顏色（${px}）`);
+  // 拿掉積分
+  await sheet.locator('[role=tab]:has-text("資料")').click();
+  await picker.locator("button", { hasText: "積分" }).click();
+  assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem("routemake:share-show:month"))).points, false);
+  await page.waitForFunction(() => [...document.querySelectorAll("[role=dialog] button")].some((b) => b.textContent === "分享到 IG" && !b.disabled));
   await sheet.locator('button:text-is("分享到 IG")').click();
   await page.waitForTimeout(400);
   const shared = await page.evaluate(() => window.__shared);
@@ -153,12 +212,6 @@ test("本月完攀圖（C1）：老闆在我的紀錄分享這個月成績；沒
   assert.equal(await off.isDisabled(), true, "沒有完攀的月份不能分享");
   assert.deepEqual(B.errors, []);
   await B.ctx.close();
-
-  const C = await phone(browser, mock);
-  await login(C.page, "climber88", "password1", "/me");
-  await C.page.waitForTimeout(800);
-  assert.equal(await C.page.locator('main button:has-text("成績到 IG")').count(), 0, "顧客看不到");
-  await C.ctx.close();
 });
 
 // 做一支真的小影片（WebM，約 2 秒）
@@ -196,7 +249,7 @@ async function makeClip() {
   return Buffer.from(b64, "base64");
 }
 
-test("影片加小貼紙（B2）：老闆上傳時順便做 IG 版（開關預設打開），上傳完馬上分享、左下角有原岩標記；開關關掉時按了才重錄（做到一半關掉會停）；不能壓縮的手機分享原本那支；顧客看不到；列表沒有 <video>", async () => {
+test("影片加小貼紙（B2）：上傳時順便做 IG 版（開關預設打開），上傳完馬上分享、左下角有原岩標記；改勾選要套用並處理、改回來不用再等；開關關掉時按了才重錄（做到一半關掉會停）；不能壓縮的手機分享原本那支；列表沒有 <video>", async () => {
   const mock = createMock();
   mock.addUser("bossman", "password1", { nickname: "老闆", is_owner: true });
   mock.addUser("climber88", "password1", { nickname: "小安" });
@@ -223,7 +276,7 @@ test("影片加小貼紙（B2）：老闆上傳時順便做 IG 版（開關預�
     }
     await dialog.locator("input[type=checkbox]").check();
     await dialog.locator('button:text-is("分享影片")').click();
-    if (prep) await page.waitForFunction(() => document.body.textContent.includes("順便做 IG 版）"), null, { timeout: 10000 });
+    if (prep) await page.waitForFunction(() => document.body.textContent.includes("同時在做 IG 版"), null, { timeout: 10000 });
     await page.waitForFunction(() => document.body.textContent.includes("已分享影片"), null, { timeout: 30000 });
     await page.waitForTimeout(300);
     return dialog;
@@ -237,7 +290,7 @@ test("影片加小貼紙（B2）：老闆上傳時順便做 IG 版（開關預�
       const g = c.getContext("2d");
       g.drawImage(i, 0, 0);
       const at = (x, y) => [...g.getImageData(x, y, 1, 1).data.slice(0, 3)];
-      return [at(30, c.height - 22), at(c.width - 10, 10)];
+      return [at(Math.round(c.width * 0.07) + 12, Math.round(c.height * 0.92) - 8), at(c.width - 10, 10)];
     });
     return Math.abs(bl[0] - tr[0]) + Math.abs(bl[1] - tr[1]) + Math.abs(bl[2] - tr[2]) > 40;
   };
@@ -256,6 +309,15 @@ test("影片加小貼紙（B2）：老闆上傳時順便做 IG 版（開關預�
   const sheet = page.locator("[role=dialog]").last();
   assert.doesNotMatch(await sheet.textContent(), /製作中/, "不用再等");
   assert.ok(await hasSticker(sheet), "左下角有貼紙");
+  // 勾選：預設 難度、館名、區域；多勾日期 → 要「套用並處理」，處理完才能分享；改回來 → 用上傳時做好的，不用再等
+  const vp = sheet.getByTestId("share-picker");
+  assert.deepEqual(await vp.locator('button[aria-pressed="true"]').allTextContents().then((t) => t.map((x) => x.replace(/[^\u4e00-\u9fff]/g, ""))), ["難度", "館名", "區域顏色"]);
+  await vp.locator("button", { hasText: "日期" }).click();
+  const apply = sheet.locator('button:has-text("套用並處理")');
+  await apply.waitFor({ timeout: 8000 });
+  assert.equal(await sheet.locator('button:text-is("分享到 IG")').count(), 0, "改了勾選要先處理");
+  await vp.locator("button", { hasText: "日期" }).click();
+  await sheet.locator('button:text-is("分享到 IG"):not([disabled])').waitFor({ timeout: 8000 });
   await sheet.locator('button:text-is("分享到 IG")').click();
   await page.waitForTimeout(400);
   let shared = await page.evaluate(() => window.__shared);
@@ -277,7 +339,7 @@ test("影片加小貼紙（B2）：老闆上傳時順便做 IG 版（開關預�
     const g = c.getContext("2d");
     g.drawImage(i, 0, 0);
     const at = (x, y) => [...g.getImageData(x, y, 1, 1).data.slice(0, 3)];
-    const [bl, tr] = [at(30, c.height - 22), at(c.width - 10, 10)];
+    const [bl, tr] = [at(Math.round(c.width * 0.07) + 12, Math.round(c.height * 0.92) - 8), at(c.width - 10, 10)];
     return Math.abs(bl[0] - tr[0]) + Math.abs(bl[1] - tr[1]) + Math.abs(bl[2] - tr[2]) <= 40;
   }, `data:${up.type};base64,${up.buf.toString("base64")}`);
   assert.ok(plain, "上傳的是沒有標記的那份");
@@ -289,13 +351,14 @@ test("影片加小貼紙（B2）：老闆上傳時順便做 IG 版（開關預�
   await offer.locator('button:has-text("也分享到 IG（加上原岩標記）"):not([disabled])').waitFor({ timeout: 8000 });
   assert.match(await offer.textContent(), /大約等影片的長度/);
   await offer.locator("button").click();
-  await page.waitForFunction(() => /製作中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
+  await page.waitForFunction(() => /處理中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
   await page.locator("[role=dialog]").last().locator('button:text-is("關閉")').click();
   await page.waitForTimeout(300);
   await offer.locator("button").click();
-  await page.waitForFunction(() => /製作中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
+  await page.waitForFunction(() => /處理中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
   assert.deepEqual(await previewSize(page), [480, 270]);
   assert.ok(await hasSticker(sheet), "重錄的也有貼紙");
+  await sheet.locator('button:text-is("分享到 IG"):not([disabled])').waitFor({ timeout: 20000 });
   await sheet.locator('button:text-is("分享到 IG")').click();
   await page.waitForTimeout(400);
   shared = await page.evaluate(() => window.__shared);
@@ -325,11 +388,11 @@ test("影片加小貼紙（B2）：老闆上傳時順便做 IG 版（開關預�
   assert.equal(sh2[0].size, clip.length, "原本那支影片");
   await P.ctx.close();
 
-  // ---- 顧客：沒有「也分享到 IG」----
+  // ---- 顧客也有（開放給大家）----
   const C = await phone(browser, mock);
   await C.ctx.addInitScript(() => (window.__RM_VIDEO_TYPES = ["video/webm;codecs=vp8,opus"]));
   await login(C.page, "climber88", "password1", `/zone?id=${zone.id}`);
-  const d3 = await upload(C.page, {});
-  assert.equal(await d3.getByTestId("share-offer").count(), 0, "顧客看不到");
+  const d3 = await upload(C.page, { prep: true });
+  assert.match(await d3.getByTestId("share-offer").textContent(), /上傳時已經做好/, "顧客也能分享到 IG");
   await C.ctx.close();
 });

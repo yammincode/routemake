@@ -59,7 +59,8 @@ import {
 import { MINGDE_PLAN } from "@/lib/floorplan";
 import { GYMS, LIVE_GYM } from "@/lib/gyms";
 import { MASCOTS, type MascotPick } from "@/lib/mascots";
-import { ShareButton, ShareOffer, SharePreview } from "@/components/ui/Share";
+import { ShareButton, ShareOffer, SharePicker, SharePreview } from "@/components/ui/Share";
+import { SHOW_DEFAULT } from "@/lib/share-options";
 
 type DemoRoute = { code: string; grade: number; color: HoldColor; tags: string[]; x: number; y: number; status: Status | null; isNew: boolean; comments: number; videos: number };
 
@@ -161,6 +162,7 @@ export default function DesignShowcase() {
   const [grade, setGrade] = useState<number | null>(null);
   const [climbDay, setClimbDay] = useState(todayYmd());
   const [sharePv, setSharePv] = useState(false);
+  const [sendShow, setSendShow] = useState(SHOW_DEFAULT.send);
   const [color, setColor] = useState<HoldColor | null>(null);
   const [setter, setSetter] = useState(false);
   const [temp, setTemp] = useState<{ x: number; y: number } | null>(null);
@@ -497,12 +499,13 @@ export default function DesignShowcase() {
         </Button>
       </Block>
 
-      <Block title="分享到 IG（ShareButton、ShareOffer、SharePreview）">
+      <Block title="分享到 IG（ShareButton、ShareOffer、SharePreview、SharePicker）">
         <ShareButton onClick={() => setSharePv(true)}>分享到 IG</ShareButton>
         <div className="mt-3">
           <ShareOffer title={<b>影片已分享到原岩，也可以發到 IG</b>} button="也分享到 IG（加上原岩標記）" hint="左下角加上難度和館名，大約等影片的長度" onClick={() => setSharePv(true)} />
         </div>
         <SharePreview open={sharePv} onClose={() => setSharePv(false)} title="分享完攀到 IG" what="圖片" file={null} image={null} progress={0.4} note="預覽：圖做好之前顯示製作進度" />
+        <SharePicker kind="send" show={sendShow} onChange={setSendShow} />
       </Block>
 
       <Block title="管理後台表單">

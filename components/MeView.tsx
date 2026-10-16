@@ -12,7 +12,7 @@ import { GymLegend, ProgressCard } from "@/components/ui/Progress";
 import { Points, RouteList, RouteRow } from "@/components/ui/Route";
 import { CalendarHeat, DaySummary, Delta, MonthGradeChart, MonthSwitcher, StatGrid, StatTile, TotalRow, type DayGym, type MonthCol } from "@/components/ui/Stats";
 import { Tabs } from "@/components/ui/Tabs";
-import { ShareButton, SharePreview } from "@/components/ui/Share";
+import { ShareButton, SharePicker, SharePreview } from "@/components/ui/Share";
 import { useToast } from "@/components/ui/Toast";
 import {
   getGyms,
@@ -40,6 +40,7 @@ import { GYMS } from "@/lib/gyms";
 import { useMascot } from "@/lib/mascot-store";
 import { canShareIg } from "@/lib/share";
 import { drawMonthCard } from "@/lib/share-cards";
+import { loadShow, saveShow, type MonthShow } from "@/lib/share-options";
 import { overlayPending, withCache } from "@/lib/offline";
 import { myProgress, progressGyms, wallProgress, type ProgressRow } from "@/lib/progress";
 import { ascentPoints } from "@/lib/scoring";
@@ -96,8 +97,10 @@ export default function MeView({ gymId }: { gymId: string }) {
   const cardRun = useRef(0); // 第幾次按：關掉又打開時，前一次慢做好的圖不要塞進來
   // 上面的數字是哪個月的（剛換月份、還沒讀到新的那個月時不能分享，免得用到上個月的數字）
   const [loadedMonth, setLoadedMonth] = useState<string | null>(null);
-  useEffect(() => () => void (card?.url && URL.revokeObjectURL(card.url)), [card]);
-  const mascot = useMascot(canShareIg(access) ? uid : null); // 分享圖用；顧客不用多讀一次
+  const cardUrl = card?.url ?? null;
+  useEffect(() => () => void (cardUrl && URL.revokeObjectURL(cardUrl)), [cardUrl]);
+  const [monthShow, setMonthShow] = useState<MonthShow | null>(null); // 勾選要放的資料（打開預覽時從手機讀）
+  const mascot = useMascot(canShareIg(access) ? uid : null); // 分享圖用的原岩夥伴
   const toast = useToast();
 
   // 第一次載入時先顯示手機裡上次的資料，抓到最新的再換掉
@@ -308,12 +311,17 @@ export default function MeView({ gymId }: { gymId: string }) {
     : [];
 
   // C1 本月完攀圖：正在看的那個月（上個月也可以分享）；數字跟上面四格、本月完攀直條圖一樣
-  const openCard = async () => {
+  // show：勾選要放的資料；改勾選時預覽先留著舊的圖，畫好再換
+  const openCard = async (show: MonthShow = monthShow ?? loadShow("month")) => {
     if (!stats?.sends || loadedMonth !== `${ym.y}-${ym.m}`) return;
     const run = ++cardRun.current;
-    setCard({ file: null, url: null });
+    setMonthShow(show);
+    setCard((c) => ({ file: null, url: c?.url ?? null }));
     try {
-      const gyms = [...new Set(list.filter(counted).map((a) => a.route.gym_id))].sort((x, y) => gymOrder(x) - gymOrder(y));
+      const sent = list.filter(counted);
+      const gyms = [...new Set(sent.map((a) => a.route.gym_id))].sort((x, y) => gymOrder(x) - gymOrder(y));
+      // 背景選「館的顏色」：這個月完攀最多的那間館
+      const mainGym = gyms.reduce<string | null>((best, id) => (best == null || sent.filter((a) => a.route.gym_id === id).length > sent.filter((a) => a.route.gym_id === best).length ? id : best), null);
       const blob = await drawMonthCard({
         year: ym.y,
         month: ym.m,
@@ -327,6 +335,8 @@ export default function MeView({ gymId }: { gymId: string }) {
         rope: ropeCols.map((c) => ({ label: c.label, n: c.sends })),
         mascot: mascot ?? { id: "mingde" },
         nickname: access?.nickname ?? "",
+        mainGym,
+        show,
       });
       if (run !== cardRun.current) return;
       const file = new File([blob], `routemake-${ym.y}-${String(ym.m).padStart(2, "0")}.jpg`, { type: "image/jpeg" });
@@ -456,7 +466,16 @@ export default function MeView({ gymId }: { gymId: string }) {
         onClose={() => setOpen(null)}
         onSaved={() => void (loadMonth(), loadProgress())}
       />
-      <SharePreview open={!!card} onClose={() => (cardRun.current++, setCard(null))} title={`分享 ${ym.m} 月成績到 IG`} what="圖片" file={card?.file ?? null} image={card?.url ?? null} note="圖上有完攀條數、積分、Flash、攀爬天數、各難度條數、去過的館、你的暱稱和原岩夥伴，不會有路線心得。" />
+      <SharePreview
+        open={!!card}
+        onClose={() => (cardRun.current++, setCard(null))}
+        title={`分享 ${ym.m} 月成績到 IG`}
+        what="圖片"
+        file={card?.file ?? null}
+        image={card?.url ?? null}
+        picker={monthShow && <SharePicker kind="month" show={monthShow} onChange={(next) => (saveShow("month", next), void openCard(next))} />}
+        note="勾選會記在這支手機，下次照這樣做；路線心得不會出現在圖上。"
+      />
     </>
   );
 }
