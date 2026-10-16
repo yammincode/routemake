@@ -97,7 +97,7 @@ export default function MeView({ gymId }: { gymId: string }) {
   // 上面的數字是哪個月的（剛換月份、還沒讀到新的那個月時不能分享，免得用到上個月的數字）
   const [loadedMonth, setLoadedMonth] = useState<string | null>(null);
   useEffect(() => () => void (card?.url && URL.revokeObjectURL(card.url)), [card]);
-  const mascot = useMascot(uid);
+  const mascot = useMascot(canShareIg(access) ? uid : null); // 分享圖用；顧客不用多讀一次
   const toast = useToast();
 
   // 第一次載入時先顯示手機裡上次的資料，抓到最新的再換掉
