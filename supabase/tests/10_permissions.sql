@@ -2275,6 +2275,9 @@ select tests.ok('數據分析：路線分析列出明德牆上的岩館路線（
                  from jsonb_array_elements(r -> 'routes') e)
           and jsonb_array_length(r -> 'supply') = 6 and jsonb_typeof(r -> 'zones') = 'array' and jsonb_typeof(r -> 'resets') = 'array'
      from public.route_insights('mingde') r), public.route_insights('mingde')::text);
+select tests.ok('數據分析：路線分析每條路線、熱門路線帶在哪一區（step46，點了跳過去）',
+  (select bool_and((e ->> 'zone_id')::uuid = (select zone_id from public.routes where id = (e ->> 'id')::uuid))
+     from jsonb_array_elements((public.route_insights('mingde') -> 'routes') || (public.route_insights('mingde') -> 'top')) e));
 select tests.ok('數據分析：路線分析不回傳客人的帳號', position('climber_' in public.route_insights('mingde')::text) = 0
   and position('climber_' in public.usage_insights(null)::text) = 0);
 

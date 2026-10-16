@@ -27,7 +27,9 @@ function Pills({ r }: { r: FlaggedRoute }) {
 export default function RouteInsightsView({ data, gym, from, initialAll = false }: { data: RouteInsights; gym: string; from: "admin" | "usage"; initialAll?: boolean }) {
   const router = useRouter();
   const [all, setAll] = useState(initialAll);
-  const open = (r: { id: string; zone_id: string }) => {
+  // 還沒套用 step46（沒有 zone_id）：路線不能點
+  const open = (r: { id: string; zone_id?: string }) => {
+    if (!r.zone_id) return;
     saveInsightsBack({ from, gym, y: window.scrollY, all });
     router.push(zoneRoutePath(r.zone_id, r.id, from));
   };
@@ -51,7 +53,7 @@ export default function RouteInsightsView({ data, gym, from, initialAll = false 
             {shown.map((r) => (
               <InsightRouteRow
                 key={r.id}
-                onClick={() => open(r)}
+                onClick={r.zone_id ? () => open(r) : undefined}
                 grade={r.grade}
                 title={routeTitle(r)}
                 meta={
@@ -84,7 +86,7 @@ export default function RouteInsightsView({ data, gym, from, initialAll = false 
             {cold.slice(0, 10).map((r) => (
               <InsightRouteRow
                 key={r.id}
-                onClick={() => open(r)}
+                onClick={r.zone_id ? () => open(r) : undefined}
                 grade={r.grade}
                 title={routeTitle(r)}
                 meta={
@@ -180,7 +182,7 @@ export default function RouteInsightsView({ data, gym, from, initialAll = false 
             {data.top.map((r) => (
               <InsightRouteRow
                 key={r.id}
-                onClick={() => open(r)}
+                onClick={r.zone_id ? () => open(r) : undefined}
                 grade={r.grade}
                 title={routeTitle(r)}
                 right={

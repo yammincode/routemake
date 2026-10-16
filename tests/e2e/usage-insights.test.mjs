@@ -128,6 +128,13 @@ test("數據分析：管理後台「路線分析」給那一館的員工；顧�
   const top = await page.locator("main #rates").evaluate((el) => el.getBoundingClientRect().top);
   assert.ok(top < 844, `捲回路線分析（top ${top}）`);
   await page.click('main button:text-is("收起來")');
+  // 還沒套用 step46（路線分析沒有在哪一區）：路線不能點，其他照常
+  mock.state.noRouteZone = true;
+  await page.click('main button:has-text("看路線分析")');
+  await page.locator("main #rates li").first().waitFor();
+  assert.equal(await page.locator("main #rates li button").count(), 0, "還沒套用 step46 路線不能點");
+  assert.ok((await page.textContent("main")).includes("可能太難"), "其他照常");
+  await page.click('main button:text-is("收起來")');
   assert.equal(await page.locator('main button:has-text("看路線分析")').count(), 1, "可以收起來");
   // 定線員還是看不到使用狀況（人、互動）
   await page.goto(BASE + "/ops/usage", { waitUntil: "networkidle" });

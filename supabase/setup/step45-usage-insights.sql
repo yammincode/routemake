@@ -15,7 +15,7 @@
 -- - usage_insights(館)：給「人」「互動」分頁；權限跟 usage_stats 一樣（全部館只有老闆，指定館要老闆授權）
 --   回頭率、新客人第一週、常客分群、程度分布、進步、幾點最多人用、每天留言影片按讚、熱門影片和留言、選了哪個夥伴
 -- - route_insights(館)：給「路線」分頁；老闆、被授權看那一館使用狀況的人，加上那一館的員工（定線員、店長）
---   牆上每條路線試過／完攀／Flash／難度體感、各區熱度、換線前後比較、難度供需、熱門路線（路線帶 zone_id，點了跳到那一區）
+--   牆上每條路線試過／完攀／Flash／難度體感、各區熱度、換線前後比較、難度供需、熱門路線
 -- - 只回傳總數和比例，不回傳客人的名字（熱門影片、留言照 App 裡本來就公開的暱稱顯示）
 -- - 數字一樣不早於「統計起始日」（usage_settings.since）
 -- 舊版 App 照常可用（record_open 參數不變）
@@ -289,7 +289,7 @@ begin
       'since', v_since,
       'routes', (
         select coalesce(jsonb_agg(jsonb_build_object(
-                 'id', w.id, 'zone_id', w.zone_id, 'code', w.code, 'grade', w.grade, 'color', w.hold_color, 'name', w.name, 'zone', w.zone,
+                 'id', w.id, 'code', w.code, 'grade', w.grade, 'color', w.hold_color, 'name', w.name, 'zone', w.zone,
                  'days', v_today - (w.created_at at time zone 'Asia/Taipei')::date,
                  'tried', (select count(*) from public.ascents s where s.route_id = w.id),
                  'sent', (select count(*) from public.ascents s where s.route_id = w.id and s.status in ('flash', 'send')),
@@ -318,7 +318,7 @@ begin
       'resets', v_resets,
       'top', (
         select coalesce(jsonb_agg(t order by t.n desc, t.code), '[]'::jsonb) from (
-          select r.id, r.zone_id, r.code, r.grade, r.hold_color as color, r.name, z.name as zone, count(distinct s.user_id) as n
+          select r.id, r.code, r.grade, r.hold_color as color, r.name, z.name as zone, count(distinct s.user_id) as n
             from recent s join public.routes r on r.id = s.route_id join public.zones z on z.id = r.zone_id
            where s.status in ('flash', 'send')
            group by r.id, z.name
