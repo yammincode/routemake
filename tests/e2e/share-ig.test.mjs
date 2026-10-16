@@ -196,67 +196,96 @@ async function makeClip() {
   return Buffer.from(b64, "base64");
 }
 
-test("影片加小貼紙（B2）：老闆分享影片後「也分享到 IG」重錄一次加上原岩標記、交出影片；不能壓縮的手機分享原本那支；顧客看不到；列表沒有 <video>", async () => {
+test("影片加小貼紙（B2）：老闆上傳時順便做 IG 版（開關預設打開），上傳完馬上分享、左下角有原岩標記；開關關掉時按了才重錄（做到一半關掉會停）；不能壓縮的手機分享原本那支；顧客看不到；列表沒有 <video>", async () => {
   const mock = createMock();
   mock.addUser("bossman", "password1", { nickname: "老闆", is_owner: true });
   mock.addUser("climber88", "password1", { nickname: "小安" });
   const zone = mock.db.zones[0];
   mock.addRoute(zone, 4, "藍");
   const clip = await makeClip();
+  const PREP = "上傳時順便做 IG 版（加原岩標記）";
 
-  const upload = async (page) => {
-    await page.locator("main ul li button", { hasText: "A1-01" }).click();
-    await page.waitForTimeout(500);
+  // prep：true＝開關打開（預設）、false＝先關掉；undefined＝沒有開關（顧客、不能壓縮的手機）
+  const upload = async (page, { prep, open = true } = {}) => {
+    if (open) {
+      await page.locator("main ul li button", { hasText: "A1-01" }).click();
+      await page.waitForTimeout(500);
+      await page.locator("[role=dialog]").first().locator('[role=tab]:has-text("影片")').click();
+    }
     const dialog = page.locator("[role=dialog]").first();
-    await dialog.locator('[role=tab]:has-text("影片")').click();
     await dialog.locator("input[type=file]").setInputFiles({ name: "climb.webm", mimeType: "video/webm", buffer: clip });
     await page.waitForTimeout(600);
+    const sw = dialog.locator(`[role=switch][aria-label="${PREP}"]`);
+    if (prep === undefined) assert.equal(await sw.count(), 0, "沒有「順便做 IG 版」開關");
+    else {
+      assert.equal(await sw.getAttribute("aria-checked"), "true", "開關預設打開");
+      if (!prep) await sw.click();
+    }
     await dialog.locator("input[type=checkbox]").check();
     await dialog.locator('button:text-is("分享影片")').click();
+    if (prep) await page.waitForFunction(() => document.body.textContent.includes("順便做 IG 版）"), null, { timeout: 10000 });
     await page.waitForFunction(() => document.body.textContent.includes("已分享影片"), null, { timeout: 30000 });
     await page.waitForTimeout(300);
     return dialog;
   };
+  // 預覽圖：左下角有小貼紙（左下角跟右上角顏色不一樣，原本整個畫面同一個顏色）
+  const hasSticker = async (sheet) => {
+    const [bl, tr] = await sheet.locator('[data-testid="share-preview"] img').evaluate((i) => {
+      const c = document.createElement("canvas");
+      c.width = i.naturalWidth;
+      c.height = i.naturalHeight;
+      const g = c.getContext("2d");
+      g.drawImage(i, 0, 0);
+      const at = (x, y) => [...g.getImageData(x, y, 1, 1).data.slice(0, 3)];
+      return [at(30, c.height - 22), at(c.width - 10, 10)];
+    });
+    return Math.abs(bl[0] - tr[0]) + Math.abs(bl[1] - tr[1]) + Math.abs(bl[2] - tr[2]) > 40;
+  };
 
-  // ---- 老闆（能壓縮的手機）----
+  // ---- 老闆（能壓縮的手機）：上傳時順便做好 ----
   const B = await phone(browser, mock);
   await fakeShare(B.ctx);
   await B.ctx.addInitScript(() => (window.__RM_VIDEO_TYPES = ["video/webm;codecs=vp8,opus"])); // 測試瀏覽器沒有 H.264
   const page = B.page;
   await login(page, "bossman", "password1", `/zone?id=${zone.id}`);
-  const dialog = await upload(page);
+  const dialog = await upload(page, { prep: true });
   const offer = dialog.getByTestId("share-offer");
-  await offer.locator('button:has-text("也分享到 IG（加上原岩標記）"):not([disabled])').waitFor({ timeout: 8000 }); // 小貼紙準備好才能按
-  // 做到一半關掉：停止處理；再按一次重新開始
+  assert.match(await offer.textContent(), /上傳時已經做好/);
+  await offer.locator("button").click();
+  assert.deepEqual(await previewSize(page), [480, 270], "預覽是第 1 秒的畫面");
+  const sheet = page.locator("[role=dialog]").last();
+  assert.doesNotMatch(await sheet.textContent(), /製作中/, "不用再等");
+  assert.ok(await hasSticker(sheet), "左下角有貼紙");
+  await sheet.locator('button:text-is("分享到 IG")').click();
+  await page.waitForTimeout(400);
+  let shared = await page.evaluate(() => window.__shared);
+  assert.equal(shared.length, 1);
+  assert.equal(shared[0].name, "routemake-A1-01.webm");
+  assert.ok(shared[0].size > 5000, `加上標記的影片（${shared[0].size}）`);
+  assert.equal(mock.db.videos.length, 1, "原岩 App 裡只有一支（IG 版不上傳）");
+  assert.ok(mock.db.vfiles[mock.db.videos[0].path].buf.length > 1000, "上傳的是沒有標記的那份");
+  await sheet.locator('button:text-is("關閉")').click();
+  assert.equal(await dialog.locator("video").count(), 0, "影片列表沒有 <video>");
+
+  // ---- 開關關掉：上傳時不做，按了才重錄（做到一半關掉會停，再按一次重新開始）----
+  await upload(page, { prep: false, open: false });
+  await offer.locator('button:has-text("也分享到 IG（加上原岩標記）"):not([disabled])').waitFor({ timeout: 8000 });
+  assert.match(await offer.textContent(), /大約等影片的長度/);
   await offer.locator("button").click();
   await page.waitForFunction(() => /製作中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
   await page.locator("[role=dialog]").last().locator('button:text-is("關閉")').click();
   await page.waitForTimeout(300);
   await offer.locator("button").click();
   await page.waitForFunction(() => /製作中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
-  assert.deepEqual(await previewSize(page), [480, 270], "預覽是第 1 秒的畫面");
-  const sheet = page.locator("[role=dialog]").last();
-  assert.match(await sheet.textContent(), /左下角加上難度和館名/);
-  // 小貼紙畫在左下角：預覽圖左下角跟右上角顏色不一樣（原本整個畫面同一個顏色）
-  const [bl, tr] = await sheet.locator('[data-testid="share-preview"] img').evaluate((i) => {
-    const c = document.createElement("canvas");
-    c.width = i.naturalWidth;
-    c.height = i.naturalHeight;
-    const g = c.getContext("2d");
-    g.drawImage(i, 0, 0);
-    const at = (x, y) => [...g.getImageData(x, y, 1, 1).data.slice(0, 3)];
-    return [at(30, c.height - 22), at(c.width - 10, 10)];
-  });
-  assert.ok(Math.abs(bl[0] - tr[0]) + Math.abs(bl[1] - tr[1]) + Math.abs(bl[2] - tr[2]) > 40, `左下角有貼紙（${bl} vs ${tr}）`);
+  assert.deepEqual(await previewSize(page), [480, 270]);
+  assert.ok(await hasSticker(sheet), "重錄的也有貼紙");
   await sheet.locator('button:text-is("分享到 IG")').click();
   await page.waitForTimeout(400);
-  const shared = await page.evaluate(() => window.__shared);
-  assert.equal(shared.length, 1);
-  assert.equal(shared[0].name, "routemake-A1-01.webm");
-  assert.ok(shared[0].size > 5000, `重錄的影片（${shared[0].size}）`);
-  assert.equal(mock.db.videos.length, 1, "原岩 App 裡的影片不變（沒有多傳一支）");
-  await sheet.locator('button:text-is("關閉")').click();
-  assert.equal(await dialog.locator("video").count(), 0, "影片列表沒有 <video>");
+  shared = await page.evaluate(() => window.__shared);
+  assert.equal(shared.length, 2);
+  assert.equal(mock.db.videos.length, 2);
+  // 開關記在手機
+  assert.equal(await page.evaluate(() => localStorage.getItem("routemake:ig-prep")), "0");
   assert.deepEqual(B.errors, []);
   await B.ctx.close();
 
@@ -265,7 +294,7 @@ test("影片加小貼紙（B2）：老闆分享影片後「也分享到 IG」重
   await fakeShare(P.ctx);
   await P.ctx.addInitScript(() => (window.__RM_VIDEO_TYPES = ["video/none"]));
   await login(P.page, "bossman", "password1", `/zone?id=${zone.id}`);
-  const d2 = await upload(P.page);
+  const d2 = await upload(P.page, {});
   const o2 = d2.getByTestId("share-offer");
   await o2.locator("button:not([disabled])").waitFor({ timeout: 8000 });
   assert.match(await o2.textContent(), /加不了原岩標記/);
@@ -283,7 +312,7 @@ test("影片加小貼紙（B2）：老闆分享影片後「也分享到 IG」重
   const C = await phone(browser, mock);
   await C.ctx.addInitScript(() => (window.__RM_VIDEO_TYPES = ["video/webm;codecs=vp8,opus"]));
   await login(C.page, "climber88", "password1", `/zone?id=${zone.id}`);
-  const d3 = await upload(C.page);
+  const d3 = await upload(C.page, {});
   assert.equal(await d3.getByTestId("share-offer").count(), 0, "顧客看不到");
   await C.ctx.close();
 });

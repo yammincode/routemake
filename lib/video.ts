@@ -112,6 +112,8 @@ async function realDuration(video: HTMLVideoElement): Promise<number | null> {
 
 // 剪輯：start、end 是秒；mute 不錄聲音
 export type VideoEdit = { start: number; end: number; mute: boolean };
+// 同一次播放順便多錄一份（加上 overlay）
+export type ExtraTake = { overlay: (g: CanvasRenderingContext2D, w: number, h: number) => void; onDone: (file: File | null, thumb: Blob | null) => void };
 
 // 壓縮成功回傳新檔；不支援、失敗、或壓完沒有變小就回傳 null（呼叫的人改傳原檔）
 // 有剪輯（edit）時一定重錄：不支援或失敗回傳 null（呼叫的人不能改傳原檔，不然長度、聲音都不對）
@@ -119,17 +121,28 @@ export type VideoEdit = { start: number; end: number; mute: boolean };
 // onThumb：錄到第 1 秒時順便給縮圖（失敗就不給）
 // overlay：每一格畫完影片後再畫上去（分享到 IG 的角落小貼紙）；有 overlay 也一定重錄
 // signal：中途取消（例如關掉預覽）：馬上停止錄影、回傳 null
+// extra：同一次播放順便多錄一份加上 overlay 的（上傳時順便做 IG 版，之後不用再等一次）；做完呼叫 onDone（失敗給 null）；有 extra 也一定重錄
 export async function compressVideo(
   file: File,
   onProgress: (ratio: number) => void,
   edit?: VideoEdit,
   onThumb?: (thumb: Blob) => void,
   overlay?: (g: CanvasRenderingContext2D, w: number, h: number) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  extra?: ExtraTake
 ): Promise<File | null> {
   const type = compressType();
   const must = !!edit || !!overlay; // 一定要重錄（不能改傳原檔）
-  if (!type || (!must && file.size < compressMinBytes()) || signal?.aborted) return null;
+  let extraDone = false;
+  const giveExtra = (f: File | null, t: Blob | null) => {
+    if (extraDone) return;
+    extraDone = true;
+    extra?.onDone(f, t);
+  };
+  if (!type || (!must && !extra && file.size < compressMinBytes()) || signal?.aborted) {
+    giveExtra(null, null);
+    return null;
+  }
 
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
@@ -139,6 +152,7 @@ export async function compressVideo(
   video.src = url;
   let ac: AudioContext | null = null;
   let stream: MediaStream | null = null;
+  let stream2: MediaStream | null = null;
   try {
     // 在點擊當下先解鎖播放與聲音
     ac = new AudioContext();
@@ -176,6 +190,33 @@ export async function compressVideo(
       dest.stream.getAudioTracks().forEach((t) => stream!.addTrack(t));
     }
 
+    // 多錄的那一份：把畫好的畫面複製到第二張畫布，再加上 overlay（不用再解碼一次影片）
+    const c2 = extra ? document.createElement("canvas") : null;
+    const g2 = c2?.getContext("2d") ?? null;
+    let rec2: MediaRecorder | null = null;
+    const chunks2: Blob[] = [];
+    let stopped2: Promise<void> = Promise.resolve();
+    let thumb2: Blob | null = null;
+    const draw2 = () => {
+      if (!c2 || !g2) return;
+      g2.drawImage(canvas, 0, 0);
+      extra!.overlay(g2, c2.width, c2.height);
+    };
+    if (extra && c2 && g2) {
+      c2.width = canvas.width;
+      c2.height = canvas.height;
+      draw2();
+      stream2 = c2.captureStream(30);
+      stream.getAudioTracks().forEach((t) => stream2!.addTrack(t.clone()));
+      try {
+        rec2 = new MediaRecorder(stream2, { mimeType: type, videoBitsPerSecond: VIDEO_BPS, ...(edit?.mute ? {} : { audioBitsPerSecond: AUDIO_BPS }) });
+        rec2.ondataavailable = (e) => e.data.size && chunks2.push(e.data);
+        stopped2 = new Promise<void>((res) => (rec2!.onstop = () => res()));
+      } catch {
+        rec2 = null; // 這支手機不能同時錄兩份：只錄原本那份
+      }
+    }
+
     const chunks: Blob[] = [];
     const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: VIDEO_BPS, ...(edit?.mute ? {} : { audioBitsPerSecond: AUDIO_BPS }) });
     rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
@@ -191,9 +232,11 @@ export async function compressVideo(
       if (done) return;
       g.drawImage(video, 0, 0, canvas.width, canvas.height);
       overlay?.(g, canvas.width, canvas.height);
+      if (rec2) draw2();
       if (!shot && video.currentTime >= shotAt - 0.02) {
         shot = true;
         void encodeThumb(canvas, canvas.width, canvas.height).then((b) => b && onThumb?.(b));
+        if (rec2 && c2) void encodeThumb(c2, c2.width, c2.height).then((b) => (thumb2 = b));
       }
       onProgress(Math.min(1, (video.currentTime - from) / (to - from)));
       if (video.currentTime >= to - 0.02) return reached();
@@ -203,26 +246,35 @@ export async function compressVideo(
     video.addEventListener("ended", () => reached(), { once: true });
     signal?.addEventListener("abort", () => reached(), { once: true });
     rec.start(1000);
+    rec2?.start(1000);
     await video.play();
     draw();
     const ended = await Promise.race([atEnd.then(() => true), new Promise<boolean>((res) => setTimeout(() => res(false), (to - from) * 1500 + 20000))]);
     done = true;
     video.pause();
     rec.stop();
+    if (rec2?.state === "recording") rec2.stop();
     await stopped;
+    await stopped2;
     if (!ended || signal?.aborted) return null;
     onProgress(1);
+    const ext = type.startsWith("video/webm") ? "webm" : "mp4";
+    if (rec2) {
+      const b2 = new Blob(chunks2, { type: type.split(";")[0] });
+      giveExtra(b2.size >= 10_000 ? new File([b2], file.name.replace(/\.[^.]+$/, "") + "-ig." + ext, { type: b2.type }) : null, thumb2);
+    }
 
     const blob = new Blob(chunks, { type: type.split(";")[0] });
     if (blob.size < 10_000 || (!must && blob.size > file.size * 0.85)) return null;
-    const ext = type.startsWith("video/webm") ? "webm" : "mp4";
     return new File([blob], file.name.replace(/\.[^.]+$/, "") + "-720p." + ext, { type: blob.type });
   } catch {
     return null;
   } finally {
+    giveExtra(null, null); // 失敗、取消、不能同時錄：多錄的那份沒有
     video.pause();
     URL.revokeObjectURL(url);
     stream?.getTracks().forEach((t) => t.stop());
+    stream2?.getTracks().forEach((t) => t.stop());
     void ac?.close().catch(() => undefined);
   }
 }

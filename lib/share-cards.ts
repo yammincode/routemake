@@ -494,14 +494,12 @@ export async function makeVideoSticker(info: { grade: number; gymName: string; z
   sg.globalCompositeOperation = "destination-in";
   rrect(sg, 0, 0, used, 180, 36);
   sg.fill();
-  // 大小照影片的長邊算（橫的影片放到限時動態會縮小，貼紙不會小到看不清楚）；
-  // 直的影片往上抬到底下 16%，不被 IG 的名字、留言框蓋住
+  // 大小照影片的長邊算（橫的影片放到限時動態會縮小，貼紙不會小到看不清楚）；貼在左下角，下面和左邊留一樣的邊（10/16 使用者說低一點）
   return (dg, w, h) => {
     const sh0 = Math.max(w, h) * 0.07;
     const sw = Math.min(w * 0.62, (used / 180) * sh0);
     const sh = (sw * 180) / used;
     const m = Math.round(Math.min(w, h) * 0.04);
-    const bottom = h > w ? Math.round(h * 0.16) : m;
-    dg.drawImage(s, m, h - bottom - sh, sw, sh);
+    dg.drawImage(s, m, h - m - sh, sw, sh);
   };
 }
