@@ -91,11 +91,11 @@ test("Spray Wall：岩友出路線、員工出岩館路線與下架", async () =
   await login(s, "setterx", "password1", "/spray/mingde-sw");
   await s.waitForTimeout(800);
   assert.ok((await s.locator("nav a").allTextContents()).includes("管理後台"), "員工看得到管理後台");
+  // 岩館路線（step44）：先放這條路線的照片，圈圈可以不畫（詳細在 route-card 測試）
   await s.click('main button:has-text("新增岩館路線")');
   await s.waitForTimeout(400);
-  await tapPhoto(s, 0.3, 0.8);
-  await s.click('[role=dialog] button:has-text("完攀 T")');
-  await tapPhoto(s, 0.6, 0.2);
+  await s.locator('[role=dialog] input[type=file]').setInputFiles(WALL);
+  await s.waitForTimeout(400);
   await s.fill("#sname", "教練的路線");
   await s.click('[role=dialog] button:text-is("V6")');
   await s.click('[role=dialog] button:text-is("發布路線")');

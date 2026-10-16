@@ -97,7 +97,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, noRoutePhoto: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -685,6 +685,8 @@ export function createMock() {
       if (a.p_sort === "mine") rs = rs.filter((r) => r.created_by === uid);
       const rows = rs.map((r) => ({
         id: r.id, code: r.code, name: r.name, grade: r.grade, description: r.description ?? null, holds: r.holds, kind: r.kind, created_at: r.created_at,
+        // step44：岩館路線照片；state.noRoutePhoto 模擬還沒套用（0018 的 spray_list 沒有這個欄位）
+        ...(state.noRoutePhoto ? {} : { photo_path: r.photo_path ?? null }),
         style_tags: r.style_tags, comments_enabled: r.comments_enabled, author: prof(r.created_by)?.nickname ?? null,
         sends: new Set(db.ascents.filter((x) => x.route_id === r.id && x.status !== "project").map((x) => x.user_id)).size,
         likes: db.routeLikes.filter((l) => l.route_id === r.id).length, liked: db.routeLikes.some((l) => l.route_id === r.id && l.user_id === uid),
@@ -892,7 +894,8 @@ export function createMock() {
     if (p.startsWith("/storage/v1/object/zone-photos/") && m === "POST") {
       const path = p.replace("/storage/v1/object/zone-photos/", "");
       const [g, folder] = path.split("/");
-      if (!(folder === "zones" && isStaff(uid, g))) return J(route, 403, { message: "new row violates row-level security policy" });
+      // 同 0050 的 can_manage_photo：zones、routes（Spray Wall 岩館路線照片）都是那間館的員工
+      if (!((folder === "zones" || (folder === "routes" && !state.noRoutePhoto)) && isStaff(uid, g))) return J(route, 403, { message: "new row violates row-level security policy" });
       const buf = req.postDataBuffer();
       const i = buf.indexOf(Buffer.from([0xff, 0xd8]));
       const j = buf.lastIndexOf(Buffer.from([0xff, 0xd9]));
@@ -948,6 +951,11 @@ export function createMock() {
       removed.forEach((k) => delete db.tfiles[k]);
       return J(route, 200, removed.map((name) => ({ name })));
     }
+    if (p === "/storage/v1/object/zone-photos" && m === "DELETE") {
+      const removed = (body?.prefixes ?? []).filter((k) => db.files[k] && isStaff(uid, k.split("/")[0]));
+      removed.forEach((k) => delete db.files[k]);
+      return J(route, 200, removed.map((name) => ({ name })));
+    }
     if (p === "/storage/v1/object/route-videos" && m === "DELETE") {
       const removed = (body?.prefixes ?? []).filter((k) => db.vfiles[k] && canDeleteVideoFile(uid, k));
       removed.forEach((k) => delete db.vfiles[k]);
@@ -988,6 +996,17 @@ export function createMock() {
       }
     }
     if (t === "routes") {
+      // step44：state.noRoutePhoto 模擬資料庫還沒套用（routes 沒有 photo_path）
+      if (state.noRoutePhoto && m === "GET" && sel.includes("photo_path")) return J(route, 400, { code: "42703", message: "column routes.photo_path does not exist" });
+      if (state.noRoutePhoto && body && !Array.isArray(body) && "photo_path" in body)
+        return J(route, 400, { code: "PGRST204", message: "Could not find the 'photo_path' column of 'routes' in the schema cache" });
+      // 同 0050 的 routes_spray_check：照片只有那間館 Spray Wall 的岩館路線可以放
+      if (body && !Array.isArray(body) && body.photo_path && (m === "POST" || m === "PATCH")) {
+        const zid = body.zone_id ?? filt(db.routes, sp)[0]?.zone_id;
+        const z = zoneOf(zid);
+        if (z.kind !== "spray" || (body.kind ?? "gym") !== "gym" || body.photo_path.split("/")[0] !== z.gym_id || !/^[a-z0-9_]+\/routes\/[A-Za-z0-9_-]+\.jpg$/.test(body.photo_path))
+          return J(route, 400, { code: "22023", message: "只有這間館的岩館路線可以放照片" });
+      }
       if (m === "GET") {
         let rows = db.routes.map((r) => {
           const z = zoneOf(r.zone_id);
@@ -1004,7 +1023,7 @@ export function createMock() {
         const z = zoneOf(body.zone_id);
         const community = body.kind === "community" && z.kind === "spray" && prof(uid)?.nickname;
         if (!isStaff(uid, z.gym_id) && !community) return J(route, 403, { code: "42501", message: "沒有權限" });
-        if (z.kind === "spray" && !(body.holds?.some((h) => h.t === "s") && body.holds?.some((h) => h.t === "t")))
+        if (z.kind === "spray" && !(body.photo_path && !body.holds) && !(body.holds?.some((h) => h.t === "s") && body.holds?.some((h) => h.t === "t")))
           return J(route, 400, { code: "22023", message: "路線要有起攀（S）和完攀（T），圈圈最多 60 個" });
         // 同 routes_spray_check／routes_grade_system：長耐力要照順序 2–50 點、YDS；其他一般區域不能有點
         if (z.kind !== "spray" && z.grade_system === "endurance") {
@@ -1019,7 +1038,7 @@ export function createMock() {
         if (body.id && db.routes.some((x) => x.id === body.id)) return J(route, 409, { code: "23505", message: 'duplicate key value violates unique constraint "routes_pkey"' });
         z.route_seq++;
         const first = body.holds?.find((h) => h.t === "s");
-        const r = { id: uuid(), code: `${z.code}-${String(z.route_seq).padStart(2, "0")}`, style_tags: [], setter_note: null, comments_enabled: true, created_at: now(), archived_at: null, kind: "gym", created_by: uid, ...body, ...(first ? { pin_x: first.x, pin_y: first.y } : {}) };
+        const r = { id: uuid(), code: `${z.code}-${String(z.route_seq).padStart(2, "0")}`, style_tags: [], setter_note: null, comments_enabled: true, created_at: now(), archived_at: null, kind: "gym", created_by: uid, ...body, ...(first ? { pin_x: first.x, pin_y: first.y } : z.kind === "spray" ? { pin_x: 50, pin_y: 50 } : {}) };
         db.routes.push(r);
         // 測試用：資料存進去了，但手機沒收到回覆（訊號差）
         if (state.dropRouteReply) {

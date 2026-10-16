@@ -102,7 +102,8 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Card.tsx` | `Card`、`PageTitle`、`SectionTitle`、`Empty`、`Tip`、`BackLink` |
 | `Button.tsx` | `Button`（default／primary／danger）、`LinkButton` |
 | `Chip.tsx` | `ChipRow`（wrap：排不下就換行）、`Chip` |
-| `Sheet.tsx` | `Sheet`、`SheetTitle`、`SheetSub`、`SheetSection` |
+| `Sheet.tsx` | `Sheet`（full：全螢幕，左上「‹」關閉、返回鍵只關面板，路線卡片用；bare：最上面不留空，內容放滿版照片）、`SheetTitle`、`SheetSub`、`SheetSection` |
+| `ClimbDay.tsx` | `ClimbDay`（攀爬日膠囊：預設今天，點開今天／昨天／前天／📅 選日期；路線卡片按鈕上面）、`dayLabel` |
 | `Form.tsx` | `Label`、`TextField`、`TextArea`、`Toggle`（disabled：處理中不能切）、`Segmented`（small：一排小膠囊）、`OptionGrid`（單選方塊、選填，再按一次取消；2 或 4 格一排，可加小字說明）、`MultiOptionGrid`（複選方塊、3 格一排，最多 max 個，選滿後其他格變淡按不了；影片型態用）、`Rating`（1–5 分）、`ColorPicker`、`GradePicker`、`TagPicker`、`Check` |
 | `Route.tsx` | `Points`、`Grade`、`RouteTag`（小一號的路線標示：難度色塊＋「店名・區域・路線」，New~ 用）、`HoldDot`、`Tape`、`Tags`、`NewBadge`、`StatusBadge`、`StatusPicker`（compact：路線卡片一排小按鈕）、`RouteRow`（color 不給＝長耐力路線，不畫膠帶）、`RouteList`、`VideoCount`、`CommentCount`（路線列「幾天前」後面依序放影片數、留言數，有才放）、`SetterNote` |
 | `Wall.tsx` | `WallPhoto`（`hideable`：左上角「隱藏路線／顯示路線」按鈕，只用在顧客區域頁；放大時加 `data-noswipe`，在照片上左右拖是拖照片、不換區）、`Pin`（`focus`：New~ 看路線跳過來的那一條，放大、黃圈閃三下）、`TempPin` |
@@ -111,7 +112,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `FloorPlan.tsx` | `FloorPlan`（guest：每區寫條數、統一底色；換線不畫在平面圖上（不寫字、不畫虛線框，報讀照樣唸「○ 天後換線」）；有好幾層的館（南港）同一張卡片由上到下畫，每層上方標 1F、2F；區域名字沒改過寫簡稱，店長改過名字就寫新名字，依旁邊的空間縮小、放不下截短加「…」，見 `lib/floorplan.ts` 的 `planLabel`、`planText`）。右上角「立體／平面」切換，記在這支手機（`usePlanMode`），館首頁和管理後台一起換；立體（預設）是 2.5D 斜俯視建築模型（幾何在 `lib/plan25d.ts`）：方塊越高路線越多（後面的小區頂面會被擋掉超過 4 成時整張圖自動壓低）、照真的前後位置畫、頂面依完成度上色、側面混 `--plan-shade`、後牆半透明（門口留空）、櫃台是矮方塊，牆、櫃台、地上的字不擋點擊；區名正立、固定 13.5px（照卡片寬度換算），放在平面圖同樣的位置（區名在區裡面的跟著頂面浮上去），蓋到別區的方塊就挪到旁邊，太擠自動推開，離原本位置遠了加指引線，改過的長名字超過 5 個字寬截短；按鈕（鍵盤、報讀）是區名、照區域順序，鍵盤移到時有深色外框，方塊也能點；後台選中的方塊浮起來、區名變深色膠囊（不移動）；只跟平面圖有關的計算每張圖記起來，量到卡片寬度才畫 |
 | `Like.tsx` | `LikeButton`（👍 讚：沒人按寫「讚」、有人按寫數字，按過變主色；沒有 onLike 只顯示讚數；`dark` 放黑底的全螢幕播放）、`LikeSpace`（跟讚按鈕一樣大的隱形空位，讚疊在整列按鈕上時先留位置）；留言、影片共用 |
 | `Comments.tsx` | `CommentItem`（含 👍 按讚 LikeButton；刪除要按兩次；New~ 用：place 路線一行＋onOpen「看路線 ›」、clamp 最多 3 行）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
-| `Spray.tsx` | `HoldMarks`（照片上的圈圈：起攀 S 綠、路線點 藍、完攀 T 紅；細框 1.5px＋外圈極細深色邊，兩指放大時框不變粗；S／T 標籤 15px）、`HoldLegend`、`HoldTools`（選種類與大小）、`SprayRow`、`RouteThumb`（列表縮圖，放大到路線範圍）、`HOLD_TYPES`、`HOLD_SIZES` |
+| `Spray.tsx` | `HoldMarks`（照片上的圈圈：起攀 S 綠、路線點 藍、完攀 T 紅；細框 1.5px＋外圈極細深色邊，兩指放大時框不變粗；S／T 標籤 15px）、`HoldLegend`、`HoldTools`（選種類與大小）、`SprayRow`、`RouteThumb`（列表縮圖，放大到路線範圍）、`PhotoThumb`（岩館路線自己照片的縮圖，整張裁正方形）、`HOLD_TYPES`、`HOLD_SIZES` |
 | `Profile.tsx` | `Avatar`（暱稱第一個字）、`HexChart`（六角形能力表）、`ProfileCardView`（人物卡） |
 | `Tabs.tsx` | `Tabs`（分頁：路線卡片的紀錄／影片／留言、New~ 的影片／留言、我的紀錄路線進度的牆上進度／我的進度） |
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |

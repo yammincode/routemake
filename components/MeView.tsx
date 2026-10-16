@@ -21,6 +21,7 @@ import {
   getPointsSummary,
   getSlamInfo,
   seqPhotoUrl,
+  heroPhoto,
   seqTotal,
   type Gym,
   type MonthAscent,
@@ -397,6 +398,7 @@ export default function MeView({ gymId }: { gymId: string }) {
       <RouteSheet
         route={open?.route ?? null}
         photo={open && seqTotal(open.route) ? seqPhotoUrl(open.route, open.route.zone_photo ?? null) : null}
+        zonePhoto={open ? heroPhoto(open.route, open.route.zone_photo ?? null) : null}
         zoneName={open?.route.zone_name ?? ""}
         gymId={open?.route.gym_id ?? gymId}
         gymCommentsOn={gymComments?.[open?.route.gym_id ?? gymId] ?? false}

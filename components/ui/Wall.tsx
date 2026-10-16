@@ -69,6 +69,8 @@ export function WallPhoto({
   alt,
   setter = false,
   hideable = false,
+  edge = false,
+  fallback,
   onPick,
   children,
 }: {
@@ -76,6 +78,8 @@ export function WallPhoto({
   alt: string;
   setter?: boolean;
   hideable?: boolean;
+  edge?: boolean; // 滿版（全螢幕路線卡片最上面）：不要圓角、陰影、下面的空白
+  fallback?: string; // src 讀不到時改用（例如縮圖還沒做好時用原圖）
   onPick?: (x: number, y: number) => void;
   children?: ReactNode;
 }) {
@@ -166,7 +170,7 @@ export function WallPhoto({
       onPointerCancel={onPointerUp}
       data-noswipe={zoomed || undefined}
       style={{ touchAction: zoomed ? "none" : "pan-y" }}
-      className={`relative mb-3.5 overflow-hidden rounded-tile bg-line shadow-card ${setter ? "cursor-crosshair outline-2 -outline-offset-2 outline-accent outline-dashed" : ""}`}
+      className={`relative overflow-hidden bg-line ${edge ? "" : "mb-3.5 rounded-tile shadow-card"} ${setter ? "cursor-crosshair outline-2 -outline-offset-2 outline-accent outline-dashed" : ""}`}
     >
       <div
         ref={inner}
@@ -175,7 +179,7 @@ export function WallPhoto({
       >
         {/* key={src}：換照片時換一個新的元素（退回一般方式顯示過的元素不會再帶 crossOrigin） */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img key={src} src={src} alt={alt} crossOrigin="anonymous" draggable={false} onError={(e) => imgFallback(e.currentTarget)} className="block h-auto w-full select-none" />
+        <img key={src} src={src} alt={alt} crossOrigin="anonymous" draggable={false} onError={(e) => imgFallback(e.currentTarget, fallback)} className="block h-auto w-full select-none" />
         <div className={`absolute inset-0 transition-[opacity,visibility] duration-150 ${hideable && hidden ? "invisible opacity-0" : ""}`}>{children}</div>
       </div>
       {zoomed && (

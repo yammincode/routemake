@@ -145,6 +145,16 @@ export function RouteThumb({ src, fallback, holds, ratio = 0.75, size = 56 }: { 
   );
 }
 
+// 岩館路線自己的照片（step44）縮圖：整張照片裁成正方形（照片本來就標好路線，不另外放大）
+export function PhotoThumb({ src, fallback, size = 56 }: { src: string; fallback?: string; size?: number }) {
+  return (
+    <span aria-hidden className="relative block flex-none overflow-hidden rounded-cell bg-line" style={{ width: size, height: size }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img key={src} src={src} alt="" loading="lazy" draggable={false} onError={(e) => imgFallback(e.currentTarget, fallback)} className="block size-full object-cover select-none" />
+    </span>
+  );
+}
+
 // Spray Wall 路線列（列表用）：難度、縮圖、名稱、出題者、完攀人數、讚數
 export function SprayRow({
   grade,

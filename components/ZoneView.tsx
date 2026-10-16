@@ -392,6 +392,7 @@ export default function ZoneView({
       <RouteSheet
         route={open}
         photo={src}
+        zonePhoto={src ? { src } : null}
         zoneName={zone.name}
         gymId={zone.gym_id}
         gymCommentsOn={commentsOn}

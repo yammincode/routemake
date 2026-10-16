@@ -948,6 +948,30 @@ select tests.lives('Spray：員工可以出岩館路線', format($q$insert into 
 select tests.lives('Spray：員工可以下架岩友路線', format($q$update public.routes set archived_at = now() where id = %L$q$, (select v from ids where k = 'cr')));
 reset role;
 select tests.ok('Spray：員工下架岩友路線有操作紀錄', exists (select 1 from public.audit_log where action = 'route.archive' and target_id = (select v from ids where k = 'cr')));
+-- 岩館路線照片（0050／step44）：員工上傳到 {館}/routes/，有照片可以不畫圈圈；岩友路線、一般區域、別館的路徑都不行
+set role authenticated; select tests.login(:ST);
+select tests.lives('路線照片：員工可以上傳到自己館的 routes 資料夾', $q$insert into storage.objects (bucket_id, name) values ('zone-photos', 'mingde/routes/S-1.jpg')$q$);
+select tests.throws('路線照片：不能上傳到別館', $q$insert into storage.objects (bucket_id, name) values ('zone-photos', 'g2/routes/S-1.jpg')$q$);
+select tests.lives('路線照片：岩館路線有照片可以不畫圈圈', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, photo_path) values (%L, 'gym', '照片路線', 5, '白', 0, 0, 'mingde/routes/S-1.jpg')$q$, (select v from ids where k = 'sw')));
+select tests.ok('路線照片：沒有圈圈時起步點放中間、列表有照片',
+  (select pin_x = 50 and pin_y = 50 and holds is null from public.routes where name = '照片路線')
+  and exists (select 1 from jsonb_array_elements(public.spray_list((select v from ids where k = 'sw'), 'gym', null, 'new', 0, 20)) e
+               where e ->> 'name' = '照片路線' and e ->> 'photo_path' = 'mingde/routes/S-1.jpg'));
+select tests.lives('路線照片：有照片也可以畫圈圈', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, photo_path, holds) values (%L, 'gym', '照片加圈', 5, '白', 0, 0, 'mingde/routes/S-2.jpg', %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'ok')));
+select tests.throws('路線照片：畫了圈圈就要有完攀 T', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, photo_path, holds) values (%L, 'gym', '少T照片', 5, '白', 0, 0, 'mingde/routes/S-3.jpg', %L)$q$, (select v from ids where k = 'sw'), (select v from hs where k = 'noTop')), '起攀');
+select tests.throws('路線照片：沒照片也沒圈圈不行', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y) values (%L, 'gym', '什麼都沒有', 5, '白', 0, 0)$q$, (select v from ids where k = 'sw')), '照片');
+select tests.throws('路線照片：照片要放在這間館', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, photo_path) values (%L, 'gym', '別館照片', 5, '白', 0, 0, 'g2/routes/S-1.jpg')$q$, (select v from ids where k = 'sw')), '這間館');
+select tests.throws('路線照片：路徑格式不對不行', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, photo_path) values (%L, 'gym', '亂路徑', 5, '白', 0, 0, 'mingde/zones/../x.jpg')$q$, (select v from ids where k = 'sw')), 'routes_photo_path_ok');
+select tests.throws('路線照片：一般區域不能放', format($q$insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, photo_path) values (%L, 3, '藍', 10, 10, 'mingde/routes/A-1.jpg')$q$, (select v from ids where k = 'zoneA')), '一般區域');
+reset role;
+set role authenticated; select tests.login(:ST2);
+select tests.throws('路線照片：別館員工不能上傳到明德', $q$insert into storage.objects (bucket_id, name) values ('zone-photos', 'mingde/routes/S-9.jpg')$q$);
+reset role;
+set role authenticated; select tests.login(:NN);
+select tests.throws('路線照片：岩友不能上傳路線照片', $q$insert into storage.objects (bucket_id, name) values ('zone-photos', 'mingde/routes/S-8.jpg')$q$);
+select tests.throws('路線照片：岩友路線不能放照片', format($q$insert into public.routes (zone_id, kind, name, grade, hold_color, pin_x, pin_y, photo_path) values (%L, 'community', '岩友照片', 3, '白', 0, 0, 'mingde/routes/S-1.jpg')$q$, (select v from ids where k = 'sw')), '岩館路線');
+select tests.ok('路線照片：岩友改不了岩館路線的照片（0 筆）', tests.rows($q$update public.routes set photo_path = 'mingde/routes/S-5.jpg' where name = '照片路線'$q$) = 0);
+reset role;
 -- 積分：岩友路線不算，岩館路線算
 select tests.login(null);
 insert into public.ascents (user_id, route_id, status, climbed_on)

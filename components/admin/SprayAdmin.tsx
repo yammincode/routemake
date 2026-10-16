@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import SprayPhotoPanel from "@/components/admin/SprayPhotoPanel";
 import { Button } from "@/components/ui/Button";
 import { Empty, SectionTitle } from "@/components/ui/Card";
-import { RouteThumb } from "@/components/ui/Spray";
+import { PhotoThumb, RouteThumb } from "@/components/ui/Spray";
 import { Tabs } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
 import { Grade } from "@/components/ui/Route";
@@ -109,7 +109,11 @@ export default function SprayAdmin({ wall }: { wall: SprayWall }) {
             {list.map((r) => (
               <li key={r.id} className="flex items-center gap-3 rounded-card bg-surface p-3 shadow-card">
                 <Grade grade={r.grade} className="text-num-row w-[46px]" />
-                {photo && r.holds?.length ? <RouteThumb src={thumbUrl(zone.photo_path) ?? photo} fallback={photo} holds={r.holds} ratio={ratio} /> : null}
+                {r.photo_path ? (
+                  <PhotoThumb src={thumbUrl(r.photo_path) ?? ""} fallback={photoUrl(r.photo_path) ?? undefined} />
+                ) : photo && r.holds?.length ? (
+                  <RouteThumb src={thumbUrl(zone.photo_path) ?? photo} fallback={photo} holds={r.holds} ratio={ratio} />
+                ) : null}
                 <span className="min-w-0 flex-1">
                   <b className="block truncate text-sub">{r.name}</b>
                   <span className="block truncate text-meta text-muted">

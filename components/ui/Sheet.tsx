@@ -1,11 +1,28 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 // 底部彈出面板（原型 .sheet）；點背景或按 Esc 關閉
 // 直接放到 body 底下，面板裡再開面板（例如路線卡片裡點名字看人物卡）也會蓋住整個畫面
-export default function Sheet({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
+// full：蓋滿整個畫面（路線卡片，使用者選的 3B）：左上「‹」關閉；bare：最上面不留空（內容自己放滿版的照片，用 -mx-5 貼齊兩邊）；
+//   打開時多一筆瀏覽紀錄，手機返回鍵（滑回上一頁）只關掉卡片、不離開這一頁
+// 全螢幕卡片剛關掉、還沒退掉的那一筆瀏覽紀錄
+let leaving: { id: string; timer: ReturnType<typeof setTimeout> } | null = null;
+
+export default function Sheet({
+  open,
+  onClose,
+  full = false,
+  bare = false,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  full?: boolean;
+  bare?: boolean;
+  children: ReactNode;
+}) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -18,7 +35,63 @@ export default function Sheet({ open, onClose, children }: { open: boolean; onCl
     };
   }, [open, onClose]);
 
+  // 全螢幕：返回鍵關卡片。打開時記一筆（網址不變）；按返回 → 關掉；用 ‹、Esc 關掉 → 把那一筆退掉
+  // 卡片裡點連結換頁時（網址變了、那一筆已經不在最上面）不退，免得把剛換的頁面退回去
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    if (!open || !full) return;
+    const href = location.href;
+    let id: string;
+    // 剛關掉又馬上打開（開發模式 React 會這樣檢查）：沿用還沒退掉的那一筆，不多記一筆
+    if (leaving && history.state?.sheet === leaving.id) {
+      clearTimeout(leaving.timer);
+      id = leaving.id;
+      leaving = null;
+    } else {
+      id = Math.random().toString(36).slice(2);
+      history.pushState({ ...(history.state ?? {}), sheet: id }, "", href);
+    }
+    let popped = false;
+    const onPop = () => {
+      popped = true;
+      closeRef.current();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      if (popped) return;
+      const timer = setTimeout(() => {
+        leaving = null;
+        if (history.state?.sheet === id && location.href === href) history.back();
+      }, 0);
+      leaving = { id, timer };
+    };
+  }, [open, full]);
+
   if (!open) return null;
+  if (full)
+    return createPortal(
+      <div className="fixed inset-0 z-20 flex justify-center bg-black/[0.42]">
+        <div role="dialog" aria-modal="true" className="relative h-full w-full max-w-page animate-sheet overflow-y-auto bg-surface pb-[calc(20px+env(safe-area-inset-bottom,0px))]">
+          <div className="sticky top-0 z-10 h-0">
+            <button
+              type="button"
+              aria-label="關閉"
+              onClick={onClose}
+              className="absolute top-[calc(10px+env(safe-area-inset-top,0px))] left-3 grid size-9 place-items-center rounded-full bg-ink/70 text-[22px] leading-none font-bold text-surface shadow-card"
+            >
+              ‹
+            </button>
+          </div>
+          {!bare && <div className="h-[calc(56px+env(safe-area-inset-top,0px))]" />}
+          <div className="px-5">{children}</div>
+        </div>
+      </div>,
+      document.body
+    );
   return createPortal(
     <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/[0.42]" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div

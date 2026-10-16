@@ -7,22 +7,24 @@ import { useAuth } from "@/components/AuthProvider";
 import ProfileSheet from "@/components/ProfileSheet";
 import RouteVideos from "@/components/RouteVideos";
 import { Button, LinkButton } from "@/components/ui/Button";
+import { ClimbDay } from "@/components/ui/ClimbDay";
 import { HighpointPicker, NumberMarks } from "@/components/ui/Endurance";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
-import { Label, Segmented, TextArea, TextField } from "@/components/ui/Form";
+import { Label, Segmented, TextArea } from "@/components/ui/Form";
 import { UserAvatar } from "@/components/ui/Mascot";
 import { Grade, SetterNote, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { Tabs } from "@/components/ui/Tabs";
 import { HoldMarks } from "@/components/ui/Spray";
 import { useToast } from "@/components/ui/Toast";
-import { WallPhoto } from "@/components/ui/Wall";
+import { Pin, WallPhoto } from "@/components/ui/Wall";
 import { isStaffOf } from "@/lib/auth";
 import {
   clearAscent,
   deleteComment,
   editComment,
   getComments,
+  photoUrl,
   likeComment,
   postComment,
   saveAscent,
@@ -42,13 +44,15 @@ import { loginExpired } from "@/lib/supabase";
 import { ascentPoints, routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
-// 路線卡片（底部彈出）：上方路線資訊與一排「點一下就記錄」，下方分頁：紀錄（日期、感受、心得）、影片、留言
-// photo：區域照片（長耐力路線在卡片上畫出全部的點）；initialTab：打開時停在哪個分頁（New~ 點 Spray Wall 的影片、留言進來；New~ 看路線跳到區域頁停在紀錄）
+// 路線卡片（全螢幕，使用者選的 3B）：最上面滿版照片（一般路線標出起步點、Spray Wall 畫圈圈、長耐力畫編號點），
+// 下面路線資訊與攀爬日＋一排「點一下就記錄」，再下面分頁：紀錄（感受、心得）、影片、留言
+// photo：長耐力路線的區域照片（畫出全部的點）；zonePhoto：一般路線的區域照片（標出這條的起步點；沒有就不放照片）；initialTab：打開時停在哪個分頁（New~ 點 Spray Wall 的影片、留言進來；New~ 看路線跳到區域頁停在紀錄）
 // pending：還沒讀到自己的紀錄時先顯示這個（讀到才顯示記錄按鈕，不然再點一次狀態會蓋掉原本的心得和日期）
 export type RouteTab = "log" | "video" | "comment";
 export default function RouteSheet({
   route,
   photo,
+  zonePhoto,
   zoneName,
   gymId,
   gymCommentsOn,
@@ -61,6 +65,7 @@ export default function RouteSheet({
 }: {
   route: Route | null;
   photo?: string | null;
+  zonePhoto?: { src: string; fallback?: string } | null;
   zoneName: string;
   gymId: string;
   gymCommentsOn: boolean;
@@ -71,14 +76,15 @@ export default function RouteSheet({
   initialTab?: RouteTab;
   pending?: ReactNode;
 }) {
+  const hero = route && !pending ? heroOf(route, photo ?? null, zonePhoto ?? null, spray) : null;
   return (
-    <Sheet open={!!route} onClose={onClose}>
+    <Sheet open={!!route} onClose={onClose} full bare={!!hero}>
       {route && pending}
       {route && !pending && (
         <RouteBody
           key={route.id}
           route={route}
-          photo={photo ?? null}
+          hero={hero}
           zoneName={zoneName}
           gymId={gymId}
           gymCommentsOn={gymCommentsOn}
@@ -96,6 +102,7 @@ export default function RouteSheet({
 // Spray Wall 路線額外的內容：公版照片（顯示這條路線的圈圈）、出題者、讚、修改／刪除
 export type SprayExtras = {
   photo: string | null;
+  routePhoto?: string | null; // 岩館路線自己的照片路徑（step44；列表讀到的在 route.photo_path，New~ 另外讀）
   author: string | null;
   likes: number;
   liked: boolean;
@@ -105,9 +112,23 @@ export type SprayExtras = {
   deleteLabel?: string; // 本人「刪除」、員工「下架」
 };
 
+// 最上面的照片：Spray Wall 畫圈圈；長耐力畫編號點；一般路線用區域照片標起步點
+type Hero = { src: string; fallback?: string; kind: "spray" | "seq" | "pin" };
+function heroOf(r: Route, photo: string | null, zonePhoto: { src: string; fallback?: string } | null, spray?: SprayExtras): Hero | null {
+  if (spray) {
+    const own = photoUrl(r.photo_path ?? spray.routePhoto ?? null);
+    if (own) return { src: own, kind: "spray" };
+    return spray.photo && r.holds?.length ? { src: spray.photo, kind: "spray" } : null;
+  }
+  if (seqTotal(r)) return photo && r.holds ? { src: photo, kind: "seq" } : null;
+  // Spray Wall 的路線（有名字）在我的紀錄打開：起步點標在公版照片上對不上，不放照片
+  if (r.name) return null;
+  return zonePhoto ? { ...zonePhoto, kind: "pin" } : null;
+}
+
 function RouteBody({
   route: r,
-  photo,
+  hero,
   zoneName,
   gymId,
   gymCommentsOn,
@@ -118,7 +139,7 @@ function RouteBody({
   initialTab,
 }: {
   route: Route;
-  photo: string | null;
+  hero: Hero | null;
   zoneName: string;
   gymId: string;
   gymCommentsOn: boolean;
@@ -133,7 +154,8 @@ function RouteBody({
   const router = useRouter();
   const toast = useToast();
   const [status, setStatus] = useState<Status | null>(ascent?.status ?? null);
-  const [date, setDate] = useState(ascent?.climbed_on ?? todayYmd());
+  // 還沒記錄：預設今天（下架的路線預設下架那天，資料庫不收晚於下架日的紀錄）
+  const [date, setDate] = useState(() => ascent?.climbed_on ?? (r.archived_at && ymd(r.archived_at) < todayYmd() ? ymd(r.archived_at) : todayYmd()));
   const [feel, setFeel] = useState<number | null>(ascent?.feel ?? null);
   const [gfeel, setGfeel] = useState<number | null>(ascent?.grade_feel ?? null);
   const [note, setNote] = useState(ascent?.private_note ?? "");
@@ -144,6 +166,8 @@ function RouteBody({
   const [hp, setHp] = useState<number | null>(ascent?.status === "project" ? (ascent?.highpoint ?? null) : null);
   // 打開卡片時的紀錄：判斷「上次嘗試中、這次爬完／爬得更高」用（這次打開後按錯又改回來不算）
   const [opened] = useState(() => ({ status: ascent?.status ?? null, date: ascent?.climbed_on ?? null, hp: ascent?.highpoint ?? null }));
+  // 這次打開後自己在攀爬日膠囊選過日期：之後嘗試中改完攀、爬得更高都照選的日期（不自動改成今天）
+  const dayPicked = useRef(false);
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [draft, setDraft] = useState("");
   const [tab, setTab] = useState<RouteTab | null>(initialTab ?? null);
@@ -219,7 +243,7 @@ function RouteBody({
     setHp(v);
     dropHp();
     // 爬得比上次高：日期改成今天（分數算在進步那天）；自己改過日期就照改的
-    const better = v > (opened.hp ?? 0) && date === opened.date;
+    const better = v > (opened.hp ?? 0) && !dayPicked.current;
     const day = better ? (todayYmd() > maxDate ? maxDate : todayYmd()) : date;
     const pts = rules ? ascentPoints(r.grade, r.style_tags, "project", rules, v, total) : 0;
     const run = () => {
@@ -243,9 +267,9 @@ function RouteBody({
     }
     dropHp();
     // 上次記「嘗試中」、這次爬完：日期改成今天（不然分數會記到第一次嘗試那天）
-    // 自己改過日期就照改的；已下架的路線不超過下架那天（資料庫會擋）
+    // 自己在攀爬日膠囊選過日期就照選的；已下架的路線不超過下架那天（資料庫會擋）
     const wasProject = opened.status === "project" && s !== "project";
-    const day = wasProject && date === opened.date ? (todayYmd() > maxDate ? maxDate : todayYmd()) : date;
+    const day = wasProject && !dayPicked.current ? (todayYmd() > maxDate ? maxDate : todayYmd()) : date;
     const before = status;
     setStatus(s);
     setDate(day);
@@ -269,6 +293,17 @@ function RouteBody({
     // 原岩夥伴：第一次記完攀、Flash（原本沒紀錄或嘗試中）就跳出來說一句；完攀、Flash 互換不算；岩友路線不算
     if (saved !== "failed" && s !== "project" && (before == null || before === "project") && r.kind !== "community" && session)
       void cheerSend({ userId: session.user.id, routeId: r.id, grade: r.grade, status: s, climbedOn: day || todayYmd(), queued: saved === "queued" });
+  };
+
+  // 攀爬日膠囊：還沒記錄只是先選好（按 Flash／完攀／嘗試中時用）；記過的馬上存，存不進去改回原本的日期
+  const pickDay = async (d: string) => {
+    dayPicked.current = true;
+    const prev = date;
+    setDate(d);
+    if (!status || !session) return;
+    dropHp();
+    const saved = await persist(current(status, d), `攀爬日改成 ${md(d)}`);
+    if (saved === "failed") setDate(prev);
   };
 
   const save = async () => {
@@ -369,15 +404,14 @@ function RouteBody({
 
   return (
     <>
-      {spray?.photo && r.holds && (
-        <WallPhoto src={spray.photo} alt={`${r.name ?? "路線"}的圈圈`}>
-          <HoldMarks holds={r.holds} />
-        </WallPhoto>
-      )}
-      {total > 0 && photo && r.holds && (
-        <WallPhoto src={photo} alt={`${r.code} 的 ${total} 個點`}>
-          <NumberMarks holds={r.holds} reached={status === "project" ? hp : null} />
-        </WallPhoto>
+      {hero && (
+        <div className="-mx-5 mb-3.5 bg-ink pt-[env(safe-area-inset-top,0px)]" data-testid="route-hero">
+          <WallPhoto edge src={hero.src} fallback={hero.fallback} alt={hero.kind === "spray" ? `${r.name ?? "路線"}的圈圈` : hero.kind === "seq" ? `${r.code} 的 ${total} 個點` : `${zoneName} 照片，標出 ${r.code} 的起步點`}>
+            {hero.kind === "spray" && !!r.holds?.length && <HoldMarks holds={r.holds} />}
+            {hero.kind === "seq" && r.holds && <NumberMarks holds={r.holds} reached={status === "project" ? hp : null} />}
+            {hero.kind === "pin" && <Pin x={r.pin_x} y={r.pin_y} color={r.hold_color} grade={r.grade} status={status} focus label={`${r.code} 的起步點`} />}
+          </WallPhoto>
+        </div>
       )}
       <SheetTitle>
         {total > 0 ? (
@@ -437,6 +471,7 @@ function RouteBody({
       )}
 
       <div className="mt-3">
+        {session && <ClimbDay value={date || todayYmd()} min={minDate} max={maxDate} disabled={busy} onChange={(d) => void pickDay(d)} />}
         <StatusPicker compact value={session ? status : null} onChange={(s) => void quick(s)} />
         {session && total > 0 && status === "project" && (
           <HighpointPicker
@@ -473,7 +508,7 @@ function RouteBody({
             <div className="flex items-center justify-between text-note">
               <span className="text-muted">
                 已記錄 <b className="text-ink">{STATUS_LABEL[status]}</b>
-                {total > 0 && status === "project" && hp ? `（${hp}／${total} 點）` : ""}・{md(date || todayYmd())}
+                {total > 0 && status === "project" && hp ? `（${hp}／${total} 點）` : ""}
               </span>
               <button onClick={() => setDetails(!details)} className="px-1 py-1 text-note font-bold text-accent">
                 {details ? "收起" : "＋ 加上心得與感受"}
@@ -481,8 +516,6 @@ function RouteBody({
             </div>
             {details && (
               <>
-                <Label htmlFor="ldate">日期</Label>
-                <TextField id="ldate" type="date" value={date} min={minDate} max={maxDate} onChange={(e) => setDate(e.target.value)} />
                 {status !== "project" && (
                   <>
                     <Label>爬起來的感覺</Label>

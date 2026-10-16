@@ -49,6 +49,7 @@ export type Route = {
   description?: string | null;
   holds?: Hold[] | null;
   created_by?: string | null;
+  photo_path?: string | null; // Spray Wall 岩館路線自己的照片（step44；員工上傳，沒有就用公版照片）
 };
 // Spray Wall 圈圈：x、y 是照片上的百分比；t = s 起攀／h 路線點／t 完攀；r 大小 1–3
 export type Hold = { x: number; y: number; t: "s" | "h" | "t"; r?: 1 | 2 | 3 };
@@ -124,6 +125,11 @@ export const photoUrl = (path: string | null) =>
 export const seqPhotoUrl = (r: Pick<Route, "archived_at">, path: string | null) => {
   const uploaded = Number(path?.match(/-(\d{13})\.jpg$/i)?.[1] ?? 0);
   return r.archived_at && uploaded > Date.parse(r.archived_at) ? null : photoUrl(path);
+};
+// 路線卡片最上面的區域照片（標起步點）：區域頁以外用縮圖（省流量），縮圖還沒做好用原圖；下架後換了照片就不放
+export const heroPhoto = (r: Pick<Route, "archived_at">, path: string | null): { src: string; fallback?: string } | null => {
+  const full = seqPhotoUrl(r, path);
+  return full && path ? { src: thumbUrl(path) ?? full, fallback: full } : null;
 };
 // 小縮圖（約 720 寬、幾十 KB）：跟原圖放在一起，檔名多 .thumb；舊照片還沒有縮圖時畫面會自動改用原圖
 export const THUMB_WIDTH = 720;
@@ -1066,14 +1072,17 @@ export function pickFeed<T extends { id: string }>(feed: Feed<T>, seen: Readonly
   return [...shuffle(feed.today), ...feed.older].slice(0, n);
 }
 // New~ 打開 Spray Wall 路線卡片要的：出題者、按讚的人
-export async function getSprayExtras(route: Pick<Route, "id" | "created_by">): Promise<{ author: string | null; likers: string[] }> {
-  const [author, likes] = await Promise.all([
+// photo_path：岩館路線自己的照片（資料庫還沒套用 step44 時讀不到，當作沒有）
+export async function getSprayExtras(route: Pick<Route, "id" | "created_by" | "kind">): Promise<{ author: string | null; likers: string[]; photo_path: string | null }> {
+  const [author, likes, photo] = await Promise.all([
     route.created_by ? supabase().from("profiles").select("nickname").eq("id", route.created_by).maybeSingle() : null,
     supabase().from("route_likes").select("user_id").eq("route_id", route.id),
+    route.kind === "gym" ? supabase().from("routes").select("photo_path").eq("id", route.id).maybeSingle() : null,
   ]);
   return {
     author: ((author?.data ?? null) as { nickname: string | null } | null)?.nickname ?? null,
     likers: ((must(likes) as { user_id: string }[] | null) ?? []).map((l) => l.user_id),
+    photo_path: ((photo?.data ?? null) as { photo_path: string | null } | null)?.photo_path ?? null,
   };
 }
 
@@ -1233,12 +1242,41 @@ export async function getSprayList(zoneId: string, kind: SprayKind, grade: numbe
   ) as Omit<SprayRoute, "zone_id" | "hold_color" | "setter_note" | "pin_x" | "pin_y" | "archived_at">[];
   return rows.map((r) => ({ ...r, zone_id: zoneId, hold_color: "白", setter_note: null, pin_x: 0, pin_y: 0, archived_at: null }));
 }
-export type SprayInput = { name: string; grade: number; description: string; holds: Hold[] };
+// photo：岩館路線新選的照片（上傳後換掉原本的）；holds 可以是空的（有照片的岩館路線可以不畫圈圈）
+export type SprayInput = { name: string; grade: number; description: string; holds: Hold[]; photo?: Blob | null };
 // 新增或修改 Spray Wall 路線（起步點位置由資料庫依第一個起攀圈設定）
-export async function saveSprayRoute(zoneId: string, kind: SprayKind, input: SprayInput, id?: string) {
-  const row = { name: input.name.trim(), grade: input.grade, description: input.description.trim() || null, holds: input.holds };
-  if (id) must(await supabase().from("routes").update(row).eq("id", id));
-  else must(await supabase().from("routes").insert({ zone_id: zoneId, kind, hold_color: "白", pin_x: 0, pin_y: 0, ...row }));
+// 岩館路線照片：先上傳（{館}/routes/，一年快取＋縮圖），存好路線再刪掉換下來的舊照片；路線沒存進去就刪掉剛上傳的
+export async function saveSprayRoute(zone: Pick<Zone, "id" | "gym_id" | "code">, kind: SprayKind, input: SprayInput, old?: Pick<Route, "id" | "photo_path"> | null) {
+  const row: Record<string, unknown> = { name: input.name.trim(), grade: input.grade, description: input.description.trim() || null, holds: input.holds.length ? input.holds : null };
+  let uploaded: string | null = null;
+  if (input.photo && kind === "gym") {
+    const { blob } = await shrinkImage(input.photo);
+    uploaded = `${zone.gym_id}/routes/${zone.code}-${Date.now()}.jpg`;
+    const up = await supabase().storage.from("zone-photos").upload(uploaded, blob, { contentType: "image/jpeg", cacheControl: "31536000" });
+    if (up.error) throw new Error(up.error.message.includes("row-level") ? "沒有權限上傳照片" : "照片上傳失敗，請再試一次");
+    await uploadThumb(uploaded, blob).catch(() => undefined); // 縮圖失敗不影響，畫面會改用原圖
+    row.photo_path = uploaded;
+  }
+  try {
+    if (old) must(await supabase().from("routes").update(row).eq("id", old.id));
+    else must(await supabase().from("routes").insert({ zone_id: zone.id, kind, hold_color: "白", pin_x: 0, pin_y: 0, ...row }));
+  } catch (e) {
+    if (uploaded) await removeRoutePhoto(uploaded);
+    throw e;
+  }
+  if (uploaded && old?.photo_path) await removeRoutePhoto(old.photo_path);
+}
+async function removeRoutePhoto(path: string) {
+  await supabase().storage.from("zone-photos").remove([path, thumbPath(path)]).catch(() => undefined);
+}
+// 資料庫有沒有套用 step44（routes.photo_path）：沒有時岩館路線照舊在公版照片上畫圈圈；讀不到（沒網路）當作沒有
+let routePhotos: Promise<boolean> | null = null;
+export function hasRoutePhotos(): Promise<boolean> {
+  routePhotos ??= Promise.resolve(supabase().from("routes").select("photo_path").limit(1)).then((r) => {
+    if (r.error) routePhotos = null; // 下次再問（店長中途套用 step44、或剛剛沒網路）
+    return !r.error;
+  });
+  return routePhotos;
 }
 export async function likeRoute(id: string) {
   must(await supabase().from("route_likes").insert({ route_id: id }));

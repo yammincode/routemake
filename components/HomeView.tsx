@@ -17,6 +17,7 @@ import {
   getNewRoutes,
   getZoneProgress,
   photoUrl,
+  heroPhoto,
   seqTotal,
   thumbUrl,
   type Ascent,
@@ -301,6 +302,7 @@ export default function HomeView({ gymId }: { gymId: string }) {
         route={open}
         zoneName={open?.zone_name ?? ""}
         photo={open && seqTotal(open) ? photoUrl(zones.find((z) => z.zone_id === open.zone_id)?.photo_path ?? null) : null}
+        zonePhoto={open ? heroPhoto(open, zones.find((z) => z.zone_id === open.zone_id)?.photo_path ?? null) : null}
         gymId={gymId}
         gymCommentsOn={gym?.comments_enabled ?? true}
         ascent={open ? (ascents[open.id] ?? null) : null}

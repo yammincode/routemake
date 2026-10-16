@@ -8,7 +8,7 @@ import SprayEditor from "@/components/SprayEditor";
 import { Button } from "@/components/ui/Button";
 import { Empty, PageTitle } from "@/components/ui/Card";
 import { Chip, ChipRow, GradeChip } from "@/components/ui/Chip";
-import { HoldLegend, RouteThumb, SprayRow } from "@/components/ui/Spray";
+import { HoldLegend, PhotoThumb, RouteThumb, SprayRow } from "@/components/ui/Spray";
 import { ScrollList } from "@/components/ui/ScrollList";
 import { Tabs } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
@@ -220,7 +220,9 @@ export default function SprayView({ wall }: { wall: SprayWall }) {
               likes={r.likes}
               done={["flash", "send"].includes(mine[r.id]?.status ?? "")}
               thumb={
-                photo && r.holds?.length ? (
+                r.photo_path ? (
+                  <PhotoThumb src={thumbUrl(r.photo_path) ?? ""} fallback={photoUrl(r.photo_path) ?? undefined} />
+                ) : photo && r.holds?.length ? (
                   <RouteThumb src={thumb ?? photo} fallback={photo} holds={r.holds} ratio={zone.photo_width && zone.photo_height ? zone.photo_height / zone.photo_width : 0.75} />
                 ) : undefined
               }

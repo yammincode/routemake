@@ -28,6 +28,7 @@ import {
   photoUrl,
   pickFeed,
   seqPhotoUrl,
+  heroPhoto,
   seqTotal,
   unlikeComment,
   unlikeRoute,
@@ -56,7 +57,7 @@ import { loginExpired } from "@/lib/supabase";
 type Kind = "video" | "comment";
 type Picked<T> = { feed: Feed<T>; shown: T[]; seen: Set<string> };
 // Spray Wall 的出題者和讚（讀不到時 failed）
-type SprayInfo = { routeId: string; author: string | null; likers: string[] } | { routeId: string; failed: true };
+type SprayInfo = { routeId: string; author: string | null; likers: string[]; photo_path: string | null } | { routeId: string; failed: true };
 
 // 「中和館・抱石 A 區・A-03」（Spray Wall 的路線有名字就寫名字）
 const placeText = (p: FeedPlace) => `${p.gym.name}・${p.zone.name}・${p.route.name || p.route.code}`;
@@ -451,6 +452,7 @@ export default function NewView() {
       <RouteSheet
         route={o?.route ?? null}
         photo={o && seqTotal(o.route) ? seqPhotoUrl(o.route, o.zone.photo_path) : null}
+        zonePhoto={o ? heroPhoto(o.route, o.zone.photo_path) : null}
         zoneName={o ? `${o.gym.name} ${o.zone.name}` : ""}
         gymId={o?.gym.id ?? ""}
         gymCommentsOn={o?.gym.comments_enabled ?? true}
@@ -463,6 +465,7 @@ export default function NewView() {
           o?.zone.kind === "spray"
             ? {
                 photo: photoUrl(o.zone.photo_path),
+                routePhoto: sp && !("failed" in sp) ? sp.photo_path : null,
                 author: sp && !("failed" in sp) ? sp.author : null,
                 likes: sp && !("failed" in sp) ? sp.likers.length : 0,
                 liked: !!uid && !!sp && !("failed" in sp) && sp.likers.includes(uid),

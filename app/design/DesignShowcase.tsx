@@ -5,6 +5,8 @@ import Header from "@/components/Header";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { BackLink, Empty, PageTitle, SectionTitle, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow, GradeChip } from "@/components/ui/Chip";
+import { ClimbDay } from "@/components/ui/ClimbDay";
+import { todayYmd } from "@/lib/date";
 import { HowTo } from "@/components/ui/HowTo";
 import { SortList } from "@/components/ui/SortList";
 import { ScrollList } from "@/components/ui/ScrollList";
@@ -14,7 +16,7 @@ import { PickList } from "@/components/ui/PickList";
 import { GrantGroup, GrantList, GrantRow } from "@/components/ui/Grant";
 import { HighpointPicker, NumberMarks } from "@/components/ui/Endurance";
 import { Tabs } from "@/components/ui/Tabs";
-import { HoldLegend, HoldMarks, HoldTools, RouteThumb, SprayRow } from "@/components/ui/Spray";
+import { HoldLegend, HoldMarks, HoldTools, PhotoThumb, RouteThumb, SprayRow } from "@/components/ui/Spray";
 import { CharacterTop, MascotAvatar, MascotBubble, MascotBuddyView, MascotColors, MascotPicker, MascotToastView } from "@/components/ui/Mascot";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { LogList, LogRow } from "@/components/ui/Log";
@@ -155,6 +157,7 @@ export default function DesignShowcase() {
   }, [theme]);
 
   const [grade, setGrade] = useState<number | null>(null);
+  const [climbDay, setClimbDay] = useState(todayYmd());
   const [color, setColor] = useState<HoldColor | null>(null);
   const [setter, setSetter] = useState(false);
   const [temp, setTemp] = useState<{ x: number; y: number } | null>(null);
@@ -684,6 +687,8 @@ export default function DesignShowcase() {
       </Block>
 
       <Block title="路線卡片：點一下就記錄＋分頁">
+        <p className="mt-0 mb-1.5 text-meta text-muted">攀爬日膠囊（ClimbDay）：預設今天，點開今天／昨天／前天／選日期</p>
+        <ClimbDay value={climbDay} min="2026-01-01" max={todayYmd()} onChange={setClimbDay} />
         <StatusPicker compact value={status} onChange={setStatus} />
         <Tabs
           tabs={[
@@ -778,6 +783,7 @@ export default function DesignShowcase() {
             thumb={<RouteThumb src={wall.uri} holds={[{ x: 20, y: 82, t: "s" }, { x: 32, y: 60, t: "h" }, { x: 46, y: 42, t: "h" }, { x: 64, y: 16, t: "t" }]} />}
             onClick={() => toast("打開路線")}
           />
+          <SprayRow grade={5} name="教練的岩館路線（自己的照片）" meta="明德教練 出的・今天" sends={3} likes={2} thumb={<PhotoThumb src={wall.uri} />} onClick={() => toast("打開路線")} />
           <SprayRow grade={1} name="晚餐前的熱身" meta="阿明 出的・今天" sends={0} likes={1} onClick={() => toast("打開路線")} />
           {[3, 5, 2, 6].map((g, i) => (
             <SprayRow key={g} grade={g} name={`框內滑動 ${i + 1}`} meta="路線多時整頁不會拉長" sends={i} likes={i} onClick={() => toast("打開路線")} />
