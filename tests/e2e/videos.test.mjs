@@ -696,6 +696,71 @@ test("影片剪輯：太長的自動打開剪輯、只上傳選的那段，可�
   void r1;
 });
 
+test("高畫質 60 fps：原影片 60 fps 才有開關、預設關、超過 20 秒要先剪短；開了重錄後上傳；30 fps 的影片沒有開關", async () => {
+  const mock = createMock();
+  mock.addUser("climber88", "password1", { nickname: "小安" });
+  const zone = mock.db.zones[0];
+  mock.addRoute(zone, 4, "藍");
+  const original = await realClip(5);
+  // fps：假裝原影片幾 fps（null＝真的去量，這支是 30 fps）；hiMax：高畫質長度上限（正式 20 秒）
+  const open = async (fps, hiMax) => {
+    const C = await phone(browser, mock);
+    await C.ctx.addInitScript(([fps, hiMax]) => {
+      window.__RM_VIDEO_TYPES = ["video/webm;codecs=vp8,opus"];
+      window.__RM_VIDEO_MIN = 100_000;
+      if (fps) window.__RM_VIDEO_FPS = fps;
+      window.__RM_VIDEO_HI_MAX = hiMax;
+    }, [fps, hiMax]);
+    await login(C.page, "climber88", "password1", `/zone?id=${zone.id}`);
+    await C.page.waitForTimeout(600);
+    await C.page.locator("main ul li button", { hasText: "A1-01" }).click();
+    await C.page.waitForTimeout(500);
+    const dialog = C.page.locator("[role=dialog]");
+    await dialog.locator('[role=tab]:has-text("影片")').click().catch(() => {});
+    await dialog.locator("input[type=file]").setInputFiles({ name: "climb.webm", mimeType: "video/webm", buffer: original });
+    await C.page.waitForTimeout(1500); // 量 fps 要播一下
+    return { ...C, dialog, hi: dialog.locator('button[role=switch][aria-label="高畫質 60 fps"]') };
+  };
+
+  // 1. 30 fps 的影片：沒有開關
+  const A = await open(null, 20);
+  assert.equal(await A.hi.count(), 0, "30 fps 的影片沒有高畫質開關");
+  assert.deepEqual(A.errors, []);
+  await A.ctx.close();
+
+  // 2. 60 fps、影片 5 秒、上限 3 秒：開關點不了，說要剪短；剪到 3 秒就能開
+  const B = await open(60, 3);
+  assert.equal(await B.hi.getAttribute("aria-checked"), "false", "預設關");
+  assert.ok(await B.hi.isDisabled(), "超過上限點不了");
+  assert.ok((await B.dialog.textContent()).includes("影片 5 秒，剪到 3 秒內才能開"));
+  await B.dialog.locator('button:has-text("剪輯長度")').click();
+  for (let i = 0; i < 4; i++) await B.dialog.locator('button[aria-label="結束往前 0.5 秒"]').click();
+  assert.ok(!(await B.hi.isDisabled()), "剪到 3 秒可以開");
+  await B.hi.click();
+  assert.equal(await B.hi.getAttribute("aria-checked"), "true");
+  // 再拉長到超過上限：自動變成關
+  await B.dialog.locator('button:has-text("不剪了")').click();
+  assert.equal(await B.hi.getAttribute("aria-checked"), "false", "超過上限就不用高畫質");
+  await B.ctx.close();
+
+  // 3. 60 fps、上限 10 秒：直接開、不剪 → 重錄（寫「壓縮中」）後上傳，長度是整支
+  const C = await open(60, 10);
+  await C.hi.click();
+  await C.dialog.locator("input[type=checkbox]").check();
+  await C.dialog.locator('button:text-is("分享影片")').click();
+  await C.page.waitForFunction(() => /壓縮中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
+  assert.ok(await C.hi.isDisabled(), "處理中不能切");
+  await C.page.waitForFunction(() => document.body.textContent.includes("已分享影片"), null, { timeout: 30000 });
+  assert.equal(mock.db.videos.length, 1);
+  const v = mock.db.videos[0];
+  assert.ok(v.duration_s >= 4 && v.duration_s <= 6, `整支的長度（${v.duration_s}）`);
+  const d = await clipSeconds(uploaded(mock.db.vfiles[v.path].buf));
+  assert.ok(d > 4 && d < 6.5, `上傳重錄過的整支（${d} 秒）`);
+  assert.ok(mock.db.tfiles[v.thumb_path ?? ""], "有縮圖");
+  assert.deepEqual(C.errors, []);
+  await C.ctx.close();
+});
+
 // 做一支小的真影片（約 1.5 秒、320×240，不用壓縮）：分享時從原檔擷取縮圖
 async function smallClip() {
   const maker = await browser.newPage();

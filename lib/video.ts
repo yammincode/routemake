@@ -1,4 +1,6 @@
-// 影片上傳前在手機上壓縮：用瀏覽器邊播放邊錄成 720p（約 2 Mbps），60 秒大約 15 MB
+// 影片上傳前在手機上壓縮：用瀏覽器邊播放邊錄成 720p、每秒 30 格（3 Mbps），60 秒大約 22 MB
+// 高畫質 60 fps（分享時的開關，原影片要是 60 fps、20 秒以內）：每秒 60 格（4.5 Mbps），20 秒大約 11 MB；檔案大約大一倍，播放流量也是
+// 每格照原影片的時間平均取（60 fps 的影片錄成 30 fps 時隔一格取一格），畫面不會一頓一頓
 // 只在手機能錄 H.264 MP4 時壓縮（iPhone Safari、新版 Android Chrome），其他情況直接傳原檔，確保大家都看得到
 // 壓縮花的時間大約等於影片長度；過程中畫面要開著
 // 剪輯也用同一套：只錄開始到結束那一段（花的時間＝剪下來的長度）；靜音就不錄聲音
@@ -7,11 +9,16 @@
 const H264 = ['video/mp4;codecs="avc1.640028,mp4a.40.2"', 'video/mp4;codecs="avc1.42E01F,mp4a.40.2"', "video/mp4;codecs=avc1", 'video/mp4;codecs="avc1,mp4a"'];
 export const COMPRESS_MIN_BYTES = 8 * 1024 * 1024; // 小於 8 MB 不用壓
 const LONG_SIDE = 1280; // 720p
-const VIDEO_BPS = 2_000_000;
+const VIDEO_BPS = 3_000_000;
+const HI_BPS = 4_500_000; // 高畫質 60 fps
 const AUDIO_BPS = 96_000;
+export const HI_MAX_SECONDS = 20; // 高畫質 60 fps 最長幾秒（省流量）
 
-type Win = Window & { __RM_VIDEO_TYPES?: string[]; __RM_VIDEO_MIN?: number }; // 測試用：允許其他格式、調低門檻
-export const compressMinBytes = () => (typeof window !== "undefined" && (window as Win).__RM_VIDEO_MIN) || COMPRESS_MIN_BYTES;
+// 測試用：允許其他格式、調低門檻、假裝原影片幾 fps、改高畫質的長度上限
+type Win = Window & { __RM_VIDEO_TYPES?: string[]; __RM_VIDEO_MIN?: number; __RM_VIDEO_FPS?: number; __RM_VIDEO_HI_MAX?: number };
+const win = () => (typeof window !== "undefined" ? (window as Win) : undefined);
+export const compressMinBytes = () => win()?.__RM_VIDEO_MIN || COMPRESS_MIN_BYTES;
+export const hiMaxSeconds = () => win()?.__RM_VIDEO_HI_MAX || HI_MAX_SECONDS;
 
 // 這支手機能用哪種格式壓縮（null＝不能壓縮，直接傳原檔）
 export function compressType(): string | null {
@@ -95,6 +102,50 @@ export async function captureThumb(file: Blob, at?: number): Promise<Blob | null
   }
 }
 
+// 原影片每秒幾格：靜音播一下，看連續幾格的時間差（取中間值，手機偶爾漏一格不影響）；量不到回傳 null
+// 手機播放跟不上 60 格的（量出來 30）也就錄不了 60 fps，所以不給開高畫質剛好
+export async function sourceFps(file: Blob): Promise<number | null> {
+  const fake = win()?.__RM_VIDEO_FPS;
+  if (fake) return fake;
+  if (typeof document === "undefined") return null;
+  const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.playsInline = true;
+  video.muted = true;
+  video.preload = "auto";
+  video.src = url;
+  try {
+    if (!("requestVideoFrameCallback" in video)) return null;
+    if (!(video.readyState >= 1 || (await once(video, "loadedmetadata", 8000)))) return null;
+    const times: number[] = [];
+    const got = new Promise<void>((res) => {
+      const t = setTimeout(res, 3000);
+      const cb = (_now: number, m: VideoFrameCallbackMetadata) => {
+        times.push(m.mediaTime);
+        if (times.length >= 24) return clearTimeout(t), res();
+        video.requestVideoFrameCallback(cb);
+      };
+      video.requestVideoFrameCallback(cb);
+    });
+    await video.play(); // 靜音允許自動播放
+    await got;
+    const gaps = times
+      .slice(1)
+      .map((t, i) => t - times[i])
+      .filter((d) => d > 0.001)
+      .sort((a, b) => a - b);
+    if (gaps.length < 8) return null;
+    return Math.round(1 / gaps[Math.floor(gaps.length / 2)]);
+  } catch {
+    return null;
+  } finally {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    URL.revokeObjectURL(url);
+  }
+}
+
 // 影片長度：有些影片（例如其他 App 錄的 WebM）一開始讀到的長度是無限大，跳到最後再讀一次
 async function realDuration(video: HTMLVideoElement): Promise<number | null> {
   let d = video.duration;
@@ -110,8 +161,8 @@ async function realDuration(video: HTMLVideoElement): Promise<number | null> {
   return Number.isFinite(d) && d > 0 ? d : null;
 }
 
-// 剪輯：start、end 是秒；mute 不錄聲音
-export type VideoEdit = { start: number; end: number; mute: boolean };
+// 剪輯：start、end 是秒；mute 不錄聲音；fps60 錄成高畫質 60 fps
+export type VideoEdit = { start: number; end: number; mute: boolean; fps60?: boolean };
 // 同一次播放順便多錄一份（加上 overlay）
 export type ExtraTake = { overlay: (g: CanvasRenderingContext2D, w: number, h: number) => void; onDone: (file: File | null, thumb: Blob | null) => void };
 
@@ -185,7 +236,9 @@ export async function compressVideo(
     g.drawImage(video, 0, 0, canvas.width, canvas.height);
     overlay?.(g, canvas.width, canvas.height);
 
-    stream = canvas.captureStream(30);
+    const fps = edit?.fps60 ? 60 : 30;
+    const bps = edit?.fps60 ? HI_BPS : VIDEO_BPS;
+    stream = canvas.captureStream(fps);
     // 聲音：影片的聲音只送進錄影，不從喇叭播出；靜音就不錄
     if (!edit?.mute) {
       const src = ac.createMediaElementSource(video);
@@ -210,10 +263,10 @@ export async function compressVideo(
       c2.width = canvas.width;
       c2.height = canvas.height;
       draw2();
-      stream2 = c2.captureStream(30);
+      stream2 = c2.captureStream(fps);
       stream.getAudioTracks().forEach((t) => stream2!.addTrack(t.clone()));
       try {
-        rec2 = new MediaRecorder(stream2, { mimeType: type, videoBitsPerSecond: VIDEO_BPS, ...(edit?.mute ? {} : { audioBitsPerSecond: AUDIO_BPS }) });
+        rec2 = new MediaRecorder(stream2, { mimeType: type, videoBitsPerSecond: bps, ...(edit?.mute ? {} : { audioBitsPerSecond: AUDIO_BPS }) });
         rec2.ondataavailable = (e) => e.data.size && chunks2.push(e.data);
         stopped2 = new Promise<void>((res) => {
           rec2!.onstop = () => res();
@@ -225,7 +278,7 @@ export async function compressVideo(
     }
 
     const chunks: Blob[] = [];
-    const r1 = (rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: VIDEO_BPS, ...(edit?.mute ? {} : { audioBitsPerSecond: AUDIO_BPS }) }));
+    const r1 = (rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: bps, ...(edit?.mute ? {} : { audioBitsPerSecond: AUDIO_BPS }) }));
     r1.ondataavailable = (e) => e.data.size && chunks.push(e.data);
     const stopped = new Promise<void>((res) => (r1.onstop = () => res()));
 
@@ -235,11 +288,17 @@ export async function compressVideo(
     const atEnd = new Promise<void>((res) => (reached = res));
     const shotAt = thumbAt(from, to);
     let shot = !onThumb;
-    const draw = () => {
+    // 照原影片的時間平均取格：比上一格晚不到 1/fps 秒就不畫（畫布沒變就不會多錄一格）
+    let last = -Infinity;
+    const draw = (_now?: number, m?: VideoFrameCallbackMetadata) => {
       if (done) return;
-      g.drawImage(video, 0, 0, canvas.width, canvas.height);
-      overlay?.(g, canvas.width, canvas.height);
-      if (rec2) draw2();
+      const at = m?.mediaTime ?? video.currentTime;
+      if (at - last >= 1 / fps - 0.004) {
+        last = at;
+        g.drawImage(video, 0, 0, canvas.width, canvas.height);
+        overlay?.(g, canvas.width, canvas.height);
+        if (rec2) draw2();
+      }
       if (!shot && video.currentTime >= shotAt - 0.02) {
         shot = true;
         void encodeThumb(canvas, canvas.width, canvas.height).then((b) => b && onThumb?.(b));
@@ -248,7 +307,7 @@ export async function compressVideo(
       onProgress(Math.min(1, (video.currentTime - from) / (to - from)));
       if (video.currentTime >= to - 0.02) return reached();
       if ("requestVideoFrameCallback" in video) video.requestVideoFrameCallback(draw);
-      else requestAnimationFrame(draw);
+      else requestAnimationFrame(() => draw());
     };
     video.addEventListener("ended", () => reached(), { once: true });
     signal?.addEventListener("abort", () => reached(), { once: true });

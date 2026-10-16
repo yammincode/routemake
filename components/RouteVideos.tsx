@@ -12,7 +12,7 @@ import { UserAvatar } from "@/components/ui/Mascot";
 import { useToast } from "@/components/ui/Toast";
 import { ShareOffer, SharePreview } from "@/components/ui/Share";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
-import { captureThumb, compressMinBytes, compressType, compressVideo, type VideoEdit } from "@/lib/video";
+import { captureThumb, compressMinBytes, compressType, compressVideo, hiMaxSeconds, sourceFps, type VideoEdit } from "@/lib/video";
 import { checkPickedVideo, deleteVideo, seqTotal, durText, getVideos, likeVideo, unlikeVideo, uploadVideo, videoDaySupported, videoLimit, videoMaxSeconds, videoThumbUrl, videoUrl, type DbError, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { videoWhen } from "@/lib/date";
@@ -97,6 +97,10 @@ export default function RouteVideos({
   const [dur, setDur] = useState<number | null>(null);
   const [trim, setTrim] = useState<[number, number] | null>(null);
   const [mute, setMute] = useState(false);
+  // 高畫質 60 fps：原影片是 60 fps（srcFps 量到 45 以上）、能重錄才出現；要分享的那段 20 秒以內才能開；預設關
+  const [srcFps, setSrcFps] = useState<number | null>(null);
+  const [hi, setHi] = useState(false);
+  const picked = useRef<File | null>(null); // 量 fps 量到一半換了影片：舊的結果不要用
   const [preview, setPreview] = useState<string | null>(null);
   const [playing, setPlaying] = useState<number | null>(null);
   const liking = useRef(new Set<string>()); // 正在送出讚的影片
@@ -204,6 +208,10 @@ export default function RouteVideos({
       setDur(d);
       setTrim(d != null && d > max + 0.5 ? [0, max] : null); // 太長：先選好前 max 秒，再自己拉
       setMute(false);
+      setHi(false);
+      setSrcFps(null);
+      picked.current = f;
+      if (compressType() && d != null) void sourceFps(f).then((fps) => void (picked.current === f && setSrcFps(fps)));
       setPreview(compressType() && d != null ? URL.createObjectURL(f) : null);
       if (session) setHeight(savedHeight(session.user.id)); // 帶入這個帳號上次選的身高
     } catch (e) {
@@ -220,12 +228,20 @@ export default function RouteVideos({
     setDur(null);
     setTrim(null);
     setMute(false);
+    setHi(false);
+    setSrcFps(null);
+    picked.current = null;
     setPreview(null);
   };
 
   // 有剪（選的不是整支）或靜音才要剪輯
   const trimmed = !!trim && dur != null && (trim[0] > 0.05 || trim[1] < dur - 0.1);
-  const edit: VideoEdit | undefined = editable && (trimmed || mute) ? { start: trimmed ? trim![0] : 0, end: trimmed ? trim![1] : dur!, mute } : undefined;
+  const seg = dur == null ? null : trim ? trim[1] - trim[0] : dur; // 要分享的那段幾秒
+  const hiShown = editable && (srcFps ?? 0) >= 45;
+  const hiOk = seg != null && Math.round(seg) <= hiMaxSeconds(); // 跟畫面上寫的秒數一致
+  const useHi = hiShown && hiOk && hi;
+  const edit: VideoEdit | undefined =
+    editable && (trimmed || mute || useHi) ? { start: trimmed ? trim![0] : 0, end: trimmed ? trim![1] : dur!, mute, ...(useHi ? { fps60: true } : {}) } : undefined;
   const upload = async () => {
     if (!session || !file || !consent) return;
     setBusy(true);
@@ -237,13 +253,14 @@ export default function RouteVideos({
       const extra = igOk && igPrep && !!compressType() && sticker ? { overlay: sticker, onDone: (f: File | null, t: Blob | null) => void (took.v = f ? { file: f, thumb: t } : null) } : undefined;
       const willSqueeze = !!edit || !!extra || (file.size >= compressMinBytes() && !!compressType());
       if (willSqueeze) setSqueeze(0);
-      setEditing(!!edit);
+      setEditing(trimmed || mute); // 只開高畫質寫「壓縮中」
       setPrepping(!!extra);
       // 縮圖（列表只放縮圖、按了才載入影片）：壓縮時順便擷取；沒壓縮或沒擷取到就從要上傳的檔案擷取；失敗照樣分享
       let thumb: Blob | null = null;
       const small = willSqueeze ? await compressVideo(file, setSqueeze, edit, (b) => (thumb = b), undefined, undefined, extra) : null;
       setSqueeze(null);
-      if (edit && !small) throw new Error(trimmed ? "剪輯沒有成功，請再試一次，或先在手機相簿剪短再分享" : "靜音沒有成功，請再試一次");
+      if (edit && !small)
+        throw new Error(trimmed ? "剪輯沒有成功，請再試一次，或先在手機相簿剪短再分享" : mute ? "靜音沒有成功，請再試一次" : "高畫質 60 fps 沒有成功，請關掉高畫質再試一次");
       thumb ??= await captureThumb(small ?? file).catch(() => null);
       await uploadVideo(
         session.user.id,
@@ -432,6 +449,26 @@ export default function RouteVideos({
                     </Button>
                   )}
                   <Toggle checked={mute} onChange={setMute} label="靜音" hint="不放影片的聲音（例如館內音樂、旁邊的人聊天）" disabled={busy} />
+                  {hiShown && (
+                    <Toggle
+                      checked={useHi}
+                      onChange={setHi}
+                      label="高畫質 60 fps"
+                      hint={
+                        hiOk ? (
+                          "動態、跳躍動作看得更順；檔案大約大一倍"
+                        ) : (
+                          <>
+                            動態、跳躍動作看得更順；檔案大約大一倍。
+                            <b className="text-warn">
+                              影片 {durText(seg!)}，剪到 {hiMaxSeconds()} 秒內才能開
+                            </b>
+                          </>
+                        )
+                      }
+                      disabled={busy || !hiOk}
+                    />
+                  )}
                 </>
               )}
               <Label>你爬起來覺得？（選填，最多 {FEEL_TAG_MAX} 個）</Label>
