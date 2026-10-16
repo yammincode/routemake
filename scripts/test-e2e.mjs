@@ -13,8 +13,8 @@ import { setTimeout as wait } from "node:timers/promises";
 const PORT = process.env.E2E_PORT ?? "3100";
 const BASE = `http://localhost:${PORT}`;
 const DIR = "tests/e2e";
-// 單獨跑：videos（真的錄影片、壓縮，跟影片一樣久）、speed（有計時）、offline-sync（要等登入換新、送出失敗重試；電腦忙時「登出」那項曾經超時）
-const SOLO = ["videos", "speed", "offline-sync"];
+// 單獨跑：videos、share-ig（真的錄影片、壓縮，跟影片一樣久）、speed（有計時）、offline-sync（要等登入換新、送出失敗重試；電腦忙時「登出」那項曾經超時）
+const SOLO = ["videos", "share-ig", "speed", "offline-sync"];
 // 比較久的先開始跑，最後才不會剩一個大的在等
 const FIRST = ["zone-rename", "auth", "plan3d", "zone-swipe", "admin-and-customer", "pwa-offline"];
 const CONCURRENCY = Number(process.env.E2E_CONCURRENCY) || Math.max(1, Math.min(3, os.availableParallelism() - 1));

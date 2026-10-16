@@ -10,11 +10,15 @@ import { ClosedNotice } from "@/components/ui/Comments";
 import { suspendActive } from "@/components/ui/Account";
 import { UserAvatar } from "@/components/ui/Mascot";
 import { useToast } from "@/components/ui/Toast";
+import { ShareOffer, SharePreview } from "@/components/ui/Share";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { captureThumb, compressMinBytes, compressType, compressVideo, type VideoEdit } from "@/lib/video";
 import { checkPickedVideo, deleteVideo, durText, getVideos, likeVideo, unlikeVideo, uploadVideo, videoDaySupported, videoLimit, videoMaxSeconds, videoThumbUrl, videoUrl, type DbError, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { videoWhen } from "@/lib/date";
+import { findGym } from "@/lib/gyms";
+import { canShareIg } from "@/lib/share";
+import { makeVideoSticker, type VideoSticker } from "@/lib/share-cards";
 import { CLIMB_MOVES, FEEL_TAG_MAX, FEEL_TAGS, HEIGHT_BANDS, feelTagText, videoTagText, type ClimbMove, type FeelTag, type HeightBand, type Status } from "@/lib/design";
 
 // 身高記在這支手機、分帳號記，下次分享不用再選；登出時清掉（lib/offline clearCache）；隱私模式等讀寫失敗就當沒記
@@ -39,6 +43,7 @@ const hasTag = (v: Video, t: TagFilter) => v.height_band === t || v.move === t |
 export default function RouteVideos({
   route: r,
   gymId,
+  zoneName = "",
   open,
   active = true,
   staff,
@@ -51,6 +56,7 @@ export default function RouteVideos({
   onProfile?: (userId: string) => void;
   route: Route;
   gymId: string;
+  zoneName?: string; // 分享到 IG 的角落小貼紙用
   open: boolean;
   active?: boolean; // 「影片」分頁打開時才放影片縮圖（縮圖會下載影片開頭，打開路線卡片時不跟記錄搶網路）
   staff: boolean;
@@ -79,6 +85,11 @@ export default function RouteVideos({
   const [preview, setPreview] = useState<string | null>(null);
   const [playing, setPlaying] = useState<number | null>(null);
   const liking = useRef(new Set<string>()); // 正在送出讚的影片
+  // 分享到 IG（B2）：剛分享到原岩的那支影片（手機裡的檔案，已剪輯、壓縮）；按了再重錄一次、左下角加上原岩小貼紙
+  // 只留在這個畫面：關掉路線卡片就沒了（之後要分享得整支從伺服器下載，費流量，先不做）
+  const [igSrc, setIgSrc] = useState<File | null>(null);
+  const [ig, setIg] = useState<{ file: File | null; thumb: string | null; progress: number | null; plain: boolean } | null>(null);
+  const sticker = useRef<VideoSticker | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null); // 刪除要按兩次（刪了不能復原）；換到別支影片就重來
 
   useEffect(() => {
@@ -90,6 +101,17 @@ export default function RouteVideos({
     if (videos) onCount?.(videos.length);
   }, [videos, onCount]);
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
+  useEffect(() => () => void (ig?.thumb && URL.revokeObjectURL(ig.thumb)), [ig?.thumb]);
+  // 小貼紙先畫好（要等字型），按「也分享到 IG」時才能直接開始重錄（iPhone 只允許在點的那一下開始播放）
+  const stickerText = r.name ? r.name : `${zoneName} ${r.hold_color}色`;
+  useEffect(() => {
+    if (!igSrc) return;
+    let on = true;
+    makeVideoSticker({ grade: r.grade, gymName: findGym(gymId)?.name ?? "", zone: stickerText })
+      .then((s) => void (on && (sticker.current = s)))
+      .catch(() => undefined);
+    return () => void (on = false);
+  }, [igSrc, r.grade, gymId, stickerText]);
 
   // 按讚、收回：先改畫面，失敗再改回來（已經按過＝別的分頁按的，不用改回）
   const toggleLike = async (v: Video) => {
@@ -144,6 +166,7 @@ export default function RouteVideos({
   const max = videoMaxSeconds(lim);
   const editable = !!compressType() && dur != null;
   const pick = async (f: File) => {
+    setIgSrc(null); // 選了新的影片：上一支就不提供分享到 IG 了
     try {
       const d = await checkPickedVideo(f, !!compressType(), lim);
       setFile(f);
@@ -208,6 +231,7 @@ export default function RouteVideos({
         if (height) localStorage.setItem(heightKey(session.user.id), height);
         else localStorage.removeItem(heightKey(session.user.id));
       } catch {}
+      if (canShareIg(access)) setIgSrc(small ?? file);
       reset();
       setFilter(null); // 回到全部，剛分享的才看得到
       setVideos(await getVideos(r.id));
@@ -217,6 +241,23 @@ export default function RouteVideos({
     }
     setSqueeze(null);
     setBusy(false);
+  };
+
+  // 也分享到 IG：能壓縮的手機重錄一次加上小貼紙（大約等影片的長度）；不能壓縮或失敗就分享原本那支
+  // 要在點擊當下直接開始重錄（前面不能先 await）
+  const makeIg = async () => {
+    const src = igSrc;
+    if (!src) return;
+    const st = sticker.current;
+    const can = !!compressType() && !!st;
+    setIg({ file: null, thumb: null, progress: can ? 0 : null, plain: !can });
+    let thumb: Blob | null = null;
+    const out = can ? await compressVideo(src, (p) => setIg((g) => g && { ...g, progress: p }), undefined, (b) => (thumb = b), st!) : null;
+    const base = out ?? src;
+    const ext = base.type.includes("webm") ? "webm" : "mp4";
+    const file = new File([base], `routemake-${r.code || "video"}.${ext}`, { type: base.type || "video/mp4" });
+    thumb ??= await captureThumb(file).catch(() => null);
+    setIg((g) => g && { file, thumb: thumb ? URL.createObjectURL(thumb) : null, progress: null, plain: !out });
   };
 
   const remove = async (id: string) => {
@@ -289,6 +330,18 @@ export default function RouteVideos({
             <ClosedNotice>帳號暫停中，暫時不能分享影片</ClosedNotice>
           ) : !file ? (
             <>
+              {igSrc && (
+                <ShareOffer
+                  title={<b>影片已分享到原岩，也可以發到 IG</b>}
+                  button={compressType() ? "也分享到 IG（加上原岩標記）" : "也分享到 IG"}
+                  hint={
+                    compressType()
+                      ? "左下角加上難度和館名，要在手機上重新處理一次，大約等影片的長度；關掉路線卡片後就不能分享到 IG 了"
+                      : "這支手機加不了原岩標記，會分享原本的影片；關掉路線卡片後就不能分享到 IG 了"
+                  }
+                  onClick={() => void makeIg()}
+                />
+              )}
               <VideoPickButton onPick={pick} disabled={busy}>
                 分享攀爬影片
               </VideoPickButton>
@@ -356,6 +409,20 @@ export default function RouteVideos({
           )}
         </div>
       )}
+      <SharePreview
+        open={!!ig}
+        onClose={() => setIg(null)}
+        title="分享影片到 IG"
+        what="影片"
+        file={ig?.file ?? null}
+        image={ig?.thumb ?? null}
+        progress={ig?.progress}
+        note={
+          ig?.plain
+            ? "這支手機加不了原岩標記，分享的是原本的影片。限時動態一則最長 60 秒，比較長的 IG 會切成好幾段。"
+            : "左下角加上難度和館名，原岩 App 裡的影片不變。限時動態一則最長 60 秒，比較長的 IG 會切成好幾段。"
+        }
+      />
     </>
   );
 }

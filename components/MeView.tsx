@@ -12,6 +12,8 @@ import { GymLegend, ProgressCard } from "@/components/ui/Progress";
 import { Points, RouteList, RouteRow } from "@/components/ui/Route";
 import { CalendarHeat, DaySummary, Delta, MonthGradeChart, MonthSwitcher, StatGrid, StatTile, TotalRow, type DayGym, type MonthCol } from "@/components/ui/Stats";
 import { Tabs } from "@/components/ui/Tabs";
+import { ShareButton, SharePreview } from "@/components/ui/Share";
+import { useToast } from "@/components/ui/Toast";
 import {
   getGyms,
   getLiveWallRoutes,
@@ -35,6 +37,9 @@ import { meLines } from "@/lib/cheer";
 import { todayYmd } from "@/lib/date";
 import { FEEL, GRADE_FEEL, GRADES, gradeLabel } from "@/lib/design";
 import { GYMS } from "@/lib/gyms";
+import { useMascot } from "@/lib/mascot-store";
+import { canShareIg } from "@/lib/share";
+import { drawMonthCard } from "@/lib/share-cards";
 import { overlayPending, withCache } from "@/lib/offline";
 import { myProgress, progressGyms, wallProgress, type ProgressRow } from "@/lib/progress";
 import { ascentPoints } from "@/lib/scoring";
@@ -86,6 +91,11 @@ export default function MeView({ gymId }: { gymId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<MonthAscent | null>(null);
   const uid = session?.user.id;
+  // 分享到 IG（C1 本月完攀圖）：按了先打開預覽、在手機上畫圖
+  const [card, setCard] = useState<{ file: File | null; url: string | null } | null>(null);
+  useEffect(() => () => void (card?.url && URL.revokeObjectURL(card.url)), [card]);
+  const mascot = useMascot(uid);
+  const toast = useToast();
 
   // 第一次載入時先顯示手機裡上次的資料，抓到最新的再換掉
   const firstMonth = useRef(true);
@@ -293,6 +303,34 @@ export default function MeView({ gymId }: { gymId: string }) {
       })
     : [];
 
+  // C1 本月完攀圖：正在看的那個月（上個月也可以分享）；數字跟上面四格、本月完攀直條圖一樣
+  const openCard = async () => {
+    if (!stats?.sends) return;
+    setCard({ file: null, url: null });
+    try {
+      const gyms = [...new Set(list.filter(counted).map((a) => a.route.gym_id))].sort((x, y) => gymOrder(x) - gymOrder(y));
+      const blob = await drawMonthCard({
+        year: ym.y,
+        month: ym.m,
+        sends: stats.sends,
+        flashes: stats.flashes,
+        days: stats.days,
+        points: points?.month_total ?? null,
+        top: stats.top_grade != null ? gradeLabel(stats.top_grade) : stats.top_yds != null ? gradeLabel(stats.top_yds) : null,
+        gyms,
+        boulder: boulderCols.map((c) => ({ label: c.label, grade: c.grade, n: c.sends })),
+        rope: ropeCols.map((c) => ({ label: c.label, n: c.sends })),
+        mascot: mascot ?? { id: "mingde" },
+        nickname: access?.nickname ?? "",
+      });
+      const file = new File([blob], `routemake-${ym.y}-${String(ym.m).padStart(2, "0")}.jpg`, { type: "image/jpeg" });
+      setCard((c) => (c ? { file, url: URL.createObjectURL(file) } : c));
+    } catch {
+      setCard(null);
+      toast("圖片做不出來，請再試一次");
+    }
+  };
+
   return (
     <>
       {uid && <PageCheer uid={uid} page="me" pool={mePool} />}
@@ -307,6 +345,11 @@ export default function MeView({ gymId }: { gymId: string }) {
         />
       </StatGrid>
       {stats && (stats.sends > 0 || stats.prev_sends > 0) && <Delta diff={stats.sends - stats.prev_sends} />}
+      {canShareIg(access) && stats && (
+        <ShareButton className="mt-2" disabled={!stats.sends} onClick={() => void openCard()}>
+          {stats.sends ? `分享 ${ym.m} 月成績到 IG` : `${ym.m} 月還沒有完攀，不能分享`}
+        </ShareButton>
+      )}
 
       <PointsPanel year={ym.y} month={ym.m} isNow={isNow} todayDay={now.d} summary={points} />
 
@@ -406,6 +449,7 @@ export default function MeView({ gymId }: { gymId: string }) {
         onClose={() => setOpen(null)}
         onSaved={() => void (loadMonth(), loadProgress())}
       />
+      <SharePreview open={!!card} onClose={() => setCard(null)} title={`分享 ${ym.m} 月成績到 IG`} what="圖片" file={card?.file ?? null} image={card?.url ?? null} note="圖上有完攀條數、積分、Flash、攀爬天數、各難度條數、去過的館、你的暱稱和原岩夥伴，不會有路線心得。" />
     </>
   );
 }

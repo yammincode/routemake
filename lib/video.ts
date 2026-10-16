@@ -117,9 +117,17 @@ export type VideoEdit = { start: number; end: number; mute: boolean };
 // 有剪輯（edit）時一定重錄：不支援或失敗回傳 null（呼叫的人不能改傳原檔，不然長度、聲音都不對）
 // 要在按鈕的點擊事件裡「直接」呼叫（前面不要先 await 別的），iPhone 才允許自動播放
 // onThumb：錄到第 1 秒時順便給縮圖（失敗就不給）
-export async function compressVideo(file: File, onProgress: (ratio: number) => void, edit?: VideoEdit, onThumb?: (thumb: Blob) => void): Promise<File | null> {
+// overlay：每一格畫完影片後再畫上去（分享到 IG 的角落小貼紙）；有 overlay 也一定重錄
+export async function compressVideo(
+  file: File,
+  onProgress: (ratio: number) => void,
+  edit?: VideoEdit,
+  onThumb?: (thumb: Blob) => void,
+  overlay?: (g: CanvasRenderingContext2D, w: number, h: number) => void
+): Promise<File | null> {
   const type = compressType();
-  if (!type || (!edit && file.size < compressMinBytes())) return null;
+  const must = !!edit || !!overlay; // 一定要重錄（不能改傳原檔）
+  if (!type || (!must && file.size < compressMinBytes())) return null;
 
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
@@ -155,6 +163,7 @@ export async function compressVideo(file: File, onProgress: (ratio: number) => v
     const g = canvas.getContext("2d");
     if (!g) return null;
     g.drawImage(video, 0, 0, canvas.width, canvas.height);
+    overlay?.(g, canvas.width, canvas.height);
 
     stream = canvas.captureStream(30);
     // 聲音：影片的聲音只送進錄影，不從喇叭播出；靜音就不錄
@@ -179,6 +188,7 @@ export async function compressVideo(file: File, onProgress: (ratio: number) => v
     const draw = () => {
       if (done) return;
       g.drawImage(video, 0, 0, canvas.width, canvas.height);
+      overlay?.(g, canvas.width, canvas.height);
       if (!shot && video.currentTime >= shotAt - 0.02) {
         shot = true;
         void encodeThumb(canvas, canvas.width, canvas.height).then((b) => b && onThumb?.(b));
@@ -201,7 +211,7 @@ export async function compressVideo(file: File, onProgress: (ratio: number) => v
     onProgress(1);
 
     const blob = new Blob(chunks, { type: type.split(";")[0] });
-    if (blob.size < 10_000 || (!edit && blob.size > file.size * 0.85)) return null;
+    if (blob.size < 10_000 || (!must && blob.size > file.size * 0.85)) return null;
     const ext = type.startsWith("video/webm") ? "webm" : "mp4";
     return new File([blob], file.name.replace(/\.[^.]+$/, "") + "-720p." + ext, { type: blob.type });
   } catch {

@@ -18,6 +18,7 @@ import { Tabs } from "@/components/ui/Tabs";
 import { HoldMarks } from "@/components/ui/Spray";
 import { useToast } from "@/components/ui/Toast";
 import { Pin, WallPhoto } from "@/components/ui/Wall";
+import { ShareButton, SharePreview } from "@/components/ui/Share";
 import { isStaffOf } from "@/lib/auth";
 import {
   clearAscent,
@@ -36,8 +37,11 @@ import {
   type Route,
 } from "@/lib/data";
 import { ago, md, todayYmd, ymd } from "@/lib/date";
+import { findGym } from "@/lib/gyms";
+import { canShareIg } from "@/lib/share";
+import { drawSendCard } from "@/lib/share-cards";
 import { FEEL, GRADE_FEEL, STATUS_LABEL, type Status } from "@/lib/design";
-import { herePath } from "@/lib/nav";
+import { herePath, zoneRoutePath } from "@/lib/nav";
 import { cheerComment, cheerSend } from "@/lib/mascot-events";
 import { isRetryable, queueAscent, unqueue } from "@/lib/offline";
 import { loginExpired } from "@/lib/supabase";
@@ -177,6 +181,8 @@ function RouteBody({
   const [videoCount, setVideoCount] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [profile, setProfile] = useState<string | null>(null);
+  // 分享到 IG（A3 完攀圖）：按了先打開預覽、在手機上畫圖，畫好再按「分享到 IG」
+  const [card, setCard] = useState<{ file: File | null; url: string | null } | null>(null);
   const onVideoCount = useCallback((n: number) => setVideoCount(n), []);
 
   const commentsOpen = gymCommentsOn && r.comments_enabled;
@@ -396,6 +402,36 @@ function RouteBody({
     }
   };
 
+  // A3 完攀圖：卡片最上面那張照片（起步點、Spray Wall 圈圈、長耐力的點）＋難度、區域、館名、攀爬日、QR code（打開這條路線）
+  const openCard = async () => {
+    if (!status || status === "project") return;
+    setCard({ file: null, url: null });
+    try {
+      const gym = findGym(gymId)?.name ?? "";
+      const day = date || todayYmd();
+      const blob = await drawSendCard({
+        photo: hero ? { src: hero.src, fallback: hero.fallback } : null,
+        pin: hero?.kind === "pin" ? { x: r.pin_x, y: r.pin_y, color: r.hold_color } : null,
+        holds: hero?.kind === "spray" ? (r.holds ?? null) : null,
+        seq: hero?.kind === "seq" ? (r.holds ?? null) : null,
+        grade: r.grade,
+        status,
+        title: r.name ? r.name : total > 0 ? `${zoneName} ${r.code}・${total} 點` : `${zoneName} ${r.code}・${r.hold_color}色`,
+        sub: [gym, `${+day.slice(0, 4)}.${day.slice(5, 7)}.${day.slice(8, 10)}`].filter(Boolean).join("・"),
+        nickname: access?.nickname ?? "",
+        // Spray Wall 的路線沒有區域頁可以標出來：QR code 打開首頁
+        url: location.origin + (r.name ? "/" : zoneRoutePath(r.zone_id, r.id, false)),
+      });
+      const file = new File([blob], `routemake-${r.code || "route"}.jpg`, { type: "image/jpeg" });
+      setCard((c) => (c ? { file, url: URL.createObjectURL(file) } : c));
+    } catch {
+      setCard(null);
+      toast("圖片做不出來，請再試一次");
+    }
+  };
+  const closeCard = () => setCard(null);
+  useEffect(() => () => void (card?.url && URL.revokeObjectURL(card.url)), [card]);
+
   // 卡片是全螢幕、多記了一筆瀏覽紀錄（網址一樣）：換掉那一筆，登入回來按返回不用多按一次
   const toLogin = () => router.replace(`/login?next=${encodeURIComponent(herePath())}`);
 
@@ -521,6 +557,11 @@ function RouteBody({
                 {details ? "收起" : "＋ 加上心得與感受"}
               </button>
             </div>
+            {canShareIg(access) && status !== "project" && (
+              <ShareButton className="mt-1" onClick={() => void openCard()}>
+                分享到 IG
+              </ShareButton>
+            )}
             {details && (
               <>
                 {status !== "project" && (
@@ -555,7 +596,7 @@ function RouteBody({
       </div>
 
       <div role="tabpanel" hidden={shownTab !== "video"}>
-        <RouteVideos route={r} gymId={gymId} open={commentsOpen} active={shownTab === "video"} staff={staff} myStatus={ascent?.status ?? null} myDay={ascent?.climbed_on ?? null} onLogin={toLogin} onCount={onVideoCount} onProfile={setProfile} />
+        <RouteVideos route={r} gymId={gymId} zoneName={zoneName} open={commentsOpen} active={shownTab === "video"} staff={staff} myStatus={ascent?.status ?? null} myDay={ascent?.climbed_on ?? null} onLogin={toLogin} onCount={onVideoCount} onProfile={setProfile} />
       </div>
 
       <div role="tabpanel" hidden={shownTab !== "comment"}>
@@ -614,6 +655,7 @@ function RouteBody({
         )}
       </div>
       <ProfileSheet userId={profile} gymId={gymId} onClose={() => setProfile(null)} />
+      <SharePreview open={!!card} onClose={closeCard} title="分享完攀到 IG" what="圖片" file={card?.file ?? null} image={card?.url ?? null} note="圖上有難度、區域、館名、攀爬日、你的暱稱和 QR code，不會有私人心得。" />
     </>
   );
 }
