@@ -27,9 +27,17 @@ export function upTo(router: ReturnType<typeof useRouter>, target: string) {
 }
 type NavLike = { currentEntry: { index: number } | null; entries(): { url: string | null }[] };
 
-// 跳到那條路線的區域頁，標出那一條（route）；New~「看路線 ›」來的返回寫「‹ New~」（from=new），館首頁「最新路線」來的照舊寫館名
-export const zoneRoutePath = (zoneId: string, routeId: string, fromNew = true) =>
-  `/zone?id=${encodeURIComponent(zoneId)}&route=${encodeURIComponent(routeId)}${fromNew ? "&from=new" : ""}`;
+// 跳到那條路線的區域頁，標出那一條（route）；from＝從哪裡來，返回寫那一頁（ZONE_FROM）：
+// New~「看路線 ›」（new）、後台「路線分析」（admin）、使用狀況「路線」分頁（usage）；館首頁「最新路線」（null）照舊寫館名
+export type ZoneFrom = "new" | "admin" | "usage";
+export const ZONE_FROM: Record<ZoneFrom, { label: string; path: string }> = {
+  new: { label: "New~", path: "/new" },
+  admin: { label: "後台", path: "/admin" },
+  usage: { label: "使用狀況", path: "/ops/usage" },
+};
+export const zoneFrom = (v: string | null): ZoneFrom | null => (v === "new" || v === "admin" || v === "usage" ? v : null);
+export const zoneRoutePath = (zoneId: string, routeId: string, from: ZoneFrom | null = "new") =>
+  `/zone?id=${encodeURIComponent(zoneId)}&route=${encodeURIComponent(routeId)}${from ? `&from=${from}` : ""}`;
 
 // 目前頁面的網址（含 ?id= 這類參數），給「登入後回到這頁」用；區域頁 /zone?id=… 少了參數會找不到區域
 export function herePath(): string {

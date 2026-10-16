@@ -72,6 +72,21 @@ test("數據分析：老闆看本週重點、分頁（記在手機）、選館�
   await page.waitForTimeout(1200);
   assert.equal(await page.locator('main [role="tab"][aria-selected="true"]').textContent(), "路線", "重新整理還在路線分頁");
 
+  // 使用狀況點路線：返回寫「‹ 使用狀況」，回來還是明德館、路線分頁
+  await page.click('main button:text-is("明德館")');
+  await page.locator("main #cold").waitFor({ timeout: 5000 });
+  await page.locator('main #cold button').first().click();
+  await page.waitForURL((x) => x.pathname === "/zone" && x.searchParams.get("from") === "usage");
+  await page.locator("[role=dialog]").waitFor({ timeout: 5000 });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  assert.ok((await page.locator("main").textContent()).startsWith("‹ 使用狀況"), "返回寫「‹ 使用狀況」");
+  await page.locator('main button:has-text("使用狀況")').first().click();
+  await page.waitForURL((x) => x.pathname === "/ops/usage");
+  await page.locator("main #cold").waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('main button[aria-pressed="true"]:text-is("明德館")').count(), 1, "還是明德館");
+  assert.equal(await page.locator('main [role="tab"][aria-selected="true"]').textContent(), "路線", "還在路線分頁");
+
   await page.click('main [role="tab"]:text-is("互動")');
   await page.waitForTimeout(300);
   text = await page.textContent("main");
@@ -92,6 +107,26 @@ test("數據分析：管理後台「路線分析」給那一館的員工；顧�
   await page.waitForTimeout(1000);
   const text = await page.textContent("main");
   assert.ok(text.includes("可能太難") && text.includes("冷門路線") && text.includes("難度供需"), "定線員看得到自己館的路線分析");
+  // 點路線：跳到那條路線的區域頁（標出那一條、打開卡片），返回寫「‹ 後台」，回來路線分析還開著
+  const row = page.locator('main #rates button:has-text("可能太難")');
+  const code = (await row.textContent()).match(/A1-\d{2}/)[0];
+  await row.click();
+  await page.waitForURL((u) => u.pathname === "/zone");
+  const u = new URL(page.url());
+  assert.equal(u.searchParams.get("from"), "admin", "從後台來");
+  const dialog = page.locator("[role=dialog]");
+  await dialog.waitFor({ timeout: 5000 });
+  assert.ok((await dialog.textContent()).includes(code), `打開那條路線的卡片（${code}：${(await dialog.textContent()).slice(0, 80)}）`);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  assert.ok((await page.locator("main").textContent()).startsWith("‹ 後台"), "返回寫「‹ 後台」");
+  await page.locator('main button:has-text("後台")').first().click();
+  await page.waitForURL((x) => x.pathname === "/admin");
+  await page.locator("main #rates").waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('main button:has-text("看路線分析")').count(), 0, "回來路線分析還開著");
+  await page.waitForTimeout(400);
+  const top = await page.locator("main #rates").evaluate((el) => el.getBoundingClientRect().top);
+  assert.ok(top < 844, `捲回路線分析（top ${top}）`);
   await page.click('main button:text-is("收起來")');
   assert.equal(await page.locator('main button:has-text("看路線分析")').count(), 1, "可以收起來");
   // 定線員還是看不到使用狀況（人、互動）

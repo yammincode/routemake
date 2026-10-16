@@ -422,7 +422,7 @@ function RouteBody({
         sub: [gym, `${+day.slice(0, 4)}.${day.slice(5, 7)}.${day.slice(8, 10)}`].filter(Boolean).join("・"),
         nickname: access?.nickname ?? "",
         // Spray Wall 的路線沒有區域頁可以標出來：QR code 打開首頁
-        url: shareUrl(r.name ? "/" : zoneRoutePath(r.zone_id, r.id, false)),
+        url: shareUrl(r.name ? "/" : zoneRoutePath(r.zone_id, r.id, null)),
       });
       if (run !== cardRun.current) return;
       const file = new File([blob], `routemake-${r.code || "route"}.jpg`, { type: "image/jpeg" });

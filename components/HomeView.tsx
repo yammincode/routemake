@@ -168,7 +168,7 @@ export default function HomeView({ gymId }: { gymId: string }) {
   // 最新路線：跳到區域頁標出那一條（跟 New~ 看路線一樣）；沒網路又沒存過那一區就照舊在這頁打開卡片
   const goRoute = (r: Route & { zone_name: string }) => {
     if (!navigator.onLine && !hasCache(`zone:${r.zone_id}:${uid ?? "guest"}`)) return setOpen(r);
-    router.push(zoneRoutePath(r.zone_id, r.id, false));
+    router.push(zoneRoutePath(r.zone_id, r.id, null));
   };
   // 提醒：最快換線（7 天內、還沒開始換）、而且還有沒完攀路線的區；正在換的牆不提醒
   const guest = !session;

@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { LinkButton } from "@/components/ui/Button";
 import { Empty, SectionTitle, Tip } from "@/components/ui/Card";
 import { InsightPill, InsightRouteRow, MeterList, MeterRow } from "@/components/ui/Insights";
 import { type RouteInsights } from "@/lib/data";
-import { COLD_DAYS, COLD_MAX, MIN_SAME_GRADE, MIN_TRIED, SUPPLY_LABEL, coldRoutes, flagRoutes, pct, supplyShares, type FlaggedRoute } from "@/lib/insights";
+import { zoneRoutePath } from "@/lib/nav";
+import { saveInsightsBack, COLD_DAYS, COLD_MAX, MIN_SAME_GRADE, MIN_TRIED, SUPPLY_LABEL, coldRoutes, flagRoutes, pct, supplyShares, type FlaggedRoute } from "@/lib/insights";
 
 const md = (d: string) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
 const routeTitle = (r: { zone: string; code: string; color: string; name: string | null }) => `${r.zone} ${r.name ?? `${r.color}色 ${r.code}`}`;
@@ -21,8 +23,14 @@ function Pills({ r }: { r: FlaggedRoute }) {
 }
 
 // 「路線」分頁（使用狀況和管理後台「路線分析」共用）：完攀率、冷門、各區熱度、換線前後、難度供需、熱門路線
-export default function RouteInsightsView({ data }: { data: RouteInsights }) {
-  const [all, setAll] = useState(false);
+// 點路線跳到那條路線的區域頁（標出那一條、打開卡片），返回寫「‹ 後台」「‹ 使用狀況」（from）；跳之前記下館、位置、看全部
+export default function RouteInsightsView({ data, gym, from, initialAll = false }: { data: RouteInsights; gym: string; from: "admin" | "usage"; initialAll?: boolean }) {
+  const router = useRouter();
+  const [all, setAll] = useState(initialAll);
+  const open = (r: { id: string; zone_id: string }) => {
+    saveInsightsBack({ from, gym, y: window.scrollY, all });
+    router.push(zoneRoutePath(r.zone_id, r.id, from));
+  };
   const routes = flagRoutes(data.routes);
   const marked = routes.filter((r) => r.flag || r.feel).sort((a, b) => b.tried - a.tried);
   const shown = all ? [...routes].sort((a, b) => b.tried - a.tried || a.code.localeCompare(b.code)) : marked;
@@ -43,6 +51,7 @@ export default function RouteInsightsView({ data }: { data: RouteInsights }) {
             {shown.map((r) => (
               <InsightRouteRow
                 key={r.id}
+                onClick={() => open(r)}
                 grade={r.grade}
                 title={routeTitle(r)}
                 meta={
@@ -75,6 +84,7 @@ export default function RouteInsightsView({ data }: { data: RouteInsights }) {
             {cold.slice(0, 10).map((r) => (
               <InsightRouteRow
                 key={r.id}
+                onClick={() => open(r)}
                 grade={r.grade}
                 title={routeTitle(r)}
                 meta={
@@ -170,6 +180,7 @@ export default function RouteInsightsView({ data }: { data: RouteInsights }) {
             {data.top.map((r) => (
               <InsightRouteRow
                 key={r.id}
+                onClick={() => open(r)}
                 grade={r.grade}
                 title={routeTitle(r)}
                 right={

@@ -162,3 +162,30 @@ export function pickHighlights(u: UsageInsights | null, ri: RouteInsights | null
   }
   return out.sort((a, b) => b.score - a.score).slice(0, 3);
 }
+
+// 從路線分析點路線跳到區域頁前記下來，「‹ 後台」「‹ 使用狀況」回來時打開同一間館的路線分析、捲回原本的位置
+// 存在這個分頁（sessionStorage），30 分鐘內有效，用過就刪
+export type InsightsBack = { from: "admin" | "usage"; gym: string; y: number; all: boolean; at: number };
+const BACK_KEY = "routemake:insights-back";
+export function saveInsightsBack(b: Omit<InsightsBack, "at">) {
+  try {
+    sessionStorage.setItem(BACK_KEY, JSON.stringify({ ...b, at: Date.now() }));
+  } catch {
+    /* 存不了就回到頁面最上面 */
+  }
+}
+export function peekInsightsBack(from: InsightsBack["from"]): InsightsBack | null {
+  try {
+    const b = JSON.parse(sessionStorage.getItem(BACK_KEY) ?? "null") as InsightsBack | null;
+    return b && b.from === from && Date.now() - b.at < 30 * 60000 ? b : null;
+  } catch {
+    return null;
+  }
+}
+export function clearInsightsBack() {
+  try {
+    sessionStorage.removeItem(BACK_KEY);
+  } catch {
+    /* 沒關係 */
+  }
+}

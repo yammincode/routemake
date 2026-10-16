@@ -852,7 +852,7 @@ export default function DesignShowcase() {
               </>
             }
           />
-          <InsightRouteRow grade={3} title="A2 區 綠色 A2-07" meta="42 人試、40 人完攀・Flash 70%" right={<InsightPill tone="easy">可能太簡單</InsightPill>} />
+          <InsightRouteRow onClick={() => toast("跳到那條路線的區域頁")} grade={3} title="A2 區 綠色 A2-07" meta="42 人試、40 人完攀・Flash 70%" right={<InsightPill tone="easy">可能太簡單</InsightPill>} />
         </ul>
       </Block>
 

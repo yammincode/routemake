@@ -61,16 +61,34 @@ export function InsightPill({ tone, children }: { tone: keyof typeof PILL; child
   return <span className={`inline-block rounded-full px-2 py-0.5 text-tiny font-bold whitespace-nowrap ${PILL[tone]}`}>{children}</span>;
 }
 
-// 路線分析的一行（不能點）：難度、名稱和數字、右邊標記；跟使用狀況「熱門路線」同一個樣子
-export function InsightRouteRow({ grade, title, meta, right }: { grade: number; title: ReactNode; meta?: ReactNode; right?: ReactNode }) {
-  return (
-    <li className="flex items-center gap-3 rounded-btn bg-surface px-3 py-2 shadow-card">
+// 路線分析的一行：難度、名稱和數字、右邊標記；跟使用狀況「熱門路線」同一個樣子
+// 有 onClick 時整行可以點（最右邊 ›，跳到那條路線的區域頁）
+export function InsightRouteRow({ grade, title, meta, right, onClick }: { grade: number; title: ReactNode; meta?: ReactNode; right?: ReactNode; onClick?: () => void }) {
+  const body = (
+    <>
       <Grade grade={grade} className="text-num-bar w-[52px]" />
       <span className="min-w-0 flex-1 text-meta text-muted">
         <span className="block truncate text-note text-ink">{title}</span>
         {meta}
       </span>
       {right && <span className="flex flex-none flex-col items-end gap-1">{right}</span>}
+      {onClick && (
+        <span aria-hidden className="flex-none text-[22px] text-muted">
+          ›
+        </span>
+      )}
+    </>
+  );
+  const cls = "flex w-full items-center gap-3 rounded-btn bg-surface px-3 py-2 text-left shadow-card";
+  return (
+    <li>
+      {onClick ? (
+        <button onClick={onClick} className={cls}>
+          {body}
+        </button>
+      ) : (
+        <div className={cls}>{body}</div>
+      )}
     </li>
   );
 }

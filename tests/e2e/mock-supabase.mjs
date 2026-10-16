@@ -783,14 +783,14 @@ export function createMock() {
       return J(route, 200, {
         since: state.usageSince,
         routes: wall.map((r) => ({
-          id: r.id, ...ref(r), days: daysAgo(tday(r.created_at)),
+          id: r.id, zone_id: r.zone_id, ...ref(r), days: daysAgo(tday(r.created_at)),
           tried: ofRoute(r).length, sent: ofRoute(r).filter((x) => x.status !== "project").length, flash: ofRoute(r).filter((x) => x.status === "flash").length,
           soft: ofRoute(r).filter((x) => x.grade_feel === -1).length, hard: ofRoute(r).filter((x) => x.grade_feel === 1).length,
         })),
         zones: zs.map((z) => ({ name: z.name, records: db.ascents.filter((x) => db.routes.find((r) => r.id === x.route_id)?.zone_id === z.id).length, users: 0, routes: wall.filter((r) => r.zone_id === z.id).length })),
         supply: bands.map(([band, lo, hi]) => ({ band, wall: wall.filter((r) => r.grade >= lo && r.grade <= hi).length, sends: sends.filter((x) => gradeOf(x) >= lo && gradeOf(x) <= hi).length })),
         resets: [],
-        top: [...counts].sort((x, y) => y[1].size - x[1].size).slice(0, 5).map(([rid, us]) => ({ id: rid, ...ref(db.routes.find((r) => r.id === rid)), n: us.size })),
+        top: [...counts].sort((x, y) => y[1].size - x[1].size).slice(0, 5).map(([rid, us]) => ({ id: rid, zone_id: db.routes.find((r) => r.id === rid).zone_id, ...ref(db.routes.find((r) => r.id === rid)), n: us.size })),
       });
     }
     if (fn === "set_usage_since") {

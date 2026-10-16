@@ -1245,7 +1245,7 @@ export type UsageInsights = {
   top_comment: (RouteRef & { body: string; nickname: string | null; likes: number }) | null;
   mascots: Record<string, number> | null; // 夥伴 id → 人數（"" 是還沒選）；還沒套用 step41 是 null
 };
-export type InsightRoute = RouteRef & { id: string; days: number; tried: number; sent: number; flash: number; soft: number; hard: number };
+export type InsightRoute = RouteRef & { id: string; zone_id: string; days: number; tried: number; sent: number; flash: number; soft: number; hard: number };
 export type SupplyBand = "easy" | "mid" | "hard" | "rope_easy" | "rope_mid" | "rope_hard";
 export type RouteInsights = {
   since: string | null;
@@ -1253,7 +1253,7 @@ export type RouteInsights = {
   zones: { name: string; records: number; users: number; routes: number }[];
   supply: { band: SupplyBand; wall: number; sends: number }[];
   resets: { label: string; starts_on: string; ends_on: string; days_after: number; before: number; after: number }[];
-  top: (RouteRef & { id: string; n: number })[];
+  top: (RouteRef & { id: string; zone_id: string; n: number })[];
 };
 export async function getUsageInsights(gym: string | null): Promise<UsageInsights | null> {
   const r = await supabase().rpc("usage_insights", { p_gym: gym });

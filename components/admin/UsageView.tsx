@@ -24,7 +24,7 @@ import {
   type UsageStats,
 } from "@/lib/data";
 import { GYMS } from "@/lib/gyms";
-import { pickHighlights, type Highlight } from "@/lib/insights";
+import { clearInsightsBack, peekInsightsBack, pickHighlights, type Highlight, type InsightsBack } from "@/lib/insights";
 
 type Tab = Highlight["tab"];
 const TABS = [
@@ -80,9 +80,24 @@ export default function UsageView() {
     void Promise.resolve().then(() => setJumpTo(null));
   });
 
+  // 從「路線」分頁點路線去區域頁、「‹ 使用狀況」回來：同一間館、路線分頁、捲回原本的位置
+  const [back, setBack] = useState<InsightsBack | null>(null);
   useEffect(() => {
-    void Promise.resolve().then(() => setTabState(savedTab()));
+    const b = peekInsightsBack("usage");
+    void Promise.resolve().then(() => {
+      setTabState(b ? "routes" : savedTab());
+      if (b) {
+        setBack(b);
+        setPicked(b.gym);
+      }
+    });
   }, []);
+  useEffect(() => {
+    if (!back || !routes || scope !== back.gym) return;
+    window.scrollTo({ top: back.y });
+    clearInsightsBack();
+    void Promise.resolve().then(() => setBack(null));
+  });
   const setTab = (t: Tab) => {
     setTabState(t);
     try {
@@ -265,7 +280,7 @@ export default function UsageView() {
 
           {tab === "routes" &&
             (!all && routes ? (
-              <RouteInsightsView data={routes} />
+              <RouteInsightsView data={routes} gym={scope!} from="usage" initialAll={back?.gym === scope ? back.all : false} />
             ) : (
               <>
                 {all ? (

@@ -8,7 +8,7 @@ import { Empty } from "@/components/ui/Card";
 import { SwipeHint, ZoneNav, type ZoneDir } from "@/components/ui/Gym";
 import { useBand } from "@/lib/band";
 import { readZoneAhead, type ZoneLink } from "@/lib/data";
-import { upTo } from "@/lib/nav";
+import { ZONE_FROM, upTo, zoneFrom } from "@/lib/nav";
 import { hasCache, peekCache, useOnline, withCache } from "@/lib/offline";
 import { attachSwipe } from "@/lib/swipe";
 import { useZoneOrder } from "@/lib/zoneOrder";
@@ -19,11 +19,12 @@ import { useZoneOrder } from "@/lib/zoneOrder";
 // - 換區後報讀新區的名字；用按鈕換的，焦點停在同一邊的按鈕
 // - 沒網路時只能換到手機裡存過的區
 // - New~「看路線 ›」跳過來（?route=…&from=new）：標出那條路線；返回寫「‹ New~」，換區後也一樣（上一頁還是 New~）
+//   後台「路線分析」（from=admin）寫「‹ 後台」、使用狀況「路線」分頁（from=usage）寫「‹ 使用狀況」，規則一樣
 export default function ZonePageClient() {
   const params = useSearchParams();
   const id = params.get("id");
   const focusRoute = params.get("route");
-  const fromNew = params.get("from") === "new";
+  const from = zoneFrom(params.get("from"));
   const router = useRouter();
   const { session } = useAuth();
   const uid = session?.user.id;
@@ -54,11 +55,11 @@ export default function ZonePageClient() {
       setMoved({ dir, byButton, to: z.id });
       setHere({ ...here, zoneName: z.name });
       setHint(null);
-      window.history.replaceState(null, "", `/zone?id=${encodeURIComponent(z.id)}${fromNew ? "&from=new" : ""}`);
+      window.history.replaceState(null, "", `/zone?id=${encodeURIComponent(z.id)}${from ? `&from=${from}` : ""}`);
       window.scrollTo({ top: 0 });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- near 每次重算，看 id 就夠
-    [id, here, prev?.id, next?.id, fromNew]
+    [id, here, prev?.id, next?.id, from]
   );
 
   // 手指：綁一次就好，用 ref 拿最新的上一區／下一區
@@ -112,7 +113,7 @@ export default function ZonePageClient() {
           head={here && arrived ? here : null}
           onZone={onZone}
           focus={focusRoute}
-          back={fromNew ? { label: "New~", onClick: () => upTo(router, "/new") } : null}
+          back={from ? { label: ZONE_FROM[from].label, onClick: () => upTo(router, ZONE_FROM[from].path) } : null}
           nav={<ZoneNav prev={prev?.name} next={next?.name} onGo={(d) => go(d, true)} focus={arrived?.byButton ? arrived.dir : null} />}
         />
       </div>

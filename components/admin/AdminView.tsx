@@ -47,6 +47,7 @@ import { ago, daysUntil } from "@/lib/date";
 import { GRADE_SYSTEMS } from "@/lib/design";
 import { PLANS, planHas } from "@/lib/floorplan";
 import { LIVE_GYM, SPRAY_WALLS } from "@/lib/gyms";
+import { peekInsightsBack } from "@/lib/insights";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
 
@@ -79,7 +80,9 @@ export default function AdminView() {
       .then((all) => {
         const mine = access.is_owner ? all : all.filter((g) => access.roles.some((r) => r.gym_id === g.id));
         setGyms(mine);
-        setGymId((cur) => cur ?? (mine.find((g) => g.id === LIVE_GYM.id) ?? mine[0])?.id ?? null);
+        // 從「路線分析」點進區域頁再回來：回到那一間館
+        const back = peekInsightsBack("admin")?.gym;
+        setGymId((cur) => cur ?? (back && mine.some((g) => g.id === back) ? back : null) ?? (mine.find((g) => g.id === LIVE_GYM.id) ?? mine[0])?.id ?? null);
       })
       .catch((e) => toast((e as Error).message));
   }, [access, toast]);
