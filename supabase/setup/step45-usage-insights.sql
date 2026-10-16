@@ -125,34 +125,41 @@ begin
     select a.user_id, a.day, a.gym_id from public.usage_activity(greatest(v_today - 37, v_floor)) a
   ), mine as (
     select distinct user_id, day from act where p_gym is null or gym_id = p_gym
-  ), wk as (  -- 第幾週前（0＝最近 7 天）
-    select distinct user_id, (v_today - day) / 7 as w from mine where day > v_today - 28
-  ), newbie as (  -- 新客人：7～37 天前註冊（第一週已經過完）
+  ), uw as (  -- 每個人最近 4 週各週有沒有用（0＝最近 7 天）；先彙總成一人一列，不逐筆查
+    select user_id,
+           bool_or(day > v_today - 7) as w0,
+           bool_or(day between v_today - 13 and v_today - 7) as w1,
+           bool_or(day between v_today - 20 and v_today - 14) as w2,
+           bool_or(day between v_today - 27 and v_today - 21) as w3
+      from mine where day > v_today - 28 group by user_id
+  ), reg as (  -- 新客人：7～37 天前註冊（第一週已經過完）
     select p.id, (p.created_at at time zone 'Asia/Taipei')::date as r
       from public.profiles p
      where (p.created_at at time zone 'Asia/Taipei')::date between greatest(v_today - 37, v_floor) and v_today - 7
-       and (p_gym is null or exists (select 1 from act a where a.user_id = p.id and a.gym_id = p_gym
-                                      and a.day between (p.created_at at time zone 'Asia/Taipei')::date
-                                                    and (p.created_at at time zone 'Asia/Taipei')::date + 6))
-  ), nb as (
+  ), nb as (  -- 第一週（註冊當天起 7 天）的使用：一次 join 彙總
     select n.id,
-           exists (select 1 from act a where a.user_id = n.id and a.day = n.r + 1) as next_day,
-           exists (select 1 from public.ascents s where s.user_id = n.id
-                    and (s.created_at at time zone 'Asia/Taipei')::date between n.r and n.r + 6) as first_route,
-           (select count(distinct a.day) from act a where a.user_id = n.id and a.day between n.r and n.r + 6) >= 2 as two_days
-      from newbie n
+           bool_or(a.day = n.r + 1) as next_day,
+           count(distinct a.day) >= 2 as two_days,
+           bool_or(a.gym_id = p_gym) as at_gym
+      from reg n join act a on a.user_id = n.id and a.day between n.r and n.r + 6
+     group by n.id
+  ), nbf as (  -- 指定館時只算第一週有在這間館用過的人；記第一條路線看 ascents（有 user_id 開頭的索引）
+    select nb.id, nb.next_day, nb.two_days,
+           exists (select 1 from public.ascents s join reg on reg.id = nb.id where s.user_id = nb.id
+                    and (s.created_at at time zone 'Asia/Taipei')::date between reg.r and reg.r + 6) as first_route
+      from nb where p_gym is null or nb.at_gym
   ), days30 as (
     select user_id, count(*) as n from mine where day >= v_from30 group by user_id
   ), vsends as (  -- 抱石（V 級）Flash／完攀，岩友路線不算
     select s.user_id, r.grade, s.climbed_on
       from public.ascents s join public.routes r on r.id = s.route_id join public.zones z on z.id = r.zone_id
-     where s.status in ('flash', 'send') and r.grade between -1 and 10 and r.kind = 'gym'
-       and (p_gym is null or z.gym_id = p_gym)
+     where s.status in ('flash', 'send') and r.grade between -1 and 10 and r.kind = 'gym' and z.kind = 'wall'
+       and s.climbed_on >= v_floor and (p_gym is null or z.gym_id = p_gym)
   ), lvl as (
     select user_id, max(grade) filter (where climbed_on >= v_from30) as recent,
            max(grade) filter (where climbed_on < v_today - 29) as before
       from vsends group by user_id
-  ), hr as (  -- 幾點有使用：打開 App（step45 之後才有）＋記錄攀爬的時間
+  ), hr as (  -- 幾點有使用：打開 App（step45 之後才有；一天只記一間館，算在那天最後看的館）＋記錄攀爬的時間
     select o.user_id, o.day, h
       from public.app_opens o, generate_series(0, 23) h
      where o.day >= v_from30 and o.hours & (1 << h) <> 0 and (p_gym is null or o.gym_id = p_gym)
@@ -161,6 +168,8 @@ begin
            extract(hour from (s.created_at at time zone 'Asia/Taipei'))::int
       from public.ascents s join public.routes r on r.id = s.route_id join public.zones z on z.id = r.zone_id
      where (s.created_at at time zone 'Asia/Taipei')::date >= v_from30 and (p_gym is null or z.gym_id = p_gym)
+  ), hrs as (
+    select h, count(distinct (user_id, day)) as n from hr group by h
   ), cm as (
     select c.id, c.body, c.user_id, c.route_id, c.created_at
       from public.comments c join public.routes r on r.id = c.route_id join public.zones z on z.id = r.zone_id
@@ -172,23 +181,19 @@ begin
     -- 回頭率：base＝那一週用過的人，back＝其中下一週也用過的；那一週早於統計起始日時是 null
     'retention', jsonb_build_object(
       'now', case when v_today - 13 >= v_floor then jsonb_build_object(
-               'base', (select count(*) from wk where w = 1),
-               'back', (select count(*) from wk a where w = 1 and exists (select 1 from wk b where b.user_id = a.user_id and b.w = 0))) end,
+               'base', (select count(*) from uw where w1), 'back', (select count(*) from uw where w1 and w0)) end,
       'prev', case when v_today - 20 >= v_floor then jsonb_build_object(
-               'base', (select count(*) from wk where w = 2),
-               'back', (select count(*) from wk a where w = 2 and exists (select 1 from wk b where b.user_id = a.user_id and b.w = 1))) end,
+               'base', (select count(*) from uw where w2), 'back', (select count(*) from uw where w2 and w1)) end,
       'cohort', case when v_today - 27 >= v_floor then jsonb_build_object(
-               'base', (select count(*) from wk where w = 3),
-               'kept', jsonb_build_array(
-                  (select count(*) from wk a where w = 3 and exists (select 1 from wk b where b.user_id = a.user_id and b.w = 2)),
-                  (select count(*) from wk a where w = 3 and exists (select 1 from wk b where b.user_id = a.user_id and b.w = 1)),
-                  (select count(*) from wk a where w = 3 and exists (select 1 from wk b where b.user_id = a.user_id and b.w = 0)))) end
+               'base', (select count(*) from uw where w3),
+               'kept', jsonb_build_array((select count(*) from uw where w3 and w2), (select count(*) from uw where w3 and w1),
+                                         (select count(*) from uw where w3 and w0))) end
     ),
     'newbie', jsonb_build_object(
-      'n', (select count(*) from nb),
-      'next_day', (select count(*) from nb where next_day),
-      'first_route', (select count(*) from nb where first_route),
-      'two_days', (select count(*) from nb where two_days)
+      'n', (select count(*) from nbf),
+      'next_day', (select count(*) from nbf where next_day),
+      'first_route', (select count(*) from nbf where first_route),
+      'two_days', (select count(*) from nbf where two_days)
     ),
     'groups', jsonb_build_object(
       'regular', (select count(*) from days30 where n >= 8),
@@ -204,8 +209,7 @@ begin
       'climbers', (select count(*) from lvl where recent is not null and before is not null),
       'improved', (select count(*) from lvl where recent > before)
     ),
-    'hours', (select jsonb_agg((select count(distinct (user_id, day)) from hr where hr.h = g) order by g)
-                from generate_series(0, 23) g),
+    'hours', (select jsonb_agg(coalesce(hrs.n, 0) order by g) from generate_series(0, 23) g left join hrs on hrs.h = g),
     'daily', (
       select jsonb_agg(jsonb_build_object('day', d::date,
                'comments', (select count(*) from cm where (cm.created_at at time zone 'Asia/Taipei')::date = d::date),
@@ -213,8 +217,10 @@ begin
                            join public.zones z on z.id = r.zone_id
                           where (v.created_at at time zone 'Asia/Taipei')::date = d::date and (p_gym is null or z.gym_id = p_gym)),
                'likes', coalesce((v_likes ->> d::date::text)::int, 0)
-                      + (select count(*) from public.comment_likes l join cm on cm.id = l.comment_id
-                          where (l.created_at at time zone 'Asia/Taipei')::date = d::date)
+                      + (select count(*) from public.comment_likes l join public.comments c on c.id = l.comment_id
+                          join public.routes r on r.id = c.route_id join public.zones z on z.id = r.zone_id
+                          where (l.created_at at time zone 'Asia/Taipei')::date = d::date and c.deleted_at is null
+                            and (p_gym is null or z.gym_id = p_gym))
              ) order by d)
         from generate_series(v_today - 13, v_today, interval '1 day') d
        where d::date >= v_from14
@@ -265,7 +271,7 @@ begin
                  and (s.created_at at time zone 'Asia/Taipei')::date between e.ends_on + 1 and e.ends_on + 7) as after
         from public.reset_events e
        where e.gym_id = p_gym and e.ends_on < v_today and e.ends_on >= v_today - 60
-       limit 6
+       order by e.ends_on desc limit 6
     ) t;
   end if;
 
