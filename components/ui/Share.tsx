@@ -83,11 +83,11 @@ export function SharePreview({
 }
 
 // 分享影片完成後的提示框：「也分享到 IG」
-export function ShareOffer({ title, button, hint, onClick }: { title: ReactNode; button: ReactNode; hint: ReactNode; onClick: () => void }) {
+export function ShareOffer({ title, button, hint, onClick, disabled }: { title: ReactNode; button: ReactNode; hint: ReactNode; onClick: () => void; disabled?: boolean }) {
   return (
     <div className="mb-3 rounded-tile bg-sunk p-3" data-testid="share-offer">
       <p className="m-0 text-note">{title}</p>
-      <ShareButton className="mt-2" onClick={onClick}>
+      <ShareButton className="mt-2" onClick={onClick} disabled={disabled}>
         {button}
       </ShareButton>
       <p className="mt-1.5 mb-0 text-tiny text-muted">{hint}</p>

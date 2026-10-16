@@ -93,6 +93,9 @@ export default function MeView({ gymId }: { gymId: string }) {
   const uid = session?.user.id;
   // 分享到 IG（C1 本月完攀圖）：按了先打開預覽、在手機上畫圖
   const [card, setCard] = useState<{ file: File | null; url: string | null } | null>(null);
+  const cardRun = useRef(0); // 第幾次按：關掉又打開時，前一次慢做好的圖不要塞進來
+  // 上面的數字是哪個月的（剛換月份、還沒讀到新的那個月時不能分享，免得用到上個月的數字）
+  const [loadedMonth, setLoadedMonth] = useState<string | null>(null);
   useEffect(() => () => void (card?.url && URL.revokeObjectURL(card.url)), [card]);
   const mascot = useMascot(uid);
   const toast = useToast();
@@ -107,6 +110,7 @@ export default function MeView({ gymId }: { gymId: string }) {
       setStats(data.s);
       setList(data.l);
       setPoints(data.p ?? null);
+      setLoadedMonth(`${ym.y}-${ym.m}`);
     };
     try {
       const { data } = await withCache<Data>(
@@ -305,7 +309,8 @@ export default function MeView({ gymId }: { gymId: string }) {
 
   // C1 本月完攀圖：正在看的那個月（上個月也可以分享）；數字跟上面四格、本月完攀直條圖一樣
   const openCard = async () => {
-    if (!stats?.sends) return;
+    if (!stats?.sends || loadedMonth !== `${ym.y}-${ym.m}`) return;
+    const run = ++cardRun.current;
     setCard({ file: null, url: null });
     try {
       const gyms = [...new Set(list.filter(counted).map((a) => a.route.gym_id))].sort((x, y) => gymOrder(x) - gymOrder(y));
@@ -323,9 +328,11 @@ export default function MeView({ gymId }: { gymId: string }) {
         mascot: mascot ?? { id: "mingde" },
         nickname: access?.nickname ?? "",
       });
+      if (run !== cardRun.current) return;
       const file = new File([blob], `routemake-${ym.y}-${String(ym.m).padStart(2, "0")}.jpg`, { type: "image/jpeg" });
-      setCard((c) => (c ? { file, url: URL.createObjectURL(file) } : c));
+      setCard({ file, url: URL.createObjectURL(file) });
     } catch {
+      if (run !== cardRun.current) return;
       setCard(null);
       toast("圖片做不出來，請再試一次");
     }
@@ -346,7 +353,7 @@ export default function MeView({ gymId }: { gymId: string }) {
       </StatGrid>
       {stats && (stats.sends > 0 || stats.prev_sends > 0) && <Delta diff={stats.sends - stats.prev_sends} />}
       {canShareIg(access) && stats && (
-        <ShareButton className="mt-2" disabled={!stats.sends} onClick={() => void openCard()}>
+        <ShareButton className="mt-2" disabled={!stats.sends || loadedMonth !== `${ym.y}-${ym.m}`} onClick={() => void openCard()}>
           {stats.sends ? `分享 ${ym.m} 月成績到 IG` : `${ym.m} 月還沒有完攀，不能分享`}
         </ShareButton>
       )}
@@ -449,7 +456,7 @@ export default function MeView({ gymId }: { gymId: string }) {
         onClose={() => setOpen(null)}
         onSaved={() => void (loadMonth(), loadProgress())}
       />
-      <SharePreview open={!!card} onClose={() => setCard(null)} title={`分享 ${ym.m} 月成績到 IG`} what="圖片" file={card?.file ?? null} image={card?.url ?? null} note="圖上有完攀條數、積分、Flash、攀爬天數、各難度條數、去過的館、你的暱稱和原岩夥伴，不會有路線心得。" />
+      <SharePreview open={!!card} onClose={() => (cardRun.current++, setCard(null))} title={`分享 ${ym.m} 月成績到 IG`} what="圖片" file={card?.file ?? null} image={card?.url ?? null} note="圖上有完攀條數、積分、Flash、攀爬天數、各難度條數、去過的館、你的暱稱和原岩夥伴，不會有路線心得。" />
     </>
   );
 }

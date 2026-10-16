@@ -226,7 +226,12 @@ test("影片加小貼紙（B2）：老闆分享影片後「也分享到 IG」重
   await login(page, "bossman", "password1", `/zone?id=${zone.id}`);
   const dialog = await upload(page);
   const offer = dialog.getByTestId("share-offer");
-  assert.match(await offer.textContent(), /也分享到 IG（加上原岩標記）/);
+  await offer.locator('button:has-text("也分享到 IG（加上原岩標記）"):not([disabled])').waitFor({ timeout: 8000 }); // 小貼紙準備好才能按
+  // 做到一半關掉：停止處理；再按一次重新開始
+  await offer.locator("button").click();
+  await page.waitForFunction(() => /製作中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
+  await page.locator("[role=dialog]").last().locator('button:text-is("關閉")').click();
+  await page.waitForTimeout(300);
   await offer.locator("button").click();
   await page.waitForFunction(() => /製作中 \d+%/.test(document.body.textContent), null, { timeout: 10000 });
   assert.deepEqual(await previewSize(page), [480, 270], "預覽是第 1 秒的畫面");
@@ -262,6 +267,7 @@ test("影片加小貼紙（B2）：老闆分享影片後「也分享到 IG」重
   await login(P.page, "bossman", "password1", `/zone?id=${zone.id}`);
   const d2 = await upload(P.page);
   const o2 = d2.getByTestId("share-offer");
+  await o2.locator("button:not([disabled])").waitFor({ timeout: 8000 });
   assert.match(await o2.textContent(), /加不了原岩標記/);
   await o2.locator("button").click();
   const s2 = P.page.locator("[role=dialog]").last();

@@ -13,7 +13,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ShareOffer, SharePreview } from "@/components/ui/Share";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { captureThumb, compressMinBytes, compressType, compressVideo, type VideoEdit } from "@/lib/video";
-import { checkPickedVideo, deleteVideo, durText, getVideos, likeVideo, unlikeVideo, uploadVideo, videoDaySupported, videoLimit, videoMaxSeconds, videoThumbUrl, videoUrl, type DbError, type Route, type Video } from "@/lib/data";
+import { checkPickedVideo, deleteVideo, seqTotal, durText, getVideos, likeVideo, unlikeVideo, uploadVideo, videoDaySupported, videoLimit, videoMaxSeconds, videoThumbUrl, videoUrl, type DbError, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { videoWhen } from "@/lib/date";
 import { findGym } from "@/lib/gyms";
@@ -88,8 +88,12 @@ export default function RouteVideos({
   // 分享到 IG（B2）：剛分享到原岩的那支影片（手機裡的檔案，已剪輯、壓縮）；按了再重錄一次、左下角加上原岩小貼紙
   // 只留在這個畫面：關掉路線卡片就沒了（之後要分享得整支從伺服器下載，費流量，先不做）
   const [igSrc, setIgSrc] = useState<File | null>(null);
-  const [ig, setIg] = useState<{ file: File | null; thumb: string | null; progress: number | null; plain: boolean } | null>(null);
-  const sticker = useRef<VideoSticker | null>(null);
+  // plain：分享原本那支（none＝這支手機加不了標記、failed＝加標記沒有成功）
+  const [ig, setIg] = useState<{ file: File | null; thumb: string | null; progress: number | null; plain: false | "none" | "failed" } | null>(null);
+  // 小貼紙：undefined＝還在準備（按鈕先寫準備中）；null＝做不出來（分享原本那支）
+  const [stk, setStk] = useState<{ src: File; st: VideoSticker | null } | null>(null);
+  const sticker = igSrc && stk?.src === igSrc ? stk.st : undefined;
+  const igRun = useRef<AbortController | null>(null); // 正在重錄的那一次：關掉預覽、關掉卡片就停
   const [confirmDel, setConfirmDel] = useState<string | null>(null); // 刪除要按兩次（刪了不能復原）；換到別支影片就重來
 
   useEffect(() => {
@@ -103,15 +107,17 @@ export default function RouteVideos({
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
   useEffect(() => () => void (ig?.thumb && URL.revokeObjectURL(ig.thumb)), [ig?.thumb]);
   // 小貼紙先畫好（要等字型），按「也分享到 IG」時才能直接開始重錄（iPhone 只允許在點的那一下開始播放）
-  const stickerText = r.name ? r.name : `${zoneName} ${r.hold_color}色`;
+  const seqN = seqTotal(r);
+  const stickerText = r.name ? r.name : seqN ? `${zoneName} ${r.code}・${seqN} 點` : `${zoneName} ${r.hold_color}色`;
   useEffect(() => {
     if (!igSrc) return;
     let on = true;
     makeVideoSticker({ grade: r.grade, gymName: findGym(gymId)?.name ?? "", zone: stickerText })
-      .then((s) => void (on && (sticker.current = s)))
-      .catch(() => undefined);
+      .then((st) => void (on && setStk({ src: igSrc, st })))
+      .catch(() => void (on && setStk({ src: igSrc, st: null })));
     return () => void (on = false);
   }, [igSrc, r.grade, gymId, stickerText]);
+  useEffect(() => () => igRun.current?.abort(), []);
 
   // 按讚、收回：先改畫面，失敗再改回來（已經按過＝別的分頁按的，不用改回）
   const toggleLike = async (v: Video) => {
@@ -167,6 +173,7 @@ export default function RouteVideos({
   const editable = !!compressType() && dur != null;
   const pick = async (f: File) => {
     setIgSrc(null); // 選了新的影片：上一支就不提供分享到 IG 了
+    igRun.current?.abort();
     try {
       const d = await checkPickedVideo(f, !!compressType(), lim);
       setFile(f);
@@ -247,17 +254,28 @@ export default function RouteVideos({
   // 要在點擊當下直接開始重錄（前面不能先 await）
   const makeIg = async () => {
     const src = igSrc;
-    if (!src) return;
-    const st = sticker.current;
+    if (!src || sticker === undefined) return;
+    igRun.current?.abort();
+    const run = new AbortController();
+    igRun.current = run;
+    const st = sticker;
     const can = !!compressType() && !!st;
-    setIg({ file: null, thumb: null, progress: can ? 0 : null, plain: !can });
+    setIg({ file: null, thumb: null, progress: can ? 0 : null, plain: false });
     let thumb: Blob | null = null;
-    const out = can ? await compressVideo(src, (p) => setIg((g) => g && { ...g, progress: p }), undefined, (b) => (thumb = b), st!) : null;
+    const out = can ? await compressVideo(src, (p) => !run.signal.aborted && setIg((g) => g && { ...g, progress: p }), undefined, (b) => (thumb = b), st!, run.signal) : null;
+    if (run.signal.aborted) return; // 關掉了（或又按了一次）：這一次的結果不要
     const base = out ?? src;
     const ext = base.type.includes("webm") ? "webm" : "mp4";
     const file = new File([base], `routemake-${r.code || "video"}.${ext}`, { type: base.type || "video/mp4" });
     thumb ??= await captureThumb(file).catch(() => null);
-    setIg((g) => g && { file, thumb: thumb ? URL.createObjectURL(thumb) : null, progress: null, plain: !out });
+    if (run.signal.aborted) return;
+    igRun.current = null;
+    setIg({ file, thumb: thumb ? URL.createObjectURL(thumb) : null, progress: null, plain: out ? false : can ? "failed" : "none" });
+  };
+  const closeIg = () => {
+    igRun.current?.abort();
+    igRun.current = null;
+    setIg(null);
   };
 
   const remove = async (id: string) => {
@@ -333,7 +351,8 @@ export default function RouteVideos({
               {igSrc && (
                 <ShareOffer
                   title={<b>影片已分享到原岩，也可以發到 IG</b>}
-                  button={compressType() ? "也分享到 IG（加上原岩標記）" : "也分享到 IG"}
+                  button={sticker === undefined ? "準備中…" : compressType() && sticker ? "也分享到 IG（加上原岩標記）" : "也分享到 IG"}
+                  disabled={sticker === undefined}
                   hint={
                     compressType()
                       ? "左下角加上難度和館名，要在手機上重新處理一次，大約等影片的長度；關掉路線卡片後就不能分享到 IG 了"
@@ -411,14 +430,16 @@ export default function RouteVideos({
       )}
       <SharePreview
         open={!!ig}
-        onClose={() => setIg(null)}
+        onClose={closeIg}
         title="分享影片到 IG"
         what="影片"
         file={ig?.file ?? null}
         image={ig?.thumb ?? null}
         progress={ig?.progress}
         note={
-          ig?.plain
+          ig?.plain === "failed"
+            ? "加原岩標記沒有成功（處理時畫面要開著），分享的是原本的影片；關掉再按一次可以重試。限時動態一則最長 60 秒，比較長的 IG 會切成好幾段。"
+            : ig?.plain
             ? "這支手機加不了原岩標記，分享的是原本的影片。限時動態一則最長 60 秒，比較長的 IG 會切成好幾段。"
             : "左下角加上難度和館名，原岩 App 裡的影片不變。限時動態一則最長 60 秒，比較長的 IG 會切成好幾段。"
         }

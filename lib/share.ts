@@ -57,3 +57,10 @@ export async function shareFile(file: File): Promise<ShareResult> {
 
 export const shareMessage = (r: ShareResult, what: "圖片" | "影片") =>
   r === "saved" ? `已存${what}，打開 IG 從相簿選這${what === "圖片" ? "張" : "支"}` : r === "failed" ? `${what}存不下來，請再試一次` : null;
+
+// QR code 的網址：在自己電腦跑試用版（localhost、區網 IP）時不放 QR code（掃了也打不開，還會印出區網位址）
+export function shareUrl(path: string): string | null {
+  const h = location.hostname;
+  if (h === "localhost" || /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h) || h.endsWith(".local")) return null;
+  return location.origin + path;
+}

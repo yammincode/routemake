@@ -164,7 +164,7 @@ export type SendCardInfo = {
   title: string; // 區域・顏色・編號（或 Spray Wall 路線名稱）
   sub: string; // 館名・日期
   nickname: string;
-  url: string; // QR code：打開這條路線
+  url: string | null; // QR code：打開這條路線（試用版在自己電腦跑時不放，免得印出區網位址）
 };
 
 export async function drawSendCard(info: SendCardInfo): Promise<Blob> {
@@ -181,11 +181,15 @@ export async function drawSendCard(info: SendCardInfo): Promise<Blob> {
     const pts = info.pin ? [info.pin] : (info.holds ?? info.seq ?? []);
     const fx = pts.length ? pts.reduce((s, p) => s + p.x, 0) / pts.length : 50;
     const fy = pts.length ? pts.reduce((s, p) => s + p.y, 0) / pts.length : 50;
-    const s = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+    // 起步點常常在牆的下面：會被下方貼紙蓋住時把照片放大，讓起步點能往上移到貼紙上面（最多放大 2.5 倍）
+    const limit = H - 72 - 320 - 150;
+    const base = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+    const lift = fy < 99 ? (H - limit) / ((1 - fy / 100) * img.naturalHeight) : base;
+    const s = (fy / 100) * img.naturalHeight * base > limit ? Math.min(base * 2.5, Math.max(base, lift)) : base;
     const dw = img.naturalWidth * s;
     const dh = img.naturalHeight * s;
     const ox = Math.min(0, Math.max(W - dw, W / 2 - (fx / 100) * dw));
-    const oy = Math.min(0, Math.max(H - dh, H * 0.42 - (fy / 100) * dh));
+    const oy = Math.min(0, Math.max(H - dh, Math.min(H * 0.42, limit) - (fy / 100) * dh));
     try {
       g.drawImage(img, ox, oy, dw, dh);
       g.getImageData(0, 0, 1, 1); // 照片不能放進圖片（不同網域）時這裡會出錯，改用膠帶色底
@@ -300,7 +304,7 @@ export async function drawSendCard(info: SendCardInfo): Promise<Blob> {
   fitText(g, gradeLabel(info.grade), sx + 156, sy + 166, 210, "700", 150, f.num);
   g.textAlign = "left";
   // 文字
-  const qr = await qrImage(info.url, 220);
+  const qr = info.url ? await qrImage(info.url, 220) : null;
   const tx = sx + 312;
   const tmax = sw - 312 - (qr ? 260 : 40);
   g.textBaseline = "alphabetic";
@@ -358,8 +362,8 @@ export async function drawMonthCard(info: MonthCardInfo): Promise<Blob> {
   // 大數字：完攀條數
   g.textBaseline = "alphabetic";
   g.fillStyle = C.ink;
-  g.font = `700 340px ${f.num}`;
   const big = String(info.sends);
+  g.font = `700 ${big.length <= 2 ? 340 : big.length === 3 ? 250 : 190}px ${f.num}`; // 三位數以上縮小，不撞到夥伴
   g.fillText(big, 56, 590);
   const bw = g.measureText(big).width;
   g.font = `900 64px ${f.sans}`;
@@ -490,10 +494,14 @@ export async function makeVideoSticker(info: { grade: number; gymName: string; z
   sg.globalCompositeOperation = "destination-in";
   rrect(sg, 0, 0, used, 180, 36);
   sg.fill();
+  // 大小照影片的長邊算（橫的影片放到限時動態會縮小，貼紙不會小到看不清楚）；
+  // 直的影片往上抬到底下 16%，不被 IG 的名字、留言框蓋住
   return (dg, w, h) => {
-    const sw = Math.min(w * 0.5, (used / 180) * h * 0.09);
+    const sh0 = Math.max(w, h) * 0.07;
+    const sw = Math.min(w * 0.62, (used / 180) * sh0);
     const sh = (sw * 180) / used;
-    const m = Math.round(Math.min(w, h) * 0.035);
-    dg.drawImage(s, m, h - m - sh, sw, sh);
+    const m = Math.round(Math.min(w, h) * 0.04);
+    const bottom = h > w ? Math.round(h * 0.16) : m;
+    dg.drawImage(s, m, h - bottom - sh, sw, sh);
   };
 }

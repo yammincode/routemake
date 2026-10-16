@@ -118,16 +118,18 @@ export type VideoEdit = { start: number; end: number; mute: boolean };
 // 要在按鈕的點擊事件裡「直接」呼叫（前面不要先 await 別的），iPhone 才允許自動播放
 // onThumb：錄到第 1 秒時順便給縮圖（失敗就不給）
 // overlay：每一格畫完影片後再畫上去（分享到 IG 的角落小貼紙）；有 overlay 也一定重錄
+// signal：中途取消（例如關掉預覽）：馬上停止錄影、回傳 null
 export async function compressVideo(
   file: File,
   onProgress: (ratio: number) => void,
   edit?: VideoEdit,
   onThumb?: (thumb: Blob) => void,
-  overlay?: (g: CanvasRenderingContext2D, w: number, h: number) => void
+  overlay?: (g: CanvasRenderingContext2D, w: number, h: number) => void,
+  signal?: AbortSignal
 ): Promise<File | null> {
   const type = compressType();
   const must = !!edit || !!overlay; // 一定要重錄（不能改傳原檔）
-  if (!type || (!must && file.size < compressMinBytes())) return null;
+  if (!type || (!must && file.size < compressMinBytes()) || signal?.aborted) return null;
 
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
@@ -199,6 +201,7 @@ export async function compressVideo(
       else requestAnimationFrame(draw);
     };
     video.addEventListener("ended", () => reached(), { once: true });
+    signal?.addEventListener("abort", () => reached(), { once: true });
     rec.start(1000);
     await video.play();
     draw();
@@ -207,7 +210,7 @@ export async function compressVideo(
     video.pause();
     rec.stop();
     await stopped;
-    if (!ended) return null;
+    if (!ended || signal?.aborted) return null;
     onProgress(1);
 
     const blob = new Blob(chunks, { type: type.split(";")[0] });

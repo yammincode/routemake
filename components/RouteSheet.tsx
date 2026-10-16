@@ -38,7 +38,7 @@ import {
 } from "@/lib/data";
 import { ago, md, todayYmd, ymd } from "@/lib/date";
 import { findGym } from "@/lib/gyms";
-import { canShareIg } from "@/lib/share";
+import { canShareIg, shareUrl } from "@/lib/share";
 import { drawSendCard } from "@/lib/share-cards";
 import { FEEL, GRADE_FEEL, STATUS_LABEL, type Status } from "@/lib/design";
 import { herePath, zoneRoutePath } from "@/lib/nav";
@@ -183,6 +183,7 @@ function RouteBody({
   const [profile, setProfile] = useState<string | null>(null);
   // 分享到 IG（A3 完攀圖）：按了先打開預覽、在手機上畫圖，畫好再按「分享到 IG」
   const [card, setCard] = useState<{ file: File | null; url: string | null } | null>(null);
+  const cardRun = useRef(0); // 第幾次按：關掉又打開時，前一次慢做好的圖不要塞進來
   const onVideoCount = useCallback((n: number) => setVideoCount(n), []);
 
   const commentsOpen = gymCommentsOn && r.comments_enabled;
@@ -405,6 +406,7 @@ function RouteBody({
   // A3 完攀圖：卡片最上面那張照片（起步點、Spray Wall 圈圈、長耐力的點）＋難度、區域、館名、攀爬日、QR code（打開這條路線）
   const openCard = async () => {
     if (!status || status === "project") return;
+    const run = ++cardRun.current;
     setCard({ file: null, url: null });
     try {
       const gym = findGym(gymId)?.name ?? "";
@@ -420,16 +422,21 @@ function RouteBody({
         sub: [gym, `${+day.slice(0, 4)}.${day.slice(5, 7)}.${day.slice(8, 10)}`].filter(Boolean).join("・"),
         nickname: access?.nickname ?? "",
         // Spray Wall 的路線沒有區域頁可以標出來：QR code 打開首頁
-        url: location.origin + (r.name ? "/" : zoneRoutePath(r.zone_id, r.id, false)),
+        url: shareUrl(r.name ? "/" : zoneRoutePath(r.zone_id, r.id, false)),
       });
+      if (run !== cardRun.current) return;
       const file = new File([blob], `routemake-${r.code || "route"}.jpg`, { type: "image/jpeg" });
-      setCard((c) => (c ? { file, url: URL.createObjectURL(file) } : c));
+      setCard({ file, url: URL.createObjectURL(file) });
     } catch {
+      if (run !== cardRun.current) return;
       setCard(null);
       toast("圖片做不出來，請再試一次");
     }
   };
-  const closeCard = () => setCard(null);
+  const closeCard = () => {
+    cardRun.current++;
+    setCard(null);
+  };
   useEffect(() => () => void (card?.url && URL.revokeObjectURL(card.url)), [card]);
 
   // 卡片是全螢幕、多記了一筆瀏覽紀錄（網址一樣）：換掉那一筆，登入回來按返回不用多按一次
