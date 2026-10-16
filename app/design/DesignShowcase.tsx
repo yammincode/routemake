@@ -59,6 +59,7 @@ import {
 import { MINGDE_PLAN } from "@/lib/floorplan";
 import { GYMS, LIVE_GYM } from "@/lib/gyms";
 import { MASCOTS, type MascotPick } from "@/lib/mascots";
+import { ReportAction, ReportCount, ReportItem, ReportLink, ReportList, ReportMark, ReportSpot } from "@/components/ui/Report";
 import { ShareButton, ShareOffer, SharePicker, SharePreview } from "@/components/ui/Share";
 import { SHOW_DEFAULT } from "@/lib/share-options";
 
@@ -506,6 +507,35 @@ export default function DesignShowcase() {
         </div>
         <SharePreview open={sharePv} onClose={() => setSharePv(false)} title="分享完攀到 IG" what="圖片" file={null} image={null} progress={0.4} note="預覽：圖做好之前顯示製作進度" />
         <SharePicker kind="send" show={sendShow} onChange={setSendShow} />
+      </Block>
+
+      <Block title="路線回報（ReportLink、ReportSpot、ReportMark、ReportItem）">
+        <ReportLink>找不到你爬的路線？回報給定線員</ReportLink>
+        <div className="relative mt-2 mb-3 h-24 rounded-tile bg-sunk">
+          <ReportSpot x={25} y={50} color="紫" />
+          <ReportMark x={55} y={50} color="橙" count={2} selected label="回報：沒標到的路線" />
+          <ReportMark x={80} y={50} count={1} label="回報：位置標錯" />
+        </div>
+        <h4 className="mb-2 text-sub font-bold">
+          路線回報
+          <ReportCount n={3} />
+        </h4>
+        <ReportList>
+          <ReportItem
+            selected
+            title="沒標到的路線：橙色・猜 V4"
+            meta="A1 區・2 人回報・小安、阿凱・3 小時前"
+            notes={[{ who: "小安", text: "從右下角的大斜面點起步" }]}
+            actions={
+              <>
+                <ReportAction main>＋ 新增這條</ReportAction>
+                <ReportAction>已經有了</ReportAction>
+                <ReportAction>不是路線</ReportAction>
+              </>
+            }
+          />
+          <ReportItem title="已經拆了：A1-03（黃色 V2）" meta="A1 區・阿凱・昨天" notes={[]} actions={<><ReportAction main>下架這條</ReportAction><ReportAction>沒問題</ReportAction></>} />
+        </ReportList>
       </Block>
 
       <Block title="管理後台表單">

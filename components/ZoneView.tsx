@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { PageCheer } from "@/components/MascotCheer";
+import ReportSheet, { type ReportTarget } from "@/components/ReportSheet";
 import RouteSheet, { type RouteTab } from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
 import { BackLink, Empty, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow, GradeChip } from "@/components/ui/Chip";
 import { HowTo } from "@/components/ui/HowTo";
+import { ReportLink } from "@/components/ui/Report";
 import { BandHeading, BandPicker, dueText, ZoneGradeCard } from "@/components/ui/Gym";
 import { CommentCount, Points, RouteList, RouteRow, Tags, VideoCount } from "@/components/ui/Route";
 import { useToast } from "@/components/ui/Toast";
@@ -16,6 +18,7 @@ import { NoPhoto, Pin, WallPhoto } from "@/components/ui/Wall";
 import {
   getZoneView,
   photoUrl,
+  reportsReady,
   takeZoneAhead,
   seqTotal,
   type Ascent,
@@ -27,7 +30,7 @@ import {
 import { zoneLines } from "@/lib/cheer";
 import { ago, daysUntil, isNew } from "@/lib/date";
 import { GRADE_BANDS, gradeColor, gradeLabel, inBand, isYds, type BandId, type HoldColor, STYLE_TAGS } from "@/lib/design";
-import { backOr, upTo } from "@/lib/nav";
+import { backOr, herePath, upTo } from "@/lib/nav";
 import { overlayPending, peekCache, withCache } from "@/lib/offline";
 import { routePoints } from "@/lib/scoring";
 import { useScoring } from "@/lib/useScoring";
@@ -143,6 +146,16 @@ export default function ZoneView({
     }, 900);
   }, [routes, fresh, error, focus, toast]);
   useEffect(() => () => clearTimeout(focusTimer.current), []);
+  // 路線回報（step47）：資料庫有這個功能才顯示最下面的入口
+  const [canReport, setCanReport] = useState(false);
+  const [report, setReport] = useState<ReportTarget>(null);
+  useEffect(() => {
+    let live = true;
+    void reportsReady().then((ok) => live && setCanReport(ok));
+    return () => {
+      live = false;
+    };
+  }, []);
   // 改篩選、點別條路線：黃圈拿掉，照片恢復照篩選變淡
   // 還沒自動打開卡片前就自己點了別的：不再自動打開
   const unfocus = () => {
@@ -388,6 +401,14 @@ export default function ZoneView({
       ) : (
         <RouteList>{shown.map(row)}</RouteList>
       )}
+
+      {/* 路線回報：只加在最下面（版型固定，見 CLAUDE.md）；岩牆有照片、開放的館才有 */}
+      {canReport && src && gym.is_live && zone.kind !== "spray" && (
+        <ReportLink onClick={() => (session ? setReport({ kind: "missing", zone, photo: src, routes }) : router.push(`/login?next=${encodeURIComponent(herePath())}`))}>
+          找不到你爬的路線？回報給定線員
+        </ReportLink>
+      )}
+      <ReportSheet target={report} onClose={() => setReport(null)} />
 
       <RouteSheet
         route={open}

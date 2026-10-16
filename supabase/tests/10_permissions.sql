@@ -2281,6 +2281,85 @@ select tests.ok('數據分析：路線分析每條路線、熱門路線帶在哪
 select tests.ok('數據分析：路線分析不回傳客人的帳號', position('climber_' in public.route_insights('mingde')::text) = 0
   and position('climber_' in public.usage_insights(null)::text) = 0);
 
+-- ---------------------------------------------------------------------
+-- 路線回報（0053）：客人回報沒標到的路線、路線有問題；那一館的員工處理
+-- ---------------------------------------------------------------------
+reset role;
+insert into ids select 'rpZone', id from public.zones where gym_id = 'mingde' and code = 'B1';
+insert into ids select 'rpRoute', id from public.routes where zone_id = (select v from ids where k = 'zoneA') and archived_at is null order by code limit 1;
+insert into ids select 'rpRoute2', id from public.routes where zone_id = (select v from ids where k = 'zoneA') and archived_at is null order by code desc limit 1;
+set role anon; select tests.login(null);
+select tests.throws('回報：沒登入不能回報', format($q$select public.submit_route_report(%L, null, 'missing', '紅', 5, 40, 60, null)$q$, (select v from ids where k = 'rpZone')));
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.lives('回報：顧客回報沒標到的路線（位置、顏色、猜的難度、說明）',
+  format($q$select public.submit_route_report(%L, null, 'missing', '紅', 5, 40.5, 62, '  中間那條紅的  ')$q$, (select v from ids where k = 'rpZone')));
+select tests.lives('回報：顧客回報路線顏色不對', format($q$select public.submit_route_report(null, %L, 'color', '藍', null, null, null, null)$q$, (select v from ids where k = 'rpRoute')));
+select tests.lives('回報：顧客回報路線已經拆了', format($q$select public.submit_route_report(null, %L, 'gone', null, null, null, null, null)$q$, (select v from ids where k = 'rpRoute2')));
+select tests.throws('回報：沒標到的要選顏色', format($q$select public.submit_route_report(%L, null, 'missing', null, null, 40, 60, null)$q$, (select v from ids where k = 'rpZone')), '顏色');
+select tests.throws('回報：沒標到的要點位置', format($q$select public.submit_route_report(%L, null, 'missing', '紅', null, null, null, null)$q$, (select v from ids where k = 'rpZone')), '起步點');
+select tests.throws('回報：位置標錯要點位置', format($q$select public.submit_route_report(null, %L, 'pin', null, null, null, null, null)$q$, (select v from ids where k = 'rpRoute')), '起步點');
+select tests.throws('回報：位置不能超出照片', format($q$select public.submit_route_report(%L, null, 'missing', '紅', null, 140, 60, null)$q$, (select v from ids where k = 'rpZone')));
+select tests.throws('回報：說明不能放網址', format($q$select public.submit_route_report(%L, null, 'missing', '紅', null, 40, 60, '看這裡 evil.com')$q$, (select v from ids where k = 'rpZone')), '網址');
+select tests.throws('回報：說明最多 100 字', format($q$select public.submit_route_report(%L, null, 'missing', '紅', null, 40, 60, %L)$q$, (select v from ids where k = 'rpZone'), repeat('長', 101)), '100');
+select tests.throws('回報：Spray Wall 不能回報沒標到的路線', format($q$select public.submit_route_report(%L, null, 'missing', '紅', null, 40, 60, null)$q$, (select id from public.zones where gym_id = 'mingde' and kind = 'spray' limit 1)), '不能回報');
+select tests.throws('回報：沒開放的館不能回報', format($q$select public.submit_route_report(%L, null, 'missing', '紅', null, 40, 60, null)$q$, (select id from public.zones where gym_id = 'g6' limit 1)));
+select tests.throws('回報：不能直接寫資料表', format($q$insert into public.route_reports (user_id, zone_id, kind, hold_color, pin_x, pin_y) values (%L, %L, 'missing', '紅', 1, 1)$q$, :A, (select v from ids where k = 'rpZone')));
+select tests.ok('回報：看得到自己送的（說明去掉前後空白、區域照路線所在那一區）',
+  (select count(*) = 3 and bool_and(user_id = :A) and bool_or(note = '中間那條紅的')
+          and bool_and(kind = 'missing' or zone_id = (select v from ids where k = 'zoneA'))
+     from public.route_reports));
+select tests.throws('回報：顧客不能看回報清單', $q$select * from public.route_reports_list('mingde')$q$, '員工');
+select tests.throws('回報：顧客不能處理回報', format($q$select public.handle_route_reports(array[%L]::uuid[], 'rejected', null)$q$, (select id from public.route_reports limit 1)), '員工');
+select tests.ok('回報：顧客不能改回報（沒有改的權限，改了沒作用）', tests.rows($q$update public.route_reports set status = 'ok'$q$) = 0);
+reset role;
+set role authenticated; select tests.login(:NN);
+select tests.ok('回報：別的顧客看不到別人的回報', (select count(*) from public.route_reports) = 0);
+reset role;
+-- 每人 24 小時最多 10 則（再送 7 則到 10 則，第 11 則擋下）
+set role authenticated; select tests.login(:A);
+select public.submit_route_report((select v from ids where k = 'rpZone'), null, 'missing', '綠', null, 10 + g, 50, null) from generate_series(1, 7) g;
+select tests.throws('回報：24 小時最多 10 則', format($q$select public.submit_route_report(%L, null, 'missing', '紅', null, 40, 60, null)$q$, (select v from ids where k = 'rpZone')), '10 則');
+reset role;
+-- 停權中的人不能回報
+update public.profiles set suspended_until = now() + interval '1 day' where id = :B;
+set role authenticated; select tests.login(:B);
+select tests.throws('回報：停權中不能回報', format($q$select public.submit_route_report(%L, null, 'missing', '紅', null, 40, 60, null)$q$, (select v from ids where k = 'rpZone')), '暫停');
+reset role;
+update public.profiles set suspended_until = null where id = :B;
+-- 員工
+set role authenticated; select tests.login(:ST);
+select tests.ok('回報：定線員看得到自己館還沒處理的回報（帶暱稱、區域、路線）',
+  (select count(*) = 10 and bool_and(nickname = (select nickname from public.profiles where id = :A) and gym_id = 'mingde') and bool_or(route_code is not null and kind = 'color')
+     from public.route_reports_list('mingde')));
+select tests.throws('回報：定線員看不到別館的回報清單', $q$select * from public.route_reports_list('g2')$q$, '員工');
+select tests.throws('回報：定線員不能看全部館', $q$select * from public.route_reports_list(null)$q$, '員工');
+select tests.throws('回報：處理狀態要對', format($q$select public.handle_route_reports(array[%L]::uuid[], 'done', null)$q$, (select id from public.route_reports where kind = 'gone')), '狀態');
+select tests.throws('回報：新增的路線要在同一區', format($q$select public.handle_route_reports(array[%L]::uuid[], 'added', %L)$q$,
+  (select id from public.route_reports where kind = 'missing' limit 1), (select v from ids where k = 'rpRoute')), '那一區');
+select tests.ok('回報：定線員處理（幾筆一起）、只算還沒處理的',
+  public.handle_route_reports((select array_agg(id) from public.route_reports where kind = 'missing' and hold_color = '綠'), 'rejected', null) = 7
+  and public.handle_route_reports((select array_agg(id) from public.route_reports where kind = 'missing' and hold_color = '綠'), 'rejected', null) = 0);
+select tests.ok('回報：處理過的不在清單上', (select count(*) from public.route_reports_list('mingde')) = 3);
+select tests.ok('回報：改好路線顏色後標成已修改',
+  public.handle_route_reports((select array_agg(id) from public.route_reports where kind = 'color'), 'fixed', (select v from ids where k = 'rpRoute')) = 1);
+select tests.ok('回報：記下是誰處理、哪條路線',
+  (select status = 'fixed' and handled_by = :ST and result_route_id = (select v from ids where k = 'rpRoute') and handled_at is not null
+         from public.route_reports where kind = 'color'));
+reset role;
+insert into ids select 'rpOpen', id from public.route_reports where status = 'new' limit 1;
+set role authenticated; select tests.login(:ST2);
+select tests.ok('回報：別館定線員看不到明德的回報', (select count(*) from public.route_reports) = 0);
+select tests.throws('回報：別館定線員不能處理明德的回報', format($q$select public.handle_route_reports(array[%L]::uuid[], 'ok', null)$q$,
+  (select v from ids where k = 'rpOpen')), '員工');
+reset role;
+set role authenticated; select tests.login(:OW);
+select tests.ok('回報：老闆看全部館', (select count(*) from public.route_reports_list(null)) = 2 and (select count(*) from public.route_reports_list('mingde')) = 2);
+reset role;
+select tests.ok('回報：處理寫進操作紀錄', (select count(*) from public.audit_log where action = 'report.handle') = 8);
+select tests.ok('回報：操作紀錄記下區域、路線編號', exists (select 1 from public.audit_log where action = 'report.handle' and detail ->> 'status' = 'fixed' and detail ->> 'zone' is not null and detail ->> 'code' is not null));
+select tests.ok('回報：回報的人看到處理結果', (select count(*) from public.route_reports where user_id = :A and status <> 'new') = 8);
+
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));
 

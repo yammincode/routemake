@@ -12,6 +12,7 @@ import { WallPhoto } from "@/components/ui/Wall";
 import {
   archiveRoute,
   createRoute,
+  handleRouteReports,
   deleteComment,
   getComments,
   newId,
@@ -25,7 +26,8 @@ import {
 import { ago } from "@/lib/date";
 import type { HoldColor } from "@/lib/design";
 
-export type EditTarget = { route: Route } | { x: number; y: number } | null;
+// 從路線回報新增（step47）：帶入客人點的位置、顏色、猜的難度；存好後把那幾則回報標成「已新增」
+export type EditTarget = { route: Route } | { x: number; y: number; color?: HoldColor | null; grade?: number | null; reports?: string[] } | null;
 
 // 新增／編輯路線（底部彈出）：顏色、難度、風格、評語、留言開關；編輯時可看並刪留言、下架
 // 長耐力區：不選顏色，改成在照片上照順序點岩點（最多 50 點）；已經有人記錄過的路線，點不能再改
@@ -69,8 +71,10 @@ function Body({
   const toast = useToast();
   const r = "route" in target ? target.route : null;
   const endurance = zone.grade_system === "endurance";
-  const [color, setColor] = useState<HoldColor>(r?.hold_color ?? "紅");
-  const [grade, setGrade] = useState(r?.grade ?? (zone.grade_system === "v" ? 3 : 104));
+  const from = "x" in target ? target : null;
+  const [color, setColor] = useState<HoldColor>(r?.hold_color ?? from?.color ?? "紅");
+  const guess = from?.grade != null && (zone.grade_system === "v") === from.grade < 100 ? from.grade : null;
+  const [grade, setGrade] = useState(r?.grade ?? guess ?? (zone.grade_system === "v" ? 3 : 104));
   // 長耐力的點：新增時第 1 點就是剛剛點的位置
   const startHolds = r?.holds?.map(({ x, y }) => ({ x, y })) ?? ("x" in target ? [{ x: +target.x.toFixed(2), y: +target.y.toFixed(2) }] : []);
   const [holds, setHolds] = useState(startHolds);
@@ -127,7 +131,9 @@ function Body({
         toast("已儲存");
       } else if ("x" in target) {
         const created = await createRoute(zone.id, input, target.x, target.y, routeId);
-        toast(endurance ? `已新增 ${created.code}（${gradeLabel(grade)}・${holds.length} 點）` : `已新增 ${created.code}（${gradeLabel(grade)} ${color}色）`);
+        const marked = target.reports?.length ? await handleRouteReports(target.reports, "added", created.id).then(() => true, () => false) : true;
+        const msg = endurance ? `已新增 ${created.code}（${gradeLabel(grade)}・${holds.length} 點）` : `已新增 ${created.code}（${gradeLabel(grade)} ${color}色）`;
+        toast(marked ? msg : `${msg}；回報還沒標成處理好，請在「路線回報」按「已經有了」`);
       }
       onChanged();
       onClose();
@@ -168,6 +174,7 @@ function Body({
       <SheetSub>
         {zone.name}
         {r ? `，${ago(r.created_at)}設定` : "，編號會自動產生"}
+        {from?.reports?.length ? `・照客人回報帶入位置${from.color ? "、顏色" : ""}${guess != null ? "、難度" : ""}，請確認` : ""}
       </SheetSub>
       {endurance ? (
         <>

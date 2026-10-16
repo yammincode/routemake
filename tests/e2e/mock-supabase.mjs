@@ -77,6 +77,7 @@ export function createMock() {
     routeLikes: [], // route_likes
     opens: [], // app_opens
     feedback: [],
+    reports: [], // route_reports（step47）
     slamClaims: [], // 大滿貫兌換碼（step40）
     resetEvents: [], // 換線公告
     resetEditors: [], // 老闆授權輸入換線日的人（user_id）
@@ -97,7 +98,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, noRoutePhoto: false, noInsights: false, noRouteZone: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, noRoutePhoto: false, noInsights: false, noRouteZone: false, noReports: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -803,6 +804,74 @@ export function createMock() {
       const p = db.profiles.find((x) => x.username === a.p_username.toLowerCase());
       return p ? J(route, 200, { id: p.id, nickname: p.nickname }) : J(route, 404, { code: "P0002", message: "找不到這個帳號，請對方先註冊" });
     }
+    // 路線回報（step47）；state.noReports 模擬資料庫還沒套用（沒有這些函式和資料表）
+    if (["submit_route_report", "route_reports_list", "handle_route_reports"].includes(fn)) {
+      if (state.noReports) return J(route, 404, { code: "PGRST202", message: `Could not find the function public.${fn}` });
+      const err = (msg, code = "22023") => J(route, code === "42501" ? 403 : 400, { code, message: msg });
+      if (!uid) return err("要先登入才能回報", "42501");
+      if (fn === "submit_route_report") {
+        if (suspended(uid)) return err("帳號暫停中，暫時不能回報", "42501");
+        const k = a.p_kind;
+        if (!["missing", "color", "pin", "gone"].includes(k)) return err("回報的種類不對");
+        let zid = a.p_zone;
+        if (k === "missing") {
+          const z = zoneOf(zid);
+          if (a.p_route || !z || z.kind === "spray" || !db.gyms.find((g) => g.id === z.gym_id)?.is_live) return err("這一區不能回報");
+        } else {
+          const r = db.routes.find((x) => x.id === a.p_route);
+          const z = r && zoneOf(r.zone_id);
+          if (!r || r.archived_at || (r.kind ?? "gym") !== "gym" || !db.gyms.find((g) => g.id === z.gym_id)?.is_live) return err("這條路線不能回報（可能已經下架）");
+          zid = r.zone_id;
+        }
+        if (["missing", "color"].includes(k) && !a.p_color) return err("請選岩點顏色");
+        if (["missing", "pin"].includes(k) && (a.p_x == null || a.p_y == null)) return err("請在照片上點出起步點");
+        const note = (a.p_note ?? "").trim() || null;
+        if (note && (note.length > 100 || hasLink(note))) return err("補充說明最多 100 字，不能放網址");
+        const dayAgo = new Date(Date.now() - 86400000).toISOString();
+        if (db.reports.filter((x) => x.user_id === uid && x.created_at > dayAgo).length >= 10) return J(route, 400, { code: "54000", message: "今天已經回報 10 則了，明天再來，謝謝你！" });
+        const id = uuid();
+        db.reports.push({
+          id, user_id: uid, zone_id: zid, route_id: k === "missing" ? null : a.p_route, kind: k,
+          hold_color: ["missing", "color"].includes(k) ? a.p_color : null, grade_guess: k === "missing" ? (a.p_grade ?? null) : null,
+          pin_x: ["missing", "pin"].includes(k) ? a.p_x : null, pin_y: ["missing", "pin"].includes(k) ? a.p_y : null,
+          note, status: "new", result_route_id: null, handled_by: null, handled_at: null, created_at: now(),
+        });
+        return J(route, 200, id);
+      }
+      if (fn === "route_reports_list") {
+        if (a.p_gym == null ? !isOwner(uid) : !isStaff(uid, a.p_gym)) return err("只有這間館的員工看得到回報", "42501");
+        const rows = db.reports
+          .filter((x) => x.status === "new" && (a.p_gym == null || zoneOf(x.zone_id).gym_id === a.p_gym))
+          .map((x) => {
+            const z = zoneOf(x.zone_id);
+            const r = x.route_id ? db.routes.find((y) => y.id === x.route_id) : null;
+            return {
+              id: x.id, zone_id: x.zone_id, zone_code: z.code, zone_name: z.name, gym_id: z.gym_id,
+              route_id: x.route_id, route_code: r?.code ?? null, route_color: r?.hold_color ?? null, route_grade: r?.grade ?? null, route_x: r?.pin_x ?? null, route_y: r?.pin_y ?? null,
+              kind: x.kind, hold_color: x.hold_color, grade_guess: x.grade_guess, pin_x: x.pin_x, pin_y: x.pin_y, note: x.note,
+              user_id: x.user_id, nickname: prof(x.user_id)?.nickname ?? null, created_at: x.created_at, _sort: z.sort,
+            };
+          })
+          .sort((p, q) => p._sort - q._sort || p.created_at.localeCompare(q.created_at))
+          .map(({ _sort, ...x }) => x);
+        return J(route, 200, rows);
+      }
+      if (fn === "handle_route_reports") {
+        if (!["added", "rejected", "fixed", "ok"].includes(a.p_status)) return err("處理狀態不對");
+        let n = 0;
+        for (const x of db.reports.filter((y) => (a.p_ids ?? []).includes(y.id) && y.status === "new")) {
+          const z = zoneOf(x.zone_id);
+          if (!isStaff(uid, z.gym_id)) return err("只有這間館的員工可以處理回報", "42501");
+          const t = a.p_route ? db.routes.find((y) => y.id === a.p_route) : null;
+          if (a.p_route && t?.zone_id !== x.zone_id) return err("路線不在回報的那一區");
+          Object.assign(x, { status: a.p_status, result_route_id: a.p_route ?? null, handled_by: uid, handled_at: now() });
+          const r0 = x.route_id ? db.routes.find((y) => y.id === x.route_id) : null;
+          audit(uid, z.gym_id, "report.handle", x.id, { kind: x.kind, status: a.p_status, route: a.p_route ?? null, zone: z.name, code: t?.code ?? r0?.code ?? null, color: x.hold_color });
+          n++;
+        }
+        return J(route, 200, n);
+      }
+    }
     if (fn === "feedback_list") {
       if (!isOwner(uid)) return J(route, 403, { code: "42501", message: "只有老闆可以看所有回饋" });
       const rows = db.feedback.filter((f) => !a.p_status || f.status === a.p_status).sort((x, y) => y.created_at.localeCompare(x.created_at));
@@ -1136,7 +1205,7 @@ export function createMock() {
           }
           Object.assign(r, body, body.holds ? { pin_x: body.holds[0].x, pin_y: body.holds[0].y } : {});
         });
-        return empty(route);
+        return sel ? out(targets.map((r) => ({ id: r.id }))) : empty(route);
       }
     }
     if (t === "ascents") {
@@ -1227,6 +1296,11 @@ export function createMock() {
         });
         return J(route, 200, rows.map((e) => ({ id: e.id })));
       }
+    }
+    if (t === "route_reports") {
+      if (state.noReports) return J(route, 404, { code: "PGRST205", message: "Could not find the table 'public.route_reports' in the schema cache" });
+      if (m === "GET") return out(filt(db.reports.filter((x) => uid && (x.user_id === uid || isStaff(uid, zoneOf(x.zone_id).gym_id))), sp));
+      return J(route, 403, { code: "42501", message: "permission denied for table route_reports" });
     }
     if (t === "feedback") {
       if (!uid) return J(route, 401, { message: "JWT" });

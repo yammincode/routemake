@@ -6,7 +6,7 @@ import { GYMS } from "@/lib/gyms";
 
 export const AUDIT_FILTERS = [
   { key: "all", label: "全部", actions: [] as string[] },
-  { key: "route", label: "路線", actions: ["route.archive", "route.unarchive", "zone.archive_all", "zone.reorder"] },
+  { key: "route", label: "路線", actions: ["route.archive", "route.unarchive", "zone.archive_all", "zone.reorder", "report.handle"] },
   { key: "comment", label: "留言", actions: ["comment.delete"] },
   { key: "video", label: "影片", actions: ["video.delete"] },
   { key: "card", label: "人物卡", actions: ["card.clear"] },
@@ -32,6 +32,12 @@ export function describeAudit(a: AuditEntry): string {
       return `${str(d.zone) || "區域"}整區換線，下架 ${typeof d.count === "number" ? d.count : 0} 條`;
     case "zone.reorder":
       return `調整區域順序：${Array.isArray(d.zones) ? d.zones.map(str).join("、") : ""}`;
+    case "report.handle": {
+      const kind = ({ missing: "沒標到的路線", color: "顏色不對", pin: "位置標錯", gone: "已經拆了" } as Record<string, string>)[str(d.kind)] ?? "路線";
+      const done = ({ added: "已新增", rejected: "不是路線", fixed: "已修改", ok: "沒問題" } as Record<string, string>)[str(d.status)] ?? str(d.status);
+      const what = [str(d.zone), str(d.code), str(d.color) && `${str(d.color)}色`].filter(Boolean).join(" ");
+      return `處理路線回報（${kind}${what ? `：${what}` : ""}）：${done}`;
+    }
     case "comment.delete": {
       const body = str(d.body);
       return `刪除 ${str(d.author_nickname) || "顧客"} 在 ${str(d.code) || "路線"} 的留言「${body.length > 24 ? body.slice(0, 24) + "…" : body}」`;

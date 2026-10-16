@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import ProfileSheet from "@/components/ProfileSheet";
+import ReportSheet, { type ReportTarget } from "@/components/ReportSheet";
 import RouteVideos from "@/components/RouteVideos";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { ClimbDay } from "@/components/ui/ClimbDay";
@@ -12,6 +13,7 @@ import { HighpointPicker, NumberMarks } from "@/components/ui/Endurance";
 import { ClosedNotice, CommentForm, CommentItem, CommentList, PrivateHint } from "@/components/ui/Comments";
 import { Label, Segmented, TextArea } from "@/components/ui/Form";
 import { UserAvatar } from "@/components/ui/Mascot";
+import { ReportLink } from "@/components/ui/Report";
 import { Grade, SetterNote, StatusPicker, Tags, Tape } from "@/components/ui/Route";
 import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { Tabs } from "@/components/ui/Tabs";
@@ -29,6 +31,7 @@ import {
   likeComment,
   postComment,
   saveAscent,
+  reportsReady,
   seqTotal,
   unlikeComment,
   type Ascent,
@@ -189,6 +192,16 @@ function RouteBody({
   const [sendShow, setSendShow] = useState<SendShow | null>(null); // 勾選要放的資料（打開預覽時從手機讀）
   const myMascot = useMascot(session?.user.id); // 圖上的原岩夥伴（讀過會記在手機）
   const onVideoCount = useCallback((n: number) => setVideoCount(n), []);
+  // 路線回報（step47）：資料庫有這個功能才顯示分頁下面的入口
+  const [canReport, setCanReport] = useState(false);
+  const [report, setReport] = useState<ReportTarget>(null);
+  useEffect(() => {
+    let live = true;
+    void reportsReady().then((ok) => live && setCanReport(ok));
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const commentsOpen = gymCommentsOn && r.comments_enabled;
   const staff = isStaffOf(access, gymId);
@@ -675,6 +688,11 @@ function RouteBody({
           </>
         )}
       </div>
+      {/* 路線回報：只加在分頁下面（版型固定，見 CLAUDE.md）；岩館的路線、還在牆上才有 */}
+      {canReport && !spray && r.kind !== "community" && !r.archived_at && !seqTotal(r) && (
+        <ReportLink onClick={() => (session ? setReport({ kind: "route", zoneName, route: r, photo: hero?.kind === "pin" ? hero.src : null }) : toLogin())}>回報這條有問題</ReportLink>
+      )}
+      <ReportSheet target={report} onClose={() => setReport(null)} />
       <ProfileSheet userId={profile} gymId={gymId} onClose={() => setProfile(null)} />
       <SharePreview
         open={!!card}

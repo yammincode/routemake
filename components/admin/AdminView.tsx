@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteEditor, { type EditTarget } from "@/components/admin/RouteEditor";
 import RouteInsightsPanel from "@/components/admin/RouteInsightsPanel";
+import RouteReportsPanel from "@/components/admin/RouteReportsPanel";
 import AccountsPanel from "@/components/admin/AccountsPanel";
 import AuditPanel from "@/components/admin/AuditPanel";
 import ScoringPanel from "@/components/admin/ScoringPanel";
@@ -21,6 +22,7 @@ import { Label, TextField, Toggle } from "@/components/ui/Form";
 import { CommentCount, Points, RouteList, RouteRow, Tags } from "@/components/ui/Route";
 import Sheet, { SheetSub, SheetTitle } from "@/components/ui/Sheet";
 import { SetBox } from "@/components/ui/Stats";
+import { ReportMark } from "@/components/ui/Report";
 import { useToast } from "@/components/ui/Toast";
 import { NoPhoto, Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
 import { isManagerOf, roleLabel } from "@/lib/auth";
@@ -31,8 +33,10 @@ import {
   getCommentCounts,
   getGyms,
   getZoneProgress,
+  getRouteReports,
   getZones,
   makeMissingThumbs,
+  reportsReady,
   photoUrl,
   seqTotal,
   reorderZones,
@@ -41,8 +45,10 @@ import {
   uploadZonePhoto,
   type Gym,
   type Route,
+  type RouteReport,
   type Zone,
 } from "@/lib/data";
+import { groupReports, groupSpot, REPORT_KIND, type ReportGroup } from "@/lib/reports";
 import { ago, daysUntil } from "@/lib/date";
 import { GRADE_SYSTEMS } from "@/lib/design";
 import { PLANS, planHas } from "@/lib/floorplan";
@@ -72,6 +78,11 @@ export default function AdminView() {
   const [busy, setBusy] = useState(false);
   const [newZone, setNewZone] = useState({ name: "", code: "" });
   const fileRef = useRef<HTMLInputElement>(null);
+  // 路線回報（step47）：這間館還沒處理的；sel＝選中的那一則（照片上加框）
+  const [reportsOn, setReportsOn] = useState(true);
+  const [reports, setReports] = useState<RouteReport[] | null>(null);
+  const [sel, setSel] = useState<string | null>(null);
+  const photoRef = useRef<HTMLDivElement>(null);
 
   // 可以管理的場館：老闆全部，其他人只有自己的館
   useEffect(() => {
@@ -114,9 +125,23 @@ export default function AdminView() {
     }
   }, [zoneId, toast]);
 
+  const loadReports = useCallback(async () => {
+    if (!gymId) return;
+    try {
+      if (!(await reportsReady())) return setReportsOn(false);
+      setReportsOn(true);
+      setReports(await getRouteReports(gymId));
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  }, [gymId, toast]);
+
   useEffect(() => {
     void Promise.resolve().then(loadZones);
   }, [loadZones]);
+  useEffect(() => {
+    void Promise.resolve().then(loadReports);
+  }, [loadReports]);
   useEffect(() => {
     void Promise.resolve().then(loadRoutes);
   }, [loadRoutes]);
@@ -204,6 +229,19 @@ export default function AdminView() {
     });
 
   const src = zone ? photoUrl(zone.photo_path) : null;
+  const groups = reports ? groupReports(reports) : null;
+  const zoneGroups = (groups ?? []).filter((g) => g.zone_id === zoneId);
+  // 點一則回報：切到那一區、捲到照片
+  const pickReport = (g: ReportGroup) => {
+    setSel(g.key);
+    setZoneId(g.zone_id);
+    setTimeout(() => photoRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  };
+  const addFromReport = (g: ReportGroup) => {
+    setSel(g.key);
+    setZoneId(g.zone_id);
+    setTarget({ x: g.x ?? 50, y: g.y ?? 50, color: g.color, grade: g.grade, reports: g.items.map((i) => i.id) });
+  };
 
   return (
     <>
@@ -224,6 +262,8 @@ export default function AdminView() {
                 setGymId(g.id);
                 setZones(null);
                 setZoneId(null);
+                setReports(null);
+                setSel(null);
               }}
             >
               {g.name}
@@ -258,6 +298,19 @@ export default function AdminView() {
         </>
       ) : (
         <>
+
+      <RouteReportsPanel
+        groups={groups}
+        ready={reportsOn}
+        selected={sel}
+        onSelect={pickReport}
+        onAdd={addFromReport}
+        onDone={() => {
+          setSel(null);
+          void loadReports();
+          void loadRoutes();
+        }}
+      />
 
       <SetBox>
         {manager ? (
@@ -359,6 +412,7 @@ export default function AdminView() {
             </div>
           </SetBox>
 
+          <div ref={photoRef} />
           {src ? (
             <WallPhoto src={src} alt={`${zone.name}照片`} setter onPick={(x, y) => setTarget({ x, y })}>
               {routes.map((r) => (
@@ -375,6 +429,23 @@ export default function AdminView() {
                   }}
                 />
               ))}
+              {zoneGroups.map((g) => {
+                const at = groupSpot(g);
+                return (
+                  at && (
+                    <ReportMark
+                      key={g.key}
+                      x={at.x}
+                      y={at.y}
+                      color={g.kind === "missing" ? g.color : g.route_color}
+                      count={g.items.length}
+                      selected={sel === g.key}
+                      label={`回報：${REPORT_KIND[g.kind]}${g.route_code ? ` ${g.route_code}` : ""}`}
+                      onClick={() => setSel(g.key)}
+                    />
+                  )
+                );
+              })}
               {target && "x" in target && <TempPin x={target.x} y={target.y} />}
             </WallPhoto>
           ) : (
@@ -426,7 +497,13 @@ export default function AdminView() {
               setTarget(null);
               void loadRoutes();
             }}
-            onChanged={loadRoutes}
+            onChanged={() => {
+              void loadRoutes();
+              if (target && "x" in target && target.reports) {
+                setSel(null);
+                void loadReports();
+              }
+            }}
           />
         </>
       )}

@@ -423,6 +423,12 @@ export async function createRoute(zoneId: string, input: RouteInput, x: number, 
 export async function updateRoute(id: string, input: RouteInput) {
   must(await supabase().from("routes").update(input).eq("id", id));
 }
+// 處理路線回報：只改顏色或起步點；權限不夠或路線不在了時資料庫不報錯、只是改不到，這裡要自己檢查
+export async function fixRoute(id: string, patch: { hold_color: HoldColor } | { pin_x: number; pin_y: number }) {
+  const p = "pin_x" in patch ? { pin_x: +patch.pin_x.toFixed(3), pin_y: +patch.pin_y.toFixed(3) } : patch;
+  const rows = must(await supabase().from("routes").update(p).eq("id", id).is("archived_at", null).select("id"));
+  if (!rows?.length) throw new Error("改不到這條路線（可能已經下架）");
+}
 // 長耐力：這條路線有沒有人記錄過（有的話點不能再改）；資料庫還沒套用 step30 時當作沒有
 export async function routeHasAscents(id: string): Promise<boolean> {
   const r = await supabase().rpc("route_has_ascents", { p_route: id });
@@ -1419,4 +1425,78 @@ export async function setSlamSettings(s: { enabled: boolean; min_routes: number;
 }
 export async function getSlamClaims(): Promise<SlamListItem[]> {
   return (mustSlam(await supabase().rpc("slam_claim_list", { p_limit: 100 })) as SlamListItem[] | null) ?? [];
+}
+
+// ---------- 路線回報（step47） ----------
+// 客人回報沒標到的路線（missing）、路線有問題（color 顏色不對／pin 位置標錯／gone 已經拆了）；那一館的員工處理
+export type ReportKind = "missing" | "color" | "pin" | "gone";
+export type ReportStatus = "added" | "rejected" | "fixed" | "ok";
+export type ReportInput = {
+  kind: ReportKind;
+  zone_id: string | null; // missing：哪一區（路線有問題時用路線所在的區）
+  route_id: string | null;
+  hold_color: HoldColor | null;
+  grade_guess: number | null; // 猜的難度（不知道就 null）
+  x: number | null; // 照片上的百分比
+  y: number | null;
+  note: string | null;
+};
+export type RouteReport = {
+  id: string;
+  zone_id: string;
+  zone_code: string;
+  zone_name: string;
+  gym_id: string;
+  route_id: string | null;
+  route_code: string | null;
+  route_color: HoldColor | null;
+  route_grade: number | null;
+  route_x: number | null;
+  route_y: number | null;
+  kind: ReportKind;
+  hold_color: HoldColor | null;
+  grade_guess: number | null;
+  pin_x: number | null;
+  pin_y: number | null;
+  note: string | null;
+  user_id: string;
+  nickname: string | null;
+  created_at: string;
+};
+const NO_REPORTS = "資料庫還沒套用路線回報（step47），請先請老闆在 Supabase 執行 step47";
+function mustReports<T>(r: { data: T | null; error: { message?: string; code?: string } | null }): T {
+  if (r.error?.code === "PGRST202" || r.error?.code === "PGRST205" || r.error?.code === "42P01") throw new Error(NO_REPORTS);
+  return must(r);
+}
+// 資料庫有沒有回報功能（還沒執行 step47 時不顯示回報入口）；問到一次就記住，網路不通時不記，下次再問
+let reportsOk: Promise<boolean> | null = null;
+export function reportsReady(): Promise<boolean> {
+  reportsOk ??= (async () => {
+    const r = await supabase().from("route_reports").select("id").limit(0);
+    if (!r.error) return true;
+    if (r.error.code === "PGRST205" || r.error.code === "42P01") return false;
+    reportsOk = null;
+    return false;
+  })().catch(() => ((reportsOk = null), false));
+  return reportsOk;
+}
+export async function submitRouteReport(f: ReportInput): Promise<void> {
+  mustReports(
+    await supabase().rpc("submit_route_report", {
+      p_zone: f.zone_id,
+      p_route: f.route_id,
+      p_kind: f.kind,
+      p_color: f.hold_color,
+      p_grade: f.grade_guess,
+      p_x: f.x == null ? null : +f.x.toFixed(2),
+      p_y: f.y == null ? null : +f.y.toFixed(2),
+      p_note: f.note?.trim() || null,
+    }),
+  );
+}
+export async function getRouteReports(gym: string): Promise<RouteReport[]> {
+  return (mustReports(await supabase().rpc("route_reports_list", { p_gym: gym })) as RouteReport[] | null) ?? [];
+}
+export async function handleRouteReports(ids: string[], status: ReportStatus, routeId: string | null = null): Promise<number> {
+  return mustReports(await supabase().rpc("handle_route_reports", { p_ids: ids, p_status: status, p_route: routeId })) as number;
 }
