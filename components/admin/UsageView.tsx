@@ -84,6 +84,7 @@ export default function UsageView() {
   const [back, setBack] = useState<InsightsBack | null>(null);
   useEffect(() => {
     const b = peekInsightsBack("usage");
+    clearInsightsBack(); // 讀一次就丟（館不能看了、讀不到也不會留著）
     void Promise.resolve().then(() => {
       setTabState(b ? "routes" : savedTab());
       if (b) {
@@ -95,7 +96,6 @@ export default function UsageView() {
   useEffect(() => {
     if (!back || !routes || scope !== back.gym) return;
     window.scrollTo({ top: back.y });
-    clearInsightsBack();
     void Promise.resolve().then(() => setBack(null));
   });
   const setTab = (t: Tab) => {

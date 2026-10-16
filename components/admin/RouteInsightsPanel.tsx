@@ -33,6 +33,7 @@ export default function RouteInsightsPanel({ gymId, gymName }: { gymId: string; 
   useEffect(() => {
     req.current++;
     const b = peekInsightsBack("admin");
+    clearInsightsBack(); // 讀一次就丟（後台已經用它選好館了）
     void Promise.resolve().then(() => {
       setOpen(false);
       setData(undefined);
@@ -49,7 +50,6 @@ export default function RouteInsightsPanel({ gymId, gymName }: { gymId: string; 
   useEffect(() => {
     if (!back || !data) return;
     window.scrollTo({ top: back.y });
-    clearInsightsBack();
     void Promise.resolve().then(() => setBack(null));
   }, [back, data]);
 
