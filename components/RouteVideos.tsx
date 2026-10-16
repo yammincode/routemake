@@ -120,15 +120,18 @@ export default function RouteVideos({
   const showKey = JSON.stringify(videoShow);
   // 小貼紙：照現在的勾選先畫好；undefined＝還在準備；null＝什麼都沒勾（或畫不出來）＝分享原本那支
   const [stk, setStk] = useState<{ key: string; st: VideoSticker | null } | null>(null);
-  const sticker = stk?.key === showKey ? stk.st : undefined;
+  // 標籤內容：勾選＋標籤上的字（攀爬日、Flash／完攀、暱稱上傳後還會改）；做好的影片要跟現在的內容一樣才直接用
+  const seqN = seqTotal(r);
+  const stickerText = r.name ? r.name : seqN ? `${zoneName} ${r.code}・${seqN} 點` : `${zoneName} ${r.hold_color}色`;
+  const nickname = access?.nickname ?? "";
+  const contentKey = JSON.stringify([showKey, r.grade, gymId, stickerText, myStatus, myDay, nickname]);
+  const sticker = stk?.key === contentKey ? stk.st : undefined;
   // 做好的 IG 版：上傳時順便做的（igReady）、按了才做的（igMade）；勾選一樣才直接用
   const [igPrep, setIgPrep] = useState(readIgPrep);
   const [igReady, setIgReady] = useState<{ src: File; key: string; file: File } | null>(null);
   const [igMade, setIgMade] = useState<{ src: File; key: string; file: File } | null>(null);
   const [prepping, setPrepping] = useState(false); // 這次上傳有順便做 IG 版（按鈕寫「壓縮中（順便做 IG 版）」）
   const [prepMiss, setPrepMiss] = useState(false); // 有順便做、但沒做成（例如這支手機不能同時錄兩份）
-  // 開關打開時要等小貼紙準備好才能按「分享影片」（不然這次就沒順便做到）
-  const prepWait = igOk && igPrep && !!compressType() && sticker === undefined;
   const igRun = useRef<AbortController | null>(null); // 正在重錄的那一次：關掉預覽、改勾選、關掉卡片就停
   const [confirmDel, setConfirmDel] = useState<string | null>(null); // 刪除要按兩次（刪了不能復原）；換到別支影片就重來
 
@@ -142,11 +145,9 @@ export default function RouteVideos({
   }, [videos, onCount]);
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
   // 小貼紙先畫好（要等字型），按「也分享到 IG」、「套用並處理」時才能直接開始重錄（iPhone 只允許在點的那一下開始播放）
-  const seqN = seqTotal(r);
-  const stickerText = r.name ? r.name : seqN ? `${zoneName} ${r.code}・${seqN} 點` : `${zoneName} ${r.hold_color}色`;
-  const nickname = access?.nickname ?? "";
   useEffect(() => {
-    if (!igOk || !open) return;
+    // 登入、打開「影片」分頁、選了影片或剛分享完才畫（要下載字型，不在每次打開路線卡片時做）
+    if (!igOk || !open || !session || !active || (!file && !igSrc)) return;
     let on = true;
     makeVideoSticker({
       grade: r.grade,
@@ -157,10 +158,10 @@ export default function RouteVideos({
       nickname,
       show: JSON.parse(showKey) as VideoShow,
     })
-      .then((st) => void (on && setStk({ key: showKey, st })))
-      .catch(() => void (on && setStk({ key: showKey, st: null })));
+      .then((st) => void (on && setStk({ key: contentKey, st })))
+      .catch(() => void (on && setStk({ key: contentKey, st: null })));
     return () => void (on = false);
-  }, [igOk, open, r.grade, gymId, stickerText, myStatus, myDay, nickname, showKey]);
+  }, [igOk, open, session, active, file, igSrc, r.grade, gymId, stickerText, myStatus, myDay, nickname, showKey, contentKey]);
   // 預覽圖：面板開著時，第 1 秒的畫面加上現在勾選的標籤（改勾選馬上重畫）
   const igOpen = !!ig;
   useEffect(() => {
@@ -277,6 +278,10 @@ export default function RouteVideos({
   if (hi && !hiOk) setHi(false); // 拉到超過上限就關掉（再剪短不會自己打開）
   const edit: VideoEdit | undefined =
     editable && (trimmed || mute || useHi) ? { start: trimmed ? trim![0] : 0, end: trimmed ? trim![1] : dur!, mute, ...(useHi ? { fps60: true } : {}) } : undefined;
+  // 上傳時順便做 IG 版：只在這支影片本來就要重錄（剪輯、靜音、要壓縮的大檔案）時一起做，小影片不為了 IG 多等一次
+  const prepFits = igOk && igPrep && !!compressType() && !!file && (!!edit || file.size >= compressMinBytes());
+  // 要順便做時，等小貼紙準備好才能按「分享影片」（不然這次就沒順便做到）
+  const prepWait = prepFits && sticker === undefined;
   const upload = async () => {
     if (!session || !file || !consent) return;
     setBusy(true);
@@ -285,8 +290,8 @@ export default function RouteVideos({
       // 要在點擊當下直接開始，iPhone 才允許播放
       // 上傳時順便做 IG 版：同一次播放多錄一份加上小貼紙（小檔案本來不用壓縮，打開開關時也一起重錄）
       const took: { v: File | null } = { v: null };
-      const prepKey = showKey;
-      const extra = igOk && igPrep && !!compressType() && sticker ? { overlay: sticker, onDone: (f: File | null) => void (took.v = f) } : undefined;
+      const prepKey = contentKey;
+      const extra = prepFits && sticker ? { overlay: sticker, onDone: (f: File | null) => void (took.v = f) } : undefined;
       const willSqueeze = !!edit || !!extra || (file.size >= compressMinBytes() && !!compressType());
       if (willSqueeze) setSqueeze(0);
       setEditing(trimmed || mute); // 只開高畫質寫「壓縮中」
@@ -342,7 +347,7 @@ export default function RouteVideos({
   // 也分享到 IG：要分享哪一支——
   // 不能壓縮的手機、什麼都沒勾 → 原本那支；勾選跟做好的一樣 → 做好的那支；處理沒有成功 → 原本那支；都不是 → 要處理（重錄加上標籤）
   const canStick = !!compressType();
-  const igHit = [igReady, igMade].find((x) => x && igSrc && x.src === igSrc.file && x.key === showKey) ?? null;
+  const igHit = [igReady, igMade].find((x) => x && igSrc && x.src === igSrc.file && x.key === contentKey) ?? null;
   const igPlain = !canStick || sticker === null || !!ig?.failed;
   const igFile = !igSrc || !ig ? null : igHit ? igHit.file : igPlain ? igSrc.plain : null;
   const igNeedsWork = !!igSrc && !!ig && !igFile;
@@ -351,7 +356,7 @@ export default function RouteVideos({
   const record = async () => {
     const src = igSrc;
     const st = sticker;
-    const key = showKey;
+    const key = contentKey;
     if (!src || !st) return;
     igRun.current?.abort();
     const run = new AbortController();
@@ -382,6 +387,7 @@ export default function RouteVideos({
   const pickVideo = (next: VideoShow) => {
     saveShow("video", next);
     setVideoShow(next);
+    setIgPv(null); // 新的標籤畫好前不顯示舊的
     stopIg();
     setIg((g) => g && { progress: null, failed: false });
   };
@@ -549,7 +555,7 @@ export default function RouteVideos({
                   checked={igPrep}
                   onChange={(on) => (setIgPrep(on), writeIgPrep(on))}
                   label="上傳時順便做 IG 版（加原岩標記）"
-                  hint="上傳完馬上可以分享到 IG；不分享的話這份不會存，關掉就丟掉，只是處理時手機比較吃力"
+                  hint="要壓縮的影片上傳時一起做，上傳完馬上可以分享到 IG；不分享的話這份不會存，關掉就丟掉，只是處理時手機比較吃力"
                   disabled={busy}
                 />
               )}

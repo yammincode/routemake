@@ -129,7 +129,7 @@ export function SharePicker<T extends Record<string, unknown>>({ kind, show, onC
         />
       )}
       {!bgs.length && <p className="mt-3 mb-2 text-note font-bold">要放的資料</p>}
-      <div className="grid grid-cols-3 gap-2">
+      <div role="group" aria-label={tab === "bg" && bgs.length ? "背景" : "要放的資料"} className="grid grid-cols-3 gap-2">
         {items.map((o) => {
           const pressed = tab === "bg" && bgs.length ? show.bg === o.key : show[o.key] === true;
           return (

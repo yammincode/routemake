@@ -67,12 +67,12 @@ export function hasCache(key: string): boolean {
   }
 }
 
-// 登出時清掉個人資料快取（含記住的身高）
+// 登出時清掉個人資料快取（含記住的身高、分享到 IG 的勾選和開關，共用手機時下一個人不會沿用）
 // keepQueue：登入自己失效（不是按登出）時，還沒送出的紀錄留著，同一個人再登入後照樣送出
 export function clearCache(keepQueue = false) {
   try {
     Object.keys(localStorage)
-      .filter((k) => k.startsWith(PREFIX) || (k === QUEUE_KEY && !keepQueue) || k.startsWith(HEIGHT_KEY_PREFIX))
+      .filter((k) => k.startsWith(PREFIX) || (k === QUEUE_KEY && !keepQueue) || k.startsWith(HEIGHT_KEY_PREFIX) || k.startsWith("routemake:share-show:") || k === "routemake:ig-prep")
       .forEach((k) => localStorage.removeItem(k));
   } catch {}
   emit();

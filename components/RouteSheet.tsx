@@ -438,7 +438,7 @@ function RouteBody({
       setCard({ file, url: URL.createObjectURL(file) });
     } catch {
       if (run !== cardRun.current) return;
-      setCard(null);
+      setCard((c) => (c?.url ? c : null)); // 改勾選時畫不出來：留著上一張（還是不能分享），不要整個關掉
       toast("圖片做不出來，請再試一次");
     }
   };
@@ -579,7 +579,7 @@ function RouteBody({
               </button>
             </div>
             {canShareIg(access) && status !== "project" && (
-              <ShareButton className="mt-1" onClick={() => void openCard()}>
+              <ShareButton className="mt-1" disabled={!myMascot} onClick={() => void openCard()}>
                 分享到 IG
               </ShareButton>
             )}

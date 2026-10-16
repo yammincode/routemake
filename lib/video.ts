@@ -214,17 +214,17 @@ export async function compressVideo(
     void ac.resume();
     void video.play().catch(() => undefined);
 
-    if (!(video.readyState >= 1 || (await once(video, "loadedmetadata", 15000)))) return null;
+    if (!(video.readyState >= 1 || (await once(video, "loadedmetadata", 15000))) || signal?.aborted) return null;
     video.pause();
     const duration = await realDuration(video);
-    if (!duration || !video.videoWidth) return null;
+    if (!duration || !video.videoWidth || signal?.aborted) return null;
     // 要錄的那一段（沒剪輯就是整支）
     const from = edit ? Math.max(0, Math.min(edit.start, duration)) : 0;
     const to = edit ? Math.max(from, Math.min(edit.end, duration)) : duration;
     if (to - from < 0.5) return null;
     if (from > 0) {
       video.currentTime = from;
-      if (!(await once(video, "seeked", 8000))) return null;
+      if (!(await once(video, "seeked", 8000)) || signal?.aborted) return null;
     }
 
     const scale = Math.min(1, LONG_SIDE / Math.max(video.videoWidth, video.videoHeight));

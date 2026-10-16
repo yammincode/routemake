@@ -6,6 +6,7 @@
 import QRCode from "qrcode";
 import { HOLD_COLORS, gradeColor, gradeLabel, gradeShort, holdTextColor, type HoldColor, type Status } from "@/lib/design";
 import { BRAND_MARK, GYM_COLORS, GYMS, gymShort } from "@/lib/gyms";
+import { inkOn } from "@/lib/resets";
 import { MASCOT_ART } from "@/lib/mascot-art";
 import { mascotInfo, tint, type MascotPick } from "@/lib/mascots";
 import type { Hold } from "@/lib/data";
@@ -121,7 +122,7 @@ async function brand(g: CanvasRenderingContext2D, f: Fonts, x: number, y: number
 }
 
 // 膠囊：Flash 黃色、完攀白底酒紅字
-function statusPill(g: CanvasRenderingContext2D, f: Fonts, status: Status, right: number, y: number) {
+function statusPill(g: CanvasRenderingContext2D, f: Fonts, status: Status, right: number, y: number, outline = false) {
   const flash = status === "flash";
   const text = flash ? "FLASH" : "完攀";
   g.font = flash ? `700 60px ${f.num}` : `900 48px ${f.sans}`;
@@ -129,6 +130,11 @@ function statusPill(g: CanvasRenderingContext2D, f: Fonts, status: Status, right
   rrect(g, right - w, y - 44, w, 88, 44);
   g.fillStyle = flash ? C.flash : "#fff";
   g.fill();
+  if (outline) {
+    g.lineWidth = 4;
+    g.strokeStyle = C.ink;
+    g.stroke();
+  }
   g.fillStyle = flash ? C.flashInk : C.accent;
   g.textAlign = "center";
   g.textBaseline = "middle";
@@ -280,8 +286,10 @@ export async function drawSendCard(info: SendCardInfo): Promise<Blob> {
   g.fillStyle = bot;
   g.fillRect(0, H - 560, W, 560);
 
-  await brand(g, f, 56, 110, "#fff");
-  if (on.status) statusPill(g, f, info.status, W - 56, 110);
+  // 淺色膠帶底（VB 白、V0 螢光黃…）上面的字改深色
+  const lightBg = !photoOk && t.fg !== "#fff";
+  await brand(g, f, 56, 110, lightBg ? C.ink : "#fff");
+  if (on.status) statusPill(g, f, info.status, W - 56, 110, lightBg);
 
   // 下方白色貼紙：只放勾選的；什麼都沒勾就不放貼紙
   const lines: { text: string; bold: boolean }[] = [];
@@ -372,14 +380,17 @@ export async function drawMonthCard(info: MonthCardInfo): Promise<Blob> {
   const f = await loadFonts(`原岩攀岩館年月條完攀積分Flash攀爬天數最高難度去了間館抱石上攀本月${info.nickname}${gymNames.join("")}`);
   const { c, g } = canvas();
   // 背景：白底，或這個月最常去那間館的標準色（字改白色）
-  const dark = on.bg === "gym";
+  // 淺色的館（中和蒂芬妮綠…）字用深色，深色的館用白字
+  const gymBg = GYM_COLORS[info.mainGym ?? ""] ?? C.accent;
+  const dark = on.bg === "gym" && inkOn(gymBg) === "#fff";
+  const tinted = on.bg === "gym";
   const ink = dark ? "#fff" : C.ink;
-  const muted = dark ? "rgba(255,255,255,0.78)" : C.muted;
-  const tileBg = dark ? "rgba(255,255,255,0.14)" : C.sunk;
-  g.fillStyle = dark ? (GYM_COLORS[info.mainGym ?? ""] ?? C.accent) : C.surface;
+  const muted = dark ? "rgba(255,255,255,0.78)" : tinted ? "rgba(21,32,27,0.72)" : C.muted;
+  const tileBg = dark ? "rgba(255,255,255,0.14)" : tinted ? "rgba(255,255,255,0.45)" : C.sunk;
+  g.fillStyle = tinted ? gymBg : C.surface;
   g.fillRect(0, 0, W, H);
   // 上方色帶（白底時酒紅，館色時加深一點）
-  g.fillStyle = dark ? "rgba(0,0,0,0.22)" : C.accent;
+  g.fillStyle = tinted ? "rgba(0,0,0,0.22)" : C.accent;
   g.fillRect(0, 0, W, 220);
   await brand(g, f, 56, 110, "#fff");
   g.fillStyle = "#fff";
@@ -419,7 +430,7 @@ export async function drawMonthCard(info: MonthCardInfo): Promise<Blob> {
   // 小格：積分、Flash、攀爬天數（只放勾選的）
   const tiles: [string, string, string][] = [];
   if (on.points) tiles.push([info.points != null ? info.points.toLocaleString("en-US") : "–", "積分", ink]);
-  if (on.flash) tiles.push([String(info.flashes), "Flash", dark ? "#FFD34D" : "#B58800"]);
+  if (on.flash) tiles.push([String(info.flashes), "Flash", dark ? "#FFD34D" : tinted ? C.ink : "#B58800"]);
   if (on.days) tiles.push([String(info.days), "攀爬天數", ink]);
   if (tiles.length) {
     const tw = (W - 112 - (tiles.length - 1) * 24) / tiles.length;
@@ -457,11 +468,11 @@ export async function drawMonthCard(info: MonthCardInfo): Promise<Blob> {
       const x = 56 + i * (cw + gap);
       const h = col.n ? Math.max(16, (col.n / max) * hgt) : 6;
       rrect(g, x, base - h, cw, h, 8);
-      g.fillStyle = col.n ? col.color : dark ? "rgba(255,255,255,0.25)" : C.line;
+      g.fillStyle = col.n ? col.color : tinted ? "rgba(255,255,255,0.35)" : C.line;
       g.fill();
-      if (col.n && (dark || col.color === gradeColor(-1)?.bg)) {
+      if (col.n && (tinted || col.color === gradeColor(-1)?.bg)) {
         g.lineWidth = 3;
-        g.strokeStyle = dark ? "rgba(255,255,255,0.45)" : C.line;
+        g.strokeStyle = dark ? "rgba(255,255,255,0.45)" : "rgba(21,32,27,0.3)";
         g.stroke();
       }
       g.textAlign = "center";
@@ -488,7 +499,8 @@ export async function drawMonthCard(info: MonthCardInfo): Promise<Blob> {
     return cols.slice(a, b + 1);
   };
   if (on.chart) {
-    const boulder = span(info.boulder).map((x) => ({ label: x.label, n: x.n, color: tape(x.grade).bg }));
+    // V9、V10 沒有膠帶顏色（用主色）：在深色的館色上改白色，不然跟背景一樣
+    const boulder = span(info.boulder).map((x) => ({ label: x.label, n: x.n, color: !gradeColor(x.grade) && dark ? "#fff" : tape(x.grade).bg }));
     const rope = span(info.rope, 4).map((x) => ({ label: x.label, n: x.n, color: dark ? "#fff" : C.accent }));
     const n = (boulder.length ? 1 : 0) + (rope.length ? 1 : 0);
     const room = (on.gyms ? H - 190 : H - 90) - y - n * 196; // 每張圖的標題、數字、難度字大約 196
@@ -510,9 +522,9 @@ export async function drawMonthCard(info: MonthCardInfo): Promise<Blob> {
       g.arc(gx + 14, H - 112, 14, 0, Math.PI * 2);
       g.fillStyle = GYM_COLORS[id] ?? C.accent;
       g.fill();
-      if (dark) {
+      if (tinted) {
         g.lineWidth = 3;
-        g.strokeStyle = "#fff";
+        g.strokeStyle = dark ? "#fff" : C.ink;
         g.stroke();
       }
       g.fillStyle = ink;

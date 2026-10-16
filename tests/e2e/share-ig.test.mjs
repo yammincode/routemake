@@ -298,7 +298,7 @@ test("影片加小貼紙（B2）：上傳時順便做 IG 版（開關預設打�
   // ---- 老闆（能壓縮的手機）：上傳時順便做好 ----
   const B = await phone(browser, mock);
   await fakeShare(B.ctx);
-  await B.ctx.addInitScript(() => (window.__RM_VIDEO_TYPES = ["video/webm;codecs=vp8,opus"])); // 測試瀏覽器沒有 H.264
+  await B.ctx.addInitScript(() => ((window.__RM_VIDEO_TYPES = ["video/webm;codecs=vp8,opus"]), (window.__RM_VIDEO_MIN = 1000))) // 測試瀏覽器沒有 H.264；小測試影片也當成要壓縮; // 測試瀏覽器沒有 H.264
   const page = B.page;
   await login(page, "bossman", "password1", `/zone?id=${zone.id}`);
   const dialog = await upload(page, { prep: true });
@@ -390,7 +390,7 @@ test("影片加小貼紙（B2）：上傳時順便做 IG 版（開關預設打�
 
   // ---- 顧客也有（開放給大家）----
   const C = await phone(browser, mock);
-  await C.ctx.addInitScript(() => (window.__RM_VIDEO_TYPES = ["video/webm;codecs=vp8,opus"]));
+  await C.ctx.addInitScript(() => ((window.__RM_VIDEO_TYPES = ["video/webm;codecs=vp8,opus"]), (window.__RM_VIDEO_MIN = 1000))) // 測試瀏覽器沒有 H.264；小測試影片也當成要壓縮;
   await login(C.page, "climber88", "password1", `/zone?id=${zone.id}`);
   const d3 = await upload(C.page, { prep: true });
   assert.match(await d3.getByTestId("share-offer").textContent(), /上傳時已經做好/, "顧客也能分享到 IG");

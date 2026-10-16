@@ -312,8 +312,9 @@ export default function MeView({ gymId }: { gymId: string }) {
 
   // C1 本月完攀圖：正在看的那個月（上個月也可以分享）；數字跟上面四格、本月完攀直條圖一樣
   // show：勾選要放的資料；改勾選時預覽先留著舊的圖，畫好再換
-  const openCard = async (show: MonthShow = monthShow ?? loadShow("month")) => {
+  const openCard = async (show: MonthShow = monthShow ?? loadShow("month"), save = false) => {
     if (!stats?.sends || loadedMonth !== `${ym.y}-${ym.m}`) return;
+    if (save) saveShow("month", show);
     const run = ++cardRun.current;
     setMonthShow(show);
     setCard((c) => ({ file: null, url: c?.url ?? null }));
@@ -343,7 +344,7 @@ export default function MeView({ gymId }: { gymId: string }) {
       setCard({ file, url: URL.createObjectURL(file) });
     } catch {
       if (run !== cardRun.current) return;
-      setCard(null);
+      setCard((c) => (c?.url ? c : null)); // 改勾選時畫不出來：留著上一張（還是不能分享），不要整個關掉
       toast("圖片做不出來，請再試一次");
     }
   };
@@ -363,7 +364,7 @@ export default function MeView({ gymId }: { gymId: string }) {
       </StatGrid>
       {stats && (stats.sends > 0 || stats.prev_sends > 0) && <Delta diff={stats.sends - stats.prev_sends} />}
       {canShareIg(access) && stats && (
-        <ShareButton className="mt-2" disabled={!stats.sends || loadedMonth !== `${ym.y}-${ym.m}`} onClick={() => void openCard()}>
+        <ShareButton className="mt-2" disabled={!stats.sends || loadedMonth !== `${ym.y}-${ym.m}` || !mascot} onClick={() => void openCard()}>
           {stats.sends ? `分享 ${ym.m} 月成績到 IG` : `${ym.m} 月還沒有完攀，不能分享`}
         </ShareButton>
       )}
@@ -473,7 +474,7 @@ export default function MeView({ gymId }: { gymId: string }) {
         what="圖片"
         file={card?.file ?? null}
         image={card?.url ?? null}
-        picker={monthShow && <SharePicker kind="month" show={monthShow} onChange={(next) => (saveShow("month", next), void openCard(next))} />}
+        picker={monthShow && <SharePicker kind="month" show={monthShow} onChange={(next) => void openCard(next, true)} />}
         note="勾選會記在這支手機，下次照這樣做；路線心得不會出現在圖上。"
       />
     </>
