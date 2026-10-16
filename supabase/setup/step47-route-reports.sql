@@ -141,6 +141,7 @@ begin
       left join public.routes x on x.id = r.route_id
       left join public.profiles p on p.id = r.user_id
      where r.status = 'new' and (p_gym is null or z.gym_id = p_gym)
+       and (r.route_id is null or x.archived_at is null) -- 路線已經下架（整區換線）的回報不用再處理
      order by z.sort, r.created_at;
 end $$;
 revoke execute on function public.route_reports_list(text) from public, anon;

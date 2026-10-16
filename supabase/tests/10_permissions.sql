@@ -2361,6 +2361,10 @@ select tests.ok('回報：老闆看全部館', (select count(*) from public.rout
 reset role;
 select tests.ok('回報：處理寫進操作紀錄', (select count(*) from public.audit_log where action = 'report.handle') = 8);
 select tests.ok('回報：操作紀錄記下區域、路線編號', exists (select 1 from public.audit_log where action = 'report.handle' and detail ->> 'status' = 'fixed' and detail ->> 'zone' is not null and detail ->> 'code' is not null));
+update public.routes set archived_at = now() where id = (select v from ids where k = 'rpRoute2');
+set role authenticated; select tests.login(:OW);
+select tests.ok('回報：路線下架了，那條的回報不在清單上', (select count(*) from public.route_reports_list('mingde')) = 1);
+reset role;
 select tests.ok('回報：回報的人看到處理結果', (select count(*) from public.route_reports where user_id = :A and status <> 'new') = 8);
 
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),

@@ -689,7 +689,7 @@ function RouteBody({
         )}
       </div>
       {/* 路線回報：只加在分頁下面（版型固定，見 CLAUDE.md）；岩館的路線、還在牆上才有 */}
-      {canReport && !spray && r.kind !== "community" && !r.archived_at && !seqTotal(r) && (
+      {canReport && !spray && r.kind !== "community" && !r.archived_at && !r.name && !r.holds?.length && !r.photo_path && (
         <ReportLink onClick={() => (session ? setReport({ kind: "route", zoneName, route: r, photo: hero?.kind === "pin" ? hero.src : null }) : toLogin())}>回報這條有問題</ReportLink>
       )}
       <ReportSheet target={report} onClose={() => setReport(null)} />

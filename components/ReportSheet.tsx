@@ -29,7 +29,7 @@ export default function ReportSheet({ target, onClose }: { target: ReportTarget;
   );
 }
 
-const ROUTE_KINDS = (["color", "pin", "gone"] as const).map((v) => ({ v, label: REPORT_KIND[v] }));
+const routeKinds = (photo: boolean) => (["color", ...(photo ? (["pin"] as const) : []), "gone"] as const).map((v) => ({ v, label: REPORT_KIND[v] }));
 
 function Body({ target, onClose }: { target: NonNullable<ReportTarget>; onClose: () => void }) {
   const toast = useToast();
@@ -83,7 +83,7 @@ function Body({ target, onClose }: { target: NonNullable<ReportTarget>; onClose:
       {!missing && (
         <>
           <Label>哪裡有問題？</Label>
-          <OptionGrid cols={3} options={ROUTE_KINDS} value={kind} onChange={(k) => (setKind(k), setSpot(null))} />
+          <OptionGrid cols={photo ? 3 : 2} options={routeKinds(!!photo)} value={kind} onChange={(k) => (setKind(k), setSpot(null))} />
         </>
       )}
 

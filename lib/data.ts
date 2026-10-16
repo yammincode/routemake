@@ -1468,18 +1468,20 @@ function mustReports<T>(r: { data: T | null; error: { message?: string; code?: s
   if (r.error?.code === "PGRST202" || r.error?.code === "PGRST205" || r.error?.code === "42P01") throw new Error(NO_REPORTS);
   return must(r);
 }
-// 資料庫有沒有回報功能（還沒執行 step47 時不顯示回報入口）；問到一次就記住，網路不通時不記，下次再問
-let reportsOk: Promise<boolean> | null = null;
-export function reportsReady(): Promise<boolean> {
-  reportsOk ??= (async () => {
+// 資料庫有沒有回報功能（還沒執行 step47 時不顯示回報入口）：ok 有、missing 還沒執行、error 讀不到（網路不通，不記，下次再問）
+type ReportsState = "ok" | "missing" | "error";
+let reportsOk: Promise<ReportsState> | null = null;
+export function reportsState(): Promise<ReportsState> {
+  reportsOk ??= (async (): Promise<ReportsState> => {
     const r = await supabase().from("route_reports").select("id").limit(0);
-    if (!r.error) return true;
-    if (r.error.code === "PGRST205" || r.error.code === "42P01") return false;
+    if (!r.error) return "ok";
+    if (r.error.code === "PGRST205" || r.error.code === "42P01") return "missing";
     reportsOk = null;
-    return false;
-  })().catch(() => ((reportsOk = null), false));
+    return "error";
+  })().catch(() => ((reportsOk = null), "error" as const));
   return reportsOk;
 }
+export const reportsReady = () => reportsState().then((s) => s === "ok");
 export async function submitRouteReport(f: ReportInput): Promise<void> {
   mustReports(
     await supabase().rpc("submit_route_report", {

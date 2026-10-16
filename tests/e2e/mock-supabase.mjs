@@ -842,7 +842,7 @@ export function createMock() {
       if (fn === "route_reports_list") {
         if (a.p_gym == null ? !isOwner(uid) : !isStaff(uid, a.p_gym)) return err("只有這間館的員工看得到回報", "42501");
         const rows = db.reports
-          .filter((x) => x.status === "new" && (a.p_gym == null || zoneOf(x.zone_id).gym_id === a.p_gym))
+          .filter((x) => x.status === "new" && (a.p_gym == null || zoneOf(x.zone_id).gym_id === a.p_gym) && !(x.route_id && db.routes.find((y) => y.id === x.route_id)?.archived_at))
           .map((x) => {
             const z = zoneOf(x.zone_id);
             const r = x.route_id ? db.routes.find((y) => y.id === x.route_id) : null;

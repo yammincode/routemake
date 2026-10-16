@@ -42,7 +42,7 @@ export function groupReports(list: RouteReport[]): ReportGroup[] {
         ? false
         : r.kind === "missing"
           ? o.color === r.hold_color && r.pin_x != null && r.pin_y != null && Math.hypot(o.x! - r.pin_x, o.y! - r.pin_y) < NEAR
-          : o.route_id === r.route_id
+          : o.route_id === r.route_id && (r.kind !== "color" || o.color === r.hold_color) // 顏色不對：說的顏色不一樣分開列
     );
     if (g) {
       g.items.push(r);
@@ -51,7 +51,6 @@ export function groupReports(list: RouteReport[]): ReportGroup[] {
         g.x = avg(pts.map((i) => i.pin_x!));
         g.y = avg(pts.map((i) => i.pin_y!));
       }
-      if (r.kind === "color") g.color = r.hold_color; // 顏色不對：用最新說的顏色
       g.grade = topGrade(g.items);
       continue;
     }

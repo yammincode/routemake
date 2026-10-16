@@ -36,7 +36,7 @@ import {
   getRouteReports,
   getZones,
   makeMissingThumbs,
-  reportsReady,
+  reportsState,
   photoUrl,
   seqTotal,
   reorderZones,
@@ -125,14 +125,21 @@ export default function AdminView() {
     }
   }, [zoneId, toast]);
 
+  // 訊號差時換館：慢回來的上一間館的回報不要蓋掉現在這間
+  const reportGym = useRef<string | null>(null);
   const loadReports = useCallback(async () => {
     if (!gymId) return;
+    reportGym.current = gymId;
     try {
-      if (!(await reportsReady())) return setReportsOn(false);
-      setReportsOn(true);
-      setReports(await getRouteReports(gymId));
+      const st = await reportsState();
+      if (st === "error") throw new Error("讀不到路線回報，請稍後再試");
+      if (reportGym.current !== gymId) return;
+      setReportsOn(st === "ok");
+      if (st !== "ok") return;
+      const list = await getRouteReports(gymId);
+      if (reportGym.current === gymId) setReports(list);
     } catch (e) {
-      toast((e as Error).message);
+      if (reportGym.current === gymId) toast((e as Error).message);
     }
   }, [gymId, toast]);
 
