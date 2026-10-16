@@ -1261,7 +1261,8 @@ export async function saveSprayRoute(zone: Pick<Zone, "id" | "gym_id" | "code">,
     if (old) must(await supabase().from("routes").update(row).eq("id", old.id));
     else must(await supabase().from("routes").insert({ zone_id: zone.id, kind, hold_color: "白", pin_x: 0, pin_y: 0, ...row }));
   } catch (e) {
-    if (uploaded) await removeRoutePhoto(uploaded);
+    // 資料庫確定沒收（有錯誤代碼、不是連線問題）才刪剛上傳的；訊號差可能其實存進去了，照片留著（頂多多一個沒用到的檔）
+    if (uploaded && e instanceof DbError && !e.retry) await removeRoutePhoto(uploaded);
     throw e;
   }
   if (uploaded && old?.photo_path) await removeRoutePhoto(old.photo_path);

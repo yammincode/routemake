@@ -255,6 +255,7 @@ export default function SprayView({ wall }: { wall: SprayWall }) {
           open
             ? {
                 photo,
+                routePhoto: open.photo_path ?? null,
                 author: open.author,
                 likes: open.likes,
                 liked: open.liked,

@@ -63,11 +63,14 @@ export default function Sheet({
     return () => {
       window.removeEventListener("popstate", onPop);
       if (popped) return;
-      const timer = setTimeout(() => {
+      const undo = () => {
         leaving = null;
         if (history.state?.sheet === id && location.href === href) history.back();
-      }, 0);
-      leaving = { id, timer };
+      };
+      // 正式版關掉就馬上退（晚一點退的話，剛好接著換頁會被這一下退回去）；
+      // 開發模式 React 會關掉再馬上打開一次檢查，晚一點退才能沿用同一筆
+      if (process.env.NODE_ENV === "production") undo();
+      else leaving = { id, timer: setTimeout(undo, 0) };
     };
   }, [open, full]);
 

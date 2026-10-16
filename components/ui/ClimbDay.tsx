@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { daysAgoYmd, md, todayYmd } from "@/lib/date";
 import { Chip } from "./Chip";
 import { TextField } from "./Form";
@@ -16,7 +16,12 @@ export function ClimbDay({ value, min, max, disabled = false, onChange }: { valu
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState(false);
   const quick = [0, 1, 2].map((n) => ({ n, d: daysAgoYmd(n) }));
+  // 選日期：電腦上一格一格打字時每打一格就會變，停 0.8 秒才算選好（手機的選擇器按完成才變一次）
+  const typing = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => () => clearTimeout(typing.current), []);
   const pick = (d: string) => {
+    clearTimeout(typing.current);
     if (d < min || d > max) return;
     setOpen(false);
     setCustom(false);
@@ -31,7 +36,7 @@ export function ClimbDay({ value, min, max, disabled = false, onChange }: { valu
           aria-expanded={open}
           aria-label={`攀爬日 ${dayLabel(value)}，點了改日期`}
           disabled={disabled}
-          onClick={() => setOpen(!open)}
+          onClick={() => (setOpen(!open), setDraft(value))}
           className="inline-flex items-center gap-1 rounded-full border-[1.5px] border-accent bg-accent-soft px-3 py-[2px] text-note font-bold text-accent disabled:opacity-45"
         >
           {dayLabel(value)} <span aria-hidden>{open ? "▴" : "▾"}</span>
@@ -55,10 +60,15 @@ export function ClimbDay({ value, min, max, disabled = false, onChange }: { valu
           type="date"
           aria-label="選攀爬日"
           className="mt-2"
-          value={value}
+          value={draft}
           min={min}
           max={max}
-          onChange={(e) => e.target.value && pick(e.target.value)}
+          onChange={(e) => {
+            const d = e.target.value;
+            setDraft(d);
+            clearTimeout(typing.current);
+            if (d) typing.current = setTimeout(() => pick(d), 800);
+          }}
         />
       )}
     </div>

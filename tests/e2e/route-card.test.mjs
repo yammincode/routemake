@@ -59,7 +59,9 @@ test("攀爬日膠囊：預設今天；先選昨天再按完攀就記昨天；�
   await pill.click();
   await day.locator('button:has-text("選日期")').click();
   await day.locator('input[type=date]').fill(taipeiDay(-3));
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(300);
+  assert.equal(asc(r1).climbed_on, taipeiDay(-2), "選日期停一下才算選好（電腦上一格一格打字不會存到打一半的日期）");
+  await page.waitForTimeout(1300);
   assert.equal(asc(r1).climbed_on, taipeiDay(-3), "用日曆選的日期");
   // 心得裡沒有第二個日期欄位
   await dlg.locator('button:has-text("＋ 加上心得與感受")').click();

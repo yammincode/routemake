@@ -102,7 +102,7 @@ export default function RouteSheet({
 // Spray Wall 路線額外的內容：公版照片（顯示這條路線的圈圈）、出題者、讚、修改／刪除
 export type SprayExtras = {
   photo: string | null;
-  routePhoto?: string | null; // 岩館路線自己的照片路徑（step44；列表讀到的在 route.photo_path，New~ 另外讀）
+  routePhoto?: string | null; // 岩館路線自己的照片路徑（step44；null＝沒有；undefined＝還不知道（New~ 還在讀），先不放照片免得圈圈畫在公版上）
   author: string | null;
   likes: number;
   liked: boolean;
@@ -116,7 +116,9 @@ export type SprayExtras = {
 type Hero = { src: string; fallback?: string; kind: "spray" | "seq" | "pin" };
 function heroOf(r: Route, photo: string | null, zonePhoto: { src: string; fallback?: string } | null, spray?: SprayExtras): Hero | null {
   if (spray) {
-    const own = photoUrl(r.photo_path ?? spray.routePhoto ?? null);
+    const path = r.photo_path !== undefined ? r.photo_path : spray.routePhoto;
+    if (path === undefined && r.kind === "gym") return null;
+    const own = photoUrl(path ?? null);
     if (own) return { src: own, kind: "spray" };
     return spray.photo && r.holds?.length ? { src: spray.photo, kind: "spray" } : null;
   }
@@ -297,13 +299,16 @@ function RouteBody({
 
   // 攀爬日膠囊：還沒記錄只是先選好（按 Flash／完攀／嘗試中時用）；記過的馬上存，存不進去改回原本的日期
   const pickDay = async (d: string) => {
+    const before = { date, picked: dayPicked.current };
     dayPicked.current = true;
-    const prev = date;
     setDate(d);
     if (!status || !session) return;
     dropHp();
     const saved = await persist(current(status, d), `攀爬日改成 ${md(d)}`);
-    if (saved === "failed") setDate(prev);
+    if (saved === "failed") {
+      setDate(before.date);
+      dayPicked.current = before.picked;
+    }
   };
 
   const save = async () => {
@@ -391,7 +396,8 @@ function RouteBody({
     }
   };
 
-  const toLogin = () => router.push(`/login?next=${encodeURIComponent(herePath())}`);
+  // 卡片是全螢幕、多記了一筆瀏覽紀錄（網址一樣）：換掉那一筆，登入回來按返回不用多按一次
+  const toLogin = () => router.replace(`/login?next=${encodeURIComponent(herePath())}`);
 
   // 自己的留言排第一，其他依讚數、新到舊；每人每條路線只能一則
   const uid = session?.user.id;
@@ -475,6 +481,7 @@ function RouteBody({
         <StatusPicker compact value={session ? status : null} onChange={(s) => void quick(s)} />
         {session && total > 0 && status === "project" && (
           <HighpointPicker
+            disabled={busy}
             value={hp}
             total={total}
             onChange={pickHp}
@@ -598,7 +605,7 @@ function RouteBody({
                     <LinkButton onClick={() => (setEditing(false), setDraft(""))}>取消編輯</LinkButton>
                   ) : (
                     <p className="mt-1.5 mb-0 text-tiny text-muted">
-                      每條路線只能留一則，留言前請看<Link href="/rules" className="underline">留言與影片規範</Link>
+                      每條路線只能留一則，留言前請看<Link href="/rules" replace className="underline">留言與影片規範</Link>
                     </p>
                   )}
                 </>

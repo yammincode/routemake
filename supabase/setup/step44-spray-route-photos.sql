@@ -12,6 +12,7 @@
 -- Spray Wall 岩館路線改成員工上傳照片（step44）
 -- - routes.photo_path：岩館路線自己的照片（zone-photos 空間的 {館}/routes/…jpg，旁邊有 .thumb.jpg 縮圖）
 --   只有 Spray Wall 的岩館路線可以有；岩友路線、一般區域、長耐力都不行
+-- - 一張照片只給一條路線用
 -- - 有照片的岩館路線圈圈可以不畫（照片本來就標好路線）；有畫就跟原本一樣要有起攀 S、完攀 T
 --   沒有圈圈時起步點標記放在照片中間（Spray Wall 不畫平面圖標記，只是欄位不能空）
 -- - 照片只有那間館的員工能上傳（Storage 的 {館}/routes/ 資料夾）
@@ -22,6 +23,8 @@ alter table public.routes add column if not exists photo_path text;
 alter table public.routes drop constraint if exists routes_photo_path_ok;
 alter table public.routes add constraint routes_photo_path_ok
   check (photo_path is null or (kind = 'gym' and photo_path ~ '^[a-z0-9_]+/routes/[A-Za-z0-9_-]+\.jpg$'));
+-- 一張照片只給一條路線用（換照片時會刪掉舊的，共用的話會連別條的照片一起刪）
+create unique index if not exists routes_photo_path_key on public.routes (photo_path) where photo_path is not null;
 
 -- 照片 Storage：{館}/zones/ 員工、{館}/floorplan/ 店長、{館}/routes/（Spray Wall 岩館路線照片）員工
 create or replace function public.can_manage_photo(p_name text) returns boolean

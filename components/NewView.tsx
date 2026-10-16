@@ -465,7 +465,7 @@ export default function NewView() {
           o?.zone.kind === "spray"
             ? {
                 photo: photoUrl(o.zone.photo_path),
-                routePhoto: sp && !("failed" in sp) ? sp.photo_path : null,
+                routePhoto: sp && !("failed" in sp) ? sp.photo_path : undefined,
                 author: sp && !("failed" in sp) ? sp.author : null,
                 likes: sp && !("failed" in sp) ? sp.likers.length : 0,
                 liked: !!uid && !!sp && !("failed" in sp) && sp.likers.includes(uid),
