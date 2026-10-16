@@ -5,7 +5,7 @@ import { LinkButton } from "@/components/ui/Button";
 import { Empty, SectionTitle, Tip } from "@/components/ui/Card";
 import { InsightPill, InsightRouteRow, MeterList, MeterRow } from "@/components/ui/Insights";
 import { type RouteInsights } from "@/lib/data";
-import { COLD_DAYS, COLD_MAX, MIN_TRIED, SUPPLY_LABEL, coldRoutes, flagRoutes, pct, supplyShares, type FlaggedRoute } from "@/lib/insights";
+import { COLD_DAYS, COLD_MAX, MIN_SAME_GRADE, MIN_TRIED, SUPPLY_LABEL, coldRoutes, flagRoutes, pct, supplyShares, type FlaggedRoute } from "@/lib/insights";
 
 const md = (d: string) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
 const routeTitle = (r: { zone: string; code: string; color: string; name: string | null }) => `${r.zone} ${r.name ?? `${r.color}色 ${r.code}`}`;
@@ -36,7 +36,7 @@ export default function RouteInsightsView({ data }: { data: RouteInsights }) {
       <section id="rates">
         <SectionTitle>路線完攀率（牆上的路線）</SectionTitle>
         <Tip>
-          跟同一段難度的平均比：完攀率低很多標「可能太難」，Flash 六成以上標「可能太簡單」（{MIN_TRIED} 人以上試過才判斷）；多人回報偏硬、偏軟也會標出來。
+          跟同一個難度的其他路線比：完攀率低很多標「可能太難」，Flash 比別條多很多標「可能太簡單」（{MIN_TRIED} 人以上試過、同難度至少 {MIN_SAME_GRADE} 條才判斷）；多人回報偏硬、偏軟也會標出來。
         </Tip>
         {shown.length ? (
           <ul className="m-0 grid list-none gap-2 p-0">

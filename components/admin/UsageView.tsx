@@ -68,6 +68,17 @@ export default function UsageView() {
   const [insights, setInsights] = useState<UsageInsights | null | undefined>(undefined);
   const [routes, setRoutes] = useState<RouteInsights | null | undefined>(undefined);
   const [moreError, setMoreError] = useState<string | null>(null);
+  const [routeError, setRouteError] = useState<string | null>(null);
+  const [jumpTo, setJumpTo] = useState<string | null>(null);
+
+  // 點了本週重點：換好分頁、畫出那一段之後再捲過去
+  useEffect(() => {
+    if (!jumpTo) return;
+    const el = document.getElementById(jumpTo);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    void Promise.resolve().then(() => setJumpTo(null));
+  });
 
   useEffect(() => {
     void Promise.resolve().then(() => setTabState(savedTab()));
@@ -91,13 +102,19 @@ export default function UsageView() {
       setInsights(undefined);
       setRoutes(undefined);
       setMoreError(null);
-      const more = Promise.all([getUsageInsights(scope), scope ? getRouteInsights(scope) : Promise.resolve(null)])
-        .then(([u, r]) => alive && (setInsights(u), setRoutes(r)))
+      setRouteError(null);
+      setError(null);
+      // 人和互動、路線分開讀：一邊出錯不會蓋掉另一邊
+      const more = getUsageInsights(scope)
+        .then((u) => alive && setInsights(u))
         .catch((e) => alive && setMoreError((e as Error).message));
+      const rt = (scope ? getRouteInsights(scope) : Promise.resolve(null))
+        .then((r) => alive && setRoutes(r))
+        .catch((e) => alive && (setRoutes(null), setRouteError((e as Error).message)));
       const base = getUsage(scope)
         .then((d) => alive && (setData(d), setError(null)))
         .catch((e) => alive && setError((e as Error).message));
-      return Promise.all([more, base]);
+      return Promise.all([more, rt, base]);
     });
     return () => {
       alive = false;
@@ -115,7 +132,7 @@ export default function UsageView() {
   const highlights = insights || routes ? pickHighlights(insights ?? null, routes ?? null) : [];
   const jump = (h: Highlight) => {
     setTab(h.tab);
-    setTimeout(() => document.getElementById(h.section)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    setJumpTo(h.section);
   };
   const missing = insights === null; // 還沒套用 step45
   const loadingMore = insights === undefined && !moreError;
@@ -251,7 +268,15 @@ export default function UsageView() {
               <RouteInsightsView data={routes} />
             ) : (
               <>
-                {all ? <Empty>完攀率、冷門路線、各區熱度、換線效果、難度供需一次看一間館，請在上面選館。</Empty> : moreNote}
+                {all ? (
+                  <Empty>完攀率、冷門路線、各區熱度、換線效果、難度供需一次看一間館，請在上面選館。</Empty>
+                ) : routeError ? (
+                  <Empty>{routeError}</Empty>
+                ) : routes === undefined ? (
+                  <Empty>讀取中…</Empty>
+                ) : (
+                  <Empty>{NO_INSIGHTS}</Empty>
+                )}
                 <SectionTitle>熱門路線（最近 30 天最多人完攀）</SectionTitle>
                 {data.top_routes.length ? (
                   <ul className="m-0 grid list-none gap-2 p-0">

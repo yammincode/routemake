@@ -41,7 +41,7 @@ export function PeopleInsights({ u }: { u: UsageInsights }) {
               4 週前用過的 <b className="font-num text-ink">{cohort.base}</b> 人，之後每週還有幾成在用
             </p>
             <MeterList>
-              {cohort.kept.map((n, i) => (
+              {cohort.kept.slice(0, 3).map((n, i) => (
                 <MeterRow key={i} label={["3 週前", "2 週前", "這週"][i]} value={pct(n, cohort.base)} right={`${pct(n, cohort.base)}%・${n} 人`} />
               ))}
             </MeterList>
@@ -169,7 +169,7 @@ export function SocialInsights({ u }: { u: UsageInsights }) {
           {u.top_video && (
             <li className="rounded-btn bg-surface px-3 py-2.5 shadow-card">
               <span className="text-meta text-muted">
-                影片・{u.top_video.zone} {u.top_video.name ?? `${u.top_video.color}色 ${u.top_video.code}`}・{u.top_video.nickname}
+                影片・{u.top_video.zone} {u.top_video.name ?? `${u.top_video.color}色 ${u.top_video.code}`}・{u.top_video.nickname ?? "（已刪除）"}
               </span>
               <span className="block text-note">
                 {u.top_video.caption || "（沒有說明）"} <b className="ml-1 font-num text-accent">👍 {u.top_video.likes}</b>
@@ -179,7 +179,7 @@ export function SocialInsights({ u }: { u: UsageInsights }) {
           {u.top_comment && (
             <li className="rounded-btn bg-surface px-3 py-2.5 shadow-card">
               <span className="text-meta text-muted">
-                留言・{u.top_comment.zone} {u.top_comment.name ?? `${u.top_comment.color}色 ${u.top_comment.code}`}・{u.top_comment.nickname}
+                留言・{u.top_comment.zone} {u.top_comment.name ?? `${u.top_comment.color}色 ${u.top_comment.code}`}・{u.top_comment.nickname ?? "（已刪除）"}
               </span>
               <span className="block text-note">
                 {u.top_comment.body} <b className="ml-1 font-num text-accent">👍 {u.top_comment.likes}</b>

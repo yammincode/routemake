@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import RouteInsightsView from "@/components/admin/RouteInsights";
 import { Button } from "@/components/ui/Button";
 import { Empty, SectionTitle, Tip } from "@/components/ui/Card";
@@ -11,9 +11,11 @@ export default function RouteInsightsPanel({ gymId, gymName }: { gymId: string; 
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<RouteInsights | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const req = useRef(0); // 只用最後一次讀的結果（換館後舊的回來不算）
 
   // 換館時收起來
   useEffect(() => {
+    req.current++;
     void Promise.resolve().then(() => {
       setOpen(false);
       setData(undefined);
@@ -22,13 +24,15 @@ export default function RouteInsightsPanel({ gymId, gymName }: { gymId: string; 
   }, [gymId]);
 
   const load = async () => {
+    const id = ++req.current;
     setOpen(true);
     setData(undefined);
     setError(null);
     try {
-      setData(await getRouteInsights(gymId));
+      const d = await getRouteInsights(gymId);
+      if (id === req.current) setData(d);
     } catch (e) {
-      setError((e as Error).message);
+      if (id === req.current) setError((e as Error).message);
     }
   };
 

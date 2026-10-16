@@ -5,7 +5,7 @@ import { Grade } from "./Route";
 export function HighlightCard({ big, title, detail, onClick }: { big: string; title: string; detail: string; onClick: () => void }) {
   return (
     <button onClick={onClick} className="flex w-full items-center gap-3 rounded-tile bg-surface px-3.5 py-3 text-left shadow-card">
-      <b className="min-w-[2.6em] flex-none font-num text-num-card text-accent">{big}</b>
+      <b className="min-w-14 flex-none font-num text-num-card text-accent">{big}</b>
       <span className="min-w-0 flex-1">
         <span className="block text-sub font-bold">{title}</span>
         <span className="block text-meta text-muted">{detail}</span>
@@ -23,7 +23,7 @@ export function MeterRow({ label, value, right, muted = false }: { label: ReactN
     <li className="grid grid-cols-[minmax(64px,auto)_1fr_auto] items-center gap-2.5 text-note">
       <span className="truncate">{label}</span>
       <span className="h-2.5 overflow-hidden rounded-full bg-sunk">
-        <span className={`block h-full rounded-full ${muted ? "bg-muted/60" : "bg-accent"}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+        <span className={`block h-full rounded-full ${muted ? "bg-muted" : "bg-accent"}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
       </span>
       <span className="text-right text-muted">{right}</span>
     </li>
@@ -34,8 +34,8 @@ export function MeterList({ children }: { children: ReactNode }) {
   return <ul className="m-0 grid list-none gap-2 p-0">{children}</ul>;
 }
 
-// 分段長條（常客分群這類加起來是全部的）：深→淺三種主色，下面圖例寫人數
-const SPLIT = ["bg-accent", "bg-accent/45", "bg-line"];
+// 分段長條（常客分群這類加起來是全部的）：主色、主色淡底、線色三段，下面圖例寫人數
+const SPLIT = ["bg-accent", "bg-accent-soft", "bg-line"];
 export function SplitBar({ parts, label }: { parts: { label: string; n: number }[]; label: string }) {
   const total = parts.reduce((s, p) => s + p.n, 0);
   return (
@@ -46,7 +46,7 @@ export function SplitBar({ parts, label }: { parts: { label: string; n: number }
       <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-meta text-muted">
         {parts.map((p, i) => (
           <span key={p.label} className="inline-flex items-center gap-1.5">
-            <span className={`inline-block size-2.5 rounded-[3px] ${SPLIT[i % SPLIT.length]}`} />
+            <span className={`inline-block size-2.5 rounded-tape ${SPLIT[i % SPLIT.length]}`} />
             {p.label} <b className="font-num text-ink">{p.n}</b> 人
           </span>
         ))}

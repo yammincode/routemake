@@ -7,20 +7,23 @@ let browser;
 before(async () => (browser = await launch()));
 after(async () => browser?.close());
 
-// 明德 A1 區：V4 一條大家都爬不上（可能太難）、V3 一條大家都 Flash（可能太簡單）、V4 一條普通、V2 一條上牆 20 天沒人爬（冷門）
+// 明德 A1 區：V4 三條裡一條大家都爬不上（可能太難）、V3 三條裡一條大家都 Flash（可能太簡單）、V2 一條上牆 20 天沒人爬（冷門）
+// 跟同一個難度的其他路線比，同難度要有 3 條 5 人以上試過的才判斷
 function seed(mock) {
   const z = mock.db.zones.find((x) => x.gym_id === "mingde" && x.code === "A1");
   const old = new Date(Date.now() - 20 * 86400000).toISOString();
   const hard = mock.addRoute(z, 4, "紅");
-  const ok = mock.addRoute(z, 4, "藍");
+  const v4 = [mock.addRoute(z, 4, "藍"), mock.addRoute(z, 4, "白")];
   const easy = mock.addRoute(z, 3, "綠");
+  const v3 = [mock.addRoute(z, 3, "黑"), mock.addRoute(z, 3, "紫")];
   mock.addRoute(z, 2, "黃", [], 30, 40, old);
   const day = taipeiDay();
   for (let i = 0; i < 6; i++) {
     const u = mock.addUser(`climber${i}`, "password1", { nickname: `岩友${i}` });
-    mock.addAscent(u, hard, "project", day, { grade_feel: null });
-    mock.addAscent(u, ok, "send", day);
+    mock.addAscent(u, hard, "project", day);
+    for (const r of v4) mock.addAscent(u, r, "send", day);
     mock.addAscent(u, easy, "flash", day, { grade_feel: i < 3 ? -1 : null });
+    for (const r of v3) mock.addAscent(u, r, "send", day);
   }
 }
 
@@ -50,9 +53,9 @@ test("數據分析：老闆看本週重點、分頁（記在手機）、選館�
   assert.ok(text.includes("路線完攀率") && text.includes("可能太難") && text.includes("可能太簡單") && text.includes("多人說偏軟"), "標出太難、太簡單、偏軟");
   assert.ok(text.includes("冷門路線") && text.includes("上牆 20 天") && text.includes("各區熱度") && text.includes("換線效果") && text.includes("難度供需") && text.includes("進階 V3–V5"), "冷門、熱度、換線、供需");
   assert.ok(!text.includes("岩友0"), "路線分析不出現客人的暱稱");
-  await page.click('main button:has-text("看全部 4 條路線")');
+  await page.click('main button:has-text("看全部 7 條路線")');
   await page.waitForTimeout(200);
-  assert.equal(await page.locator("main #rates li").count(), 4, "可以看全部路線");
+  assert.equal(await page.locator("main #rates li").count(), 7, "可以看全部路線");
 
   await page.click('main [role="tab"]:text-is("人")');
   await page.waitForTimeout(200);

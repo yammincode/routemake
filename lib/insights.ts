@@ -1,6 +1,6 @@
 // 使用狀況的數據分析：判斷路線太難／太簡單、冷門路線、難度供需落差、本週重點（純計算，畫面在 components/admin/Insights*.tsx）
 import type { InsightRoute, RouteInsights, SupplyBand, UsageInsights } from "@/lib/data";
-import { GRADE_BANDS, ROPE_BANDS, gradeLabel } from "@/lib/design";
+import { gradeLabel } from "@/lib/design";
 
 export const MIN_TRIED = 5; // 少於 5 人試過的路線不判斷太難、太簡單
 export const COLD_DAYS = 14; // 上牆 14 天以上
@@ -8,8 +8,6 @@ export const COLD_MAX = 2; // 記錄 2 筆以下＝冷門
 export const FEEL_MIN = 3; // 至少 3 人回報難度體感才標
 
 export const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0);
-
-const bandOf = (g: number) => [...GRADE_BANDS, ...ROPE_BANDS].find((b) => (g >= 100) === !!b.rope && g >= b.min && g <= b.max);
 
 export const SUPPLY_LABEL: Record<SupplyBand, string> = {
   easy: "入門 VB–V2",
@@ -24,23 +22,26 @@ export type RouteFlag = "hard" | "easy" | null;
 export type FeelFlag = "soft" | "hard" | null;
 export type FlaggedRoute = InsightRoute & { rate: number; flag: RouteFlag; feel: FeelFlag };
 
-// 完攀率跟同一段難度的平均比：低 30% 以上＝可能太難；Flash 六成以上＝可能太簡單（至少 5 人試過才判斷）
+// 跟「同一個難度」其他路線的平均比（5 人以上試過、同難度至少 3 條才比，不然不判斷）：
+// 完攀率低 30% 以上＝可能太難；Flash 比例高 30% 以上而且過半＝可能太簡單
 // 難度體感：至少 3 人回報，而且偏硬（偏軟）是另一邊的兩倍以上
+export const MIN_SAME_GRADE = 3;
 export function flagRoutes(routes: InsightRoute[]): FlaggedRoute[] {
-  const avg = new Map<string, number>();
-  for (const b of [...GRADE_BANDS, ...ROPE_BANDS]) {
-    const rs = routes.filter((r) => r.tried >= MIN_TRIED && bandOf(r.grade) === b);
-    const tried = rs.reduce((n, r) => n + r.tried, 0);
-    if (tried) avg.set(`${b.rope ? "r" : "v"}${b.id}`, rs.reduce((n, r) => n + r.sent, 0) / tried);
+  const avg = new Map<number, { sent: number; flash: number }>();
+  for (const g of new Set(routes.map((r) => r.grade))) {
+    const rs = routes.filter((r) => r.grade === g && r.tried >= MIN_TRIED);
+    if (rs.length < MIN_SAME_GRADE) continue;
+    const mean = (f: (r: InsightRoute) => number) => rs.reduce((n, r) => n + f(r) / r.tried, 0) / rs.length;
+    avg.set(g, { sent: mean((r) => r.sent), flash: mean((r) => r.flash) });
   }
   return routes.map((r) => {
-    const b = bandOf(r.grade);
-    const a = b ? avg.get(`${b.rope ? "r" : "v"}${b.id}`) : undefined;
+    const a = avg.get(r.grade);
     const rate = r.tried ? r.sent / r.tried : 0;
+    const flashRate = r.tried ? r.flash / r.tried : 0;
     let flag: RouteFlag = null;
-    if (r.tried >= MIN_TRIED) {
-      if (r.flash / r.tried >= 0.6) flag = "easy";
-      else if (a != null && rate <= a - 0.3) flag = "hard";
+    if (a && r.tried >= MIN_TRIED) {
+      if (rate <= a.sent - 0.3) flag = "hard";
+      else if (flashRate >= 0.5 && flashRate >= a.flash + 0.3) flag = "easy";
     }
     const votes = r.soft + r.hard;
     const feel: FeelFlag = votes >= FEEL_MIN && r.hard >= r.soft * 2 && r.hard > 0 ? "hard" : votes >= FEEL_MIN && r.soft >= r.hard * 2 && r.soft > 0 ? "soft" : null;
@@ -82,7 +83,7 @@ export function pickHighlights(u: UsageInsights | null, ri: RouteInsights | null
       out.push({
         key: "retention",
         big: `${r}%`,
-        title: diff == null || diff === 0 ? "上週的人這週有回來" : `回頭率比前一週${diff > 0 ? "好" : "少"} ${Math.abs(diff)}%`,
+        title: diff == null || diff === 0 ? "上週的人這週有回來" : `回頭率比前一週${diff > 0 ? "高" : "低"} ${Math.abs(diff)} 個百分點`,
         detail: `上週用過的 ${now.base} 人，這週有 ${now.back} 人回來`,
         tab: "people",
         section: "retention",
@@ -99,17 +100,6 @@ export function pickHighlights(u: UsageInsights | null, ri: RouteInsights | null
         tab: "people",
         section: "newbie",
         score: 8 + Math.abs(50 - r) / 2,
-      });
-    }
-    if (u.progress.improved >= 1) {
-      out.push({
-        key: "progress",
-        big: `${u.progress.improved}`,
-        title: "人這 30 天破了自己的最高難度",
-        detail: `之前就有完攀紀錄的 ${u.progress.climbers} 人裡面（抱石）`,
-        tab: "people",
-        section: "levels",
-        score: 6 + u.progress.improved * 2,
       });
     }
     const last = u.daily.slice(-7);
