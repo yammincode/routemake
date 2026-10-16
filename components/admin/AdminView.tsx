@@ -4,6 +4,7 @@ import FeedbackPanel from "@/components/admin/FeedbackPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import RouteEditor, { type EditTarget } from "@/components/admin/RouteEditor";
+import RouteInsightsPanel from "@/components/admin/RouteInsightsPanel";
 import AccountsPanel from "@/components/admin/AccountsPanel";
 import AuditPanel from "@/components/admin/AuditPanel";
 import ScoringPanel from "@/components/admin/ScoringPanel";
@@ -448,6 +449,7 @@ export default function AdminView() {
           </LinkButton>
         </SetBox>
       )}
+      {gym && <RouteInsightsPanel gymId={gymId} gymName={gym.name} />}
       {gym && <VideoPanel gymId={gymId} gymName={gym.name} />}
       {gym && <AccountsPanel gymId={gymId} />}
       {manager && gym && <StaffPanel gymId={gymId} gymName={gym.name} />}

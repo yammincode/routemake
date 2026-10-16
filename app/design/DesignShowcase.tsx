@@ -16,6 +16,7 @@ import { PickList } from "@/components/ui/PickList";
 import { GrantGroup, GrantList, GrantRow } from "@/components/ui/Grant";
 import { HighpointPicker, NumberMarks } from "@/components/ui/Endurance";
 import { Tabs } from "@/components/ui/Tabs";
+import { HighlightCard, InsightPill, InsightRouteRow, MeterList, MeterRow, SplitBar } from "@/components/ui/Insights";
 import { HoldLegend, HoldMarks, HoldTools, PhotoThumb, RouteThumb, SprayRow } from "@/components/ui/Spray";
 import { CharacterTop, MascotAvatar, MascotBubble, MascotBuddyView, MascotColors, MascotPicker, MascotToastView } from "@/components/ui/Mascot";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
@@ -809,6 +810,40 @@ export default function DesignShowcase() {
 
       <Block title="原岩夥伴">
         <MascotDemo />
+      </Block>
+
+      <Block title="數據分析（HighlightCard、MeterRow、SplitBar、InsightPill、InsightRouteRow）">
+        <HighlightCard big="62%" title="回頭率比前一週好 5%" detail="上週用過的 40 人，這週有 25 人回來" onClick={() => toast("跳到回頭率")} />
+        <div className="mt-3">
+          <MeterList>
+            <MeterRow label="牆上" value={34} right="34%・12 條" muted />
+            <MeterRow label="完攀" value={52} right="52%・40 條" />
+          </MeterList>
+        </div>
+        <div className="mt-3">
+          <SplitBar
+            label="常客分群"
+            parts={[
+              { label: "常客 8 天以上", n: 83 },
+              { label: "偶爾 2–7 天", n: 156 },
+              { label: "只來 1 天", n: 140 },
+            ]}
+          />
+        </div>
+        <ul className="mt-3 grid list-none gap-2 p-0">
+          <InsightRouteRow
+            grade={5}
+            title="C1 區 紅色 C1-03"
+            meta="38 人試、3 人完攀・完攀率 8%"
+            right={
+              <>
+                <InsightPill tone="hard">可能太難</InsightPill>
+                <InsightPill tone="plain">多人說偏硬</InsightPill>
+              </>
+            }
+          />
+          <InsightRouteRow grade={3} title="A2 區 綠色 A2-07" meta="42 人試、40 人完攀・Flash 70%" right={<InsightPill tone="easy">可能太簡單</InsightPill>} />
+        </ul>
       </Block>
 
       <Block title="拖曳排序">

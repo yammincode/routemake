@@ -1227,6 +1227,45 @@ export async function resetUsageSince(): Promise<string> {
   return must(await supabase().rpc("set_usage_since", { p_day: null }));
 }
 
+// ---------- 使用狀況：更多數據分析（step45） ----------
+// 還沒套用 step45 時回傳 null（畫面照舊顯示原本的使用狀況，多的分析寫要套用 step45）
+export const NO_INSIGHTS = "資料庫還沒套用數據分析（step45），請老闆在 Supabase 執行 step45 後就看得到";
+type RouteRef = { zone: string; code: string; grade: number; color: string; name: string | null };
+export type UsageInsights = {
+  since: string | null;
+  // base＝那一週用過的人、back＝其中下一週也用過的；那一週早於統計起始日時是 null
+  retention: { now: { base: number; back: number } | null; prev: { base: number; back: number } | null; cohort: { base: number; kept: number[] } | null };
+  newbie: { n: number; next_day: number; first_route: number; two_days: number };
+  groups: { regular: number; sometimes: number; once: number };
+  levels: { easy: number; mid: number; hard: number };
+  progress: { climbers: number; improved: number };
+  hours: number[]; // 0–23 點，每格是「有人在那個小時用」的人次（同一人同一天算一次）
+  daily: { day: string; comments: number; videos: number; likes: number }[];
+  top_video: (RouteRef & { caption: string | null; nickname: string | null; likes: number }) | null;
+  top_comment: (RouteRef & { body: string; nickname: string | null; likes: number }) | null;
+  mascots: Record<string, number> | null; // 夥伴 id → 人數（"" 是還沒選）；還沒套用 step41 是 null
+};
+export type InsightRoute = RouteRef & { id: string; days: number; tried: number; sent: number; flash: number; soft: number; hard: number };
+export type SupplyBand = "easy" | "mid" | "hard" | "rope_easy" | "rope_mid" | "rope_hard";
+export type RouteInsights = {
+  since: string | null;
+  routes: InsightRoute[];
+  zones: { name: string; records: number; users: number; routes: number }[];
+  supply: { band: SupplyBand; wall: number; sends: number }[];
+  resets: { label: string; starts_on: string; ends_on: string; days_after: number; before: number; after: number }[];
+  top: (RouteRef & { id: string; n: number })[];
+};
+export async function getUsageInsights(gym: string | null): Promise<UsageInsights | null> {
+  const r = await supabase().rpc("usage_insights", { p_gym: gym });
+  if (r.error?.code === "PGRST202") return null;
+  return must(r);
+}
+export async function getRouteInsights(gym: string): Promise<RouteInsights | null> {
+  const r = await supabase().rpc("route_insights", { p_gym: gym });
+  if (r.error?.code === "PGRST202") return null;
+  return must(r);
+}
+
 // ---------- Spray Wall ----------
 export type SprayKind = "gym" | "community";
 export type SpraySort = "new" | "sends" | "likes" | "mine";

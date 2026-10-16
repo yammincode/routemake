@@ -2224,6 +2224,60 @@ reset role;
 select tests.ok('刪帳號：真的刪掉了', not exists (select 1 from auth.users where id = :Z));
 select tests.ok('刪帳號：操作紀錄留著帳號名稱', exists (select 1 from public.audit_log where action = 'user.delete' and detail ->> 'username' = 'spammer'));
 
+-- ---------------------------------------------------------------------
+-- 使用狀況：更多數據分析（step45）
+-- ---------------------------------------------------------------------
+set role authenticated; select tests.login(:OW);
+select tests.lives('數據分析：老闆授權店長看明德', format($q$select public.set_usage_viewer(%L, 'mingde', true)$q$, :MG));
+select tests.lives('數據分析：老闆授權顧客乙看萬華', format($q$select public.set_usage_viewer(%L, 'g2', true)$q$, :B));
+reset role;
+select tests.ok('數據分析：打開 App 記下現在幾點', (select hours = 1 << extract(hour from (now() at time zone 'Asia/Taipei'))::int
+  from public.app_opens where user_id = :A and day = public.taipei_today()));
+set role authenticated; select tests.login(:A);
+select tests.throws('數據分析：顧客不能看人和互動', $q$select public.usage_insights('mingde')$q$);
+select tests.throws('數據分析：顧客不能看路線分析', $q$select public.route_insights('mingde')$q$);
+select tests.throws('數據分析：不能直接叫內部的使用紀錄', $q$select * from public.usage_activity('2000-01-01')$q$);
+reset role;
+set role authenticated; select tests.login(:ST);
+select tests.throws('數據分析：定線員不能看人和互動', $q$select public.usage_insights('mingde')$q$);
+select tests.ok('數據分析：定線員看得到自己館的路線分析', jsonb_typeof(public.route_insights('mingde') -> 'routes') = 'array');
+select tests.throws('數據分析：定線員看不到別館的路線分析', $q$select public.route_insights('g2')$q$);
+select tests.throws('數據分析：路線分析一定要指定館', $q$select public.route_insights(null)$q$);
+reset role;
+set role authenticated; select tests.login(:MG);
+select tests.lives('數據分析：被授權的店長看得到明德的人和互動', $q$select public.usage_insights('mingde')$q$);
+select tests.throws('數據分析：被授權的店長不能看全部館', $q$select public.usage_insights(null)$q$);
+select tests.throws('數據分析：被授權的店長不能看別館', $q$select public.usage_insights('g2')$q$);
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.lives('數據分析：被授權看萬華的顧客看得到萬華路線分析', $q$select public.route_insights('g2')$q$);
+select tests.throws('數據分析：被授權看萬華的顧客看不到南港路線分析', $q$select public.route_insights('g4')$q$);
+reset role;
+set role anon; select tests.login(null);
+select tests.throws('數據分析：沒登入不能看', $q$select public.usage_insights('g2')$q$);
+select tests.throws('數據分析：沒登入不能看路線分析', $q$select public.route_insights('g2')$q$);
+reset role;
+-- 下面用資料庫管理者的身分核對數字（不受 RLS 影響），函式照樣用老闆登入
+select tests.login(:OW);
+select tests.ok('數據分析：老闆看全部館（有回頭率、新客人、分群、程度、24 小時、每天互動、夥伴）',
+  (select u ? 'retention' and u ? 'newbie' and u -> 'groups' ? 'regular' and u -> 'levels' ? 'mid'
+          and jsonb_array_length(u -> 'hours') = 24 and (select sum(h::int) from jsonb_array_elements_text(u -> 'hours') h) >= 1
+          and jsonb_typeof(u -> 'daily') = 'array' and jsonb_typeof(u -> 'mascots') = 'object'
+     from public.usage_insights(null) u), public.usage_insights(null)::text);
+select tests.ok('數據分析：分群人數＝30 天活躍人數',
+  (select (g ->> 'regular')::int + (g ->> 'sometimes')::int + (g ->> 'once')::int = (s ->> 'month')::int
+     from (select public.usage_insights(null) -> 'groups' g, public.usage_stats(null) s) x));
+select tests.ok('數據分析：路線分析列出明德牆上的岩館路線（Spray Wall、岩友路線不算），試過、完攀數對得上',
+  (select jsonb_array_length(r -> 'routes') = (select count(*) from public.routes x join public.zones z on z.id = x.zone_id
+                                                where z.gym_id = 'mingde' and z.kind = 'wall' and x.kind = 'gym' and x.archived_at is null)
+          and (select bool_and((e ->> 'tried')::int = (select count(*) from public.ascents a where a.route_id = (e ->> 'id')::uuid)
+                           and (e ->> 'sent')::int = (select count(*) from public.ascents a where a.route_id = (e ->> 'id')::uuid and a.status <> 'project'))
+                 from jsonb_array_elements(r -> 'routes') e)
+          and jsonb_array_length(r -> 'supply') = 6 and jsonb_typeof(r -> 'zones') = 'array' and jsonb_typeof(r -> 'resets') = 'array'
+     from public.route_insights('mingde') r), public.route_insights('mingde')::text);
+select tests.ok('數據分析：路線分析不回傳客人的帳號', position('climber_' in public.route_insights('mingde')::text) = 0
+  and position('climber_' in public.usage_insights(null)::text) = 0);
+
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));
 

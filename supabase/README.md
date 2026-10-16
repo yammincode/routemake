@@ -51,6 +51,7 @@
 | `setup/step42-video-likes.sql` | migration 0048：影片按讚 👍（video_likes：所有人看得到讚數，登入且有暱稱才能按，每人每支一個讚，只能收回自己的；影片刪掉讚跟著刪）。再執行一次不會改到東西（最後登記那一行會報錯，代表已經套用過）。新舊版 App 都能用（還沒執行時新版照常顯示影片，只是沒有讚的按鈕） | 已套用 |
 | `setup/step43-accounts.sql` | migration 0049：帳號管理（profiles 多停權欄位（到哪天、原因、誰停的），不公開；停權中在資料庫擋留言、改留言、按讚、分享影片、上傳檔案、出岩友路線、改暱稱和人物卡、換夥伴、送回饋，記錄完攀照常；suspend_user／unsuspend_user：店長 3／7／30 天、永久只有老闆，員工和老闆不能停；店長只刪得到自己館的留言、只能解除自己停的；search_accounts、account_info、suspended_accounts、account_comments：員工看帳號管理；delete_user_videos＋delete_user：老闆刪別人（員工不能被刪；先刪影片資料、App 刪檔案，再刪帳號），delete_my_videos＋delete_my_account：本人輸入密碼刪自己；password_resets＋issue_reset_code／cancel_reset_code：店長、老闆產生 6 位數重設碼（只存加密後的、15 分鐘、員工的帳號只有老闆能產生；定線長不行），reset_password_with_code：沒登入也能用，打錯 5 次作廢，成功後其他手機登出；my_access 多回傳 suspension）。跟 step40、step41 互不影響，可以單獨執行（要先套用 step42）。新舊版 App 都能用（還沒執行時新版沒有停權、帳號管理寫要套用 step43、忘記密碼請洽櫃檯）。**執行後**用測試帳號試一次重設密碼、刪除我的帳號（第一次由資料庫改密碼、刪 auth 帳號） | 已套用 |
 | `setup/step44-spray-route-photos.sql` | migration 0050：Spray Wall 岩館路線改成員工上傳照片（routes.photo_path：只有 Spray Wall 的岩館路線能放，路徑一定是那間館的 {館}/routes/；有照片圈圈可以不畫；Storage {館}/routes/ 只有那館員工能上傳；spray_list 多回傳 photo_path）。還沒執行時 App 照常（岩館路線照舊在公版照片上畫圈） | 已套用 |
+| `setup/step45-usage-insights.sql` | migration 0051：使用狀況更多數據分析（app_opens 多一欄 hours：當天幾點有打開，record_open 每次補上那一格，之前的紀錄沒有時間；usage_insights：「人」「互動」分頁的回頭率、新客人第一週、常客分群、程度分布、進步、幾點最多人用、每天留言影片按讚、熱門影片和留言、夥伴，權限跟 usage_stats 一樣；route_insights：「路線」分頁的每條路線試過／完攀／Flash／難度體感、各區熱度、換線前後、難度供需、熱門路線，老闆、被授權看那一館的人和那一館的員工（定線員、店長）看得到；usage_activity 內部用，App 不能直接叫；都只回傳總數，不回傳客人的帳號）。還沒執行 step41、step42 也可以執行（沒有的就不算）。再執行一次不會改到東西（最後登記那一行會報錯，代表已經套用過）。新舊版 App 都能用（還沒執行時新版照舊顯示現在的使用狀況，多的分析寫要套用 step45） | 未套用 |
 
 ## 規則摘要
 
@@ -69,7 +70,7 @@
 | scoring_rules | 所有人 | 只有老闆 | 不開放 |
 | route_videos | 所有人 | 登入且有暱稱；路線未下架、留言開啟；路徑要是 `{館}/{路線}/{本人}/檔名`，而且要先上傳好本人的檔案；身高、動作、型態只收固定選項（型態最多 2 個）；長度、大小依區域（上攀 180 秒、100 MB，其他 60 秒、50 MB）；24 小時 15 筆；說明不能放網址；App 有送攀爬日和完成狀態時，由資料庫從本人紀錄帶入（舊版 App、沒送完成狀態的不記攀爬日）；不能修改 | `delete_video()`：本人或該館員工（員工刪除寫操作紀錄）；路線下架時自動刪除 |
 | comment_likes | 所有人 | 登入且有暱稱；留言未刪除；每人每則一個讚；不能修改 | 只能收回自己的讚 |
-| app_opens | 沒有人能直接讀寫 | 只能用 `record_open()` 記自己今天有打開 | 不開放 |
+| app_opens | 沒有人能直接讀寫 | 只能用 `record_open()` 記自己今天有打開（step45 起多記幾點） | 不開放 |
 | Storage `zone-photos` | 公開（只收 JPEG、PNG、WebP） | `{館}/zones/` 員工、`{館}/floorplan/` 店長 | 同左 |
 | Storage `route-videos` | 用網址公開播放；檔案清單只有本人、該館員工看得到 | 同 route_videos；每支 100 MB（影片資料再依區域檢查：上攀 3 分鐘、100 MB，其他 60 秒、50 MB）、mp4／mov／webm；每人 24 小時 15 支 | 該館員工；本人（分享中的要先用 `delete_video()` 刪資料）；岩友路線下架後出題者可清掉這條路線的影片檔 |
 

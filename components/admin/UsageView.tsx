@@ -1,20 +1,52 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import RouteInsightsView from "@/components/admin/RouteInsights";
+import { PeopleInsights, SocialInsights } from "@/components/admin/UsageInsights";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { BackLink, Empty, SectionTitle, Tip } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
+import { HighlightCard } from "@/components/ui/Insights";
 import { Grade } from "@/components/ui/Route";
+import { Tabs } from "@/components/ui/Tabs";
 import { SetBox, StatGrid, StatTile, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
-import { getUsage, resetUsageSince, type UsageStats } from "@/lib/data";
+import {
+  NO_INSIGHTS,
+  getRouteInsights,
+  getUsage,
+  getUsageInsights,
+  resetUsageSince,
+  type RouteInsights,
+  type UsageInsights,
+  type UsageStats,
+} from "@/lib/data";
 import { GYMS } from "@/lib/gyms";
+import { pickHighlights, type Highlight } from "@/lib/insights";
+
+type Tab = Highlight["tab"];
+const TABS = [
+  { key: "people", label: "人" },
+  { key: "routes", label: "路線" },
+  { key: "social", label: "互動" },
+] as const;
+const TAB_KEY = "routemake:usage-tab";
+const savedTab = (): Tab => {
+  try {
+    const v = localStorage.getItem(TAB_KEY);
+    return v === "routes" || v === "social" ? v : "people";
+  } catch {
+    return "people";
+  }
+};
 
 const md = (d: string) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
 
 // 使用狀況頁（營運分頁）：老闆授權的人只看老闆指定的館；老闆可以看全部館、各館比較，並設定「統計起始日」
+// 上面「本週重點」（自動挑變化最大的 3 件，點了跳到那一段），下面分頁 人｜路線｜互動（記在手機）；路線一次看一間館
+// 還沒套用 step45：人分頁照舊（活躍、每天、註冊、各館比較），熱門路線放在路線分頁，其他分析寫要套用 step45
 // 「有使用」＝當天有打開 App，或有記錄攀爬、留言、分享影片（只算登入的人）
 export default function UsageView() {
   const { access } = useAuth();
@@ -31,6 +63,23 @@ export default function UsageView() {
   const [pick, setPick] = useState<number | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [reload, setReload] = useState(0);
+  const [tab, setTabState] = useState<Tab>("people");
+  // insights／routes：undefined＝讀取中、null＝資料庫還沒套用 step45
+  const [insights, setInsights] = useState<UsageInsights | null | undefined>(undefined);
+  const [routes, setRoutes] = useState<RouteInsights | null | undefined>(undefined);
+  const [moreError, setMoreError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => setTabState(savedTab()));
+  }, []);
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    try {
+      localStorage.setItem(TAB_KEY, t);
+    } catch {
+      /* 存不了就只記這一次 */
+    }
+  };
 
   const allowed = owner || myGyms.length > 0;
   useEffect(() => {
@@ -39,9 +88,16 @@ export default function UsageView() {
     void Promise.resolve().then(() => {
       setData(null);
       setPick(null);
-      return getUsage(scope)
+      setInsights(undefined);
+      setRoutes(undefined);
+      setMoreError(null);
+      const more = Promise.all([getUsageInsights(scope), scope ? getRouteInsights(scope) : Promise.resolve(null)])
+        .then(([u, r]) => alive && (setInsights(u), setRoutes(r)))
+        .catch((e) => alive && setMoreError((e as Error).message));
+      const base = getUsage(scope)
         .then((d) => alive && (setData(d), setError(null)))
         .catch((e) => alive && setError((e as Error).message));
+      return Promise.all([more, base]);
     });
     return () => {
       alive = false;
@@ -56,6 +112,14 @@ export default function UsageView() {
     );
 
   const all = scope == null;
+  const highlights = insights || routes ? pickHighlights(insights ?? null, routes ?? null) : [];
+  const jump = (h: Highlight) => {
+    setTab(h.tab);
+    setTimeout(() => document.getElementById(h.section)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
+  const missing = insights === null; // 還沒套用 step45
+  const loadingMore = insights === undefined && !moreError;
+  const moreNote = moreError ? <Empty>{moreError}</Empty> : missing ? <Empty>{NO_INSIGHTS}</Empty> : loadingMore ? <Empty>讀取中…</Empty> : null;
   const rate = data && data.registered ? Math.round((data.month / data.registered) * 1000) / 10 : 0;
 
   const reset = async () => {
@@ -99,76 +163,118 @@ export default function UsageView() {
         <Empty>讀取中…</Empty>
       ) : (
         <>
-          <SectionTitle>活躍人數</SectionTitle>
-          <StatGrid>
-            <StatTile value={data.today} label="今天" />
-            <StatTile value={data.week} label="最近 7 天" />
-            <StatTile value={data.month} label="最近 30 天" />
-            {all ? <StatTile value={`${rate}%`} label="使用率" /> : <StatTile value={data.sends30} label="30 天完攀" />}
-          </StatGrid>
-          <Tip>
-            活躍＝當天有打開 App，或有記錄攀爬、留言、分享影片的人（只算登入的人）。
-            {all ? `使用率＝30 天活躍 ÷ 全部註冊 ${data.registered} 人。` : ""}
-          </Tip>
-
-          <SectionTitle>每天使用人數（最近 30 天）</SectionTitle>
-          <SetBox>
-            <TrendBars
-              label="最近 30 天每天使用人數"
-              items={data.daily.map((d) => ({ key: d.day, tick: md(d.day), title: `${md(d.day)}：${d.users} 人使用・完攀 ${d.sends} 條`, value: d.users }))}
-              selected={pick}
-              onSelect={setPick}
-            />
-          </SetBox>
-
-          <SectionTitle>註冊</SectionTitle>
-          <StatGrid>
-            <StatTile value={data.since ? data.registered_since : data.registered} label={data.since ? "上線後註冊" : "全部註冊"} />
-            <StatTile value={data.new7} label="最近 7 天新註冊" />
-            {data.since && <StatTile value={data.registered_before} label="測試期間註冊" />}
-          </StatGrid>
-
-          {data.gyms && (
-            <>
-              <SectionTitle>各館比較（最近 30 天）</SectionTitle>
-              <ul className="m-0 grid list-none gap-2 p-0">
-                {data.gyms.map((g) => {
-                  const max = Math.max(1, ...data.gyms!.map((x) => x.users));
-                  return (
-                    <li key={g.gym} className="grid grid-cols-[64px_1fr_auto] items-center gap-2.5 text-note">
-                      <b>{g.name}</b>
-                      <span className="h-2.5 overflow-hidden rounded-full bg-sunk">
-                        <span className="block h-full rounded-full bg-accent" style={{ width: `${(g.users / max) * 100}%` }} />
-                      </span>
-                      <span className="text-muted">
-                        <b className="font-num text-ink">{g.users}</b> 人・完攀 <span className="font-num">{g.sends}</span>
-                      </span>
+          {!missing && !moreError && (
+            <section>
+              <SectionTitle className="mt-[18px]">本週重點</SectionTitle>
+              {highlights.length ? (
+                <ul className="m-0 grid list-none gap-2 p-0">
+                  {highlights.map((h) => (
+                    <li key={h.key}>
+                      <HighlightCard big={h.big} title={h.title} detail={h.detail} onClick={() => jump(h)} />
                     </li>
-                  );
-                })}
-              </ul>
+                  ))}
+                </ul>
+              ) : (
+                <Empty>{loadingMore ? "讀取中…" : "資料還不夠，過幾天再來看。"}</Empty>
+              )}
+              {all && <Tip>路線的重點要選一間館才看得到。</Tip>}
+            </section>
+          )}
+
+          <Tabs tabs={TABS} value={tab} onChange={setTab} />
+
+          {tab === "people" && (
+            <>
+              <SectionTitle>活躍人數</SectionTitle>
+              <StatGrid>
+                <StatTile value={data.today} label="今天" />
+                <StatTile value={data.week} label="最近 7 天" />
+                <StatTile value={data.month} label="最近 30 天" />
+                {all ? <StatTile value={`${rate}%`} label="使用率" /> : <StatTile value={data.sends30} label="30 天完攀" />}
+              </StatGrid>
+              <Tip>
+                活躍＝當天有打開 App，或有記錄攀爬、留言、分享影片的人（只算登入的人）。
+                {all ? `使用率＝30 天活躍 ÷ 全部註冊 ${data.registered} 人。` : ""}
+              </Tip>
+
+              <SectionTitle>每天使用人數（最近 30 天）</SectionTitle>
+              <SetBox>
+                <TrendBars
+                  label="最近 30 天每天使用人數"
+                  items={data.daily.map((d) => ({
+                    key: d.day,
+                    tick: md(d.day),
+                    title: `${md(d.day)}：${d.users} 人使用・完攀 ${d.sends} 條`,
+                    value: d.users,
+                  }))}
+                  selected={pick}
+                  onSelect={setPick}
+                />
+              </SetBox>
+
+              <SectionTitle>註冊</SectionTitle>
+              <StatGrid>
+                <StatTile value={data.since ? data.registered_since : data.registered} label={data.since ? "上線後註冊" : "全部註冊"} />
+                <StatTile value={data.new7} label="最近 7 天新註冊" />
+                {data.since && <StatTile value={data.registered_before} label="測試期間註冊" />}
+              </StatGrid>
+
+              {data.gyms && (
+                <>
+                  <SectionTitle>各館比較（最近 30 天）</SectionTitle>
+                  <ul className="m-0 grid list-none gap-2 p-0">
+                    {data.gyms.map((g) => {
+                      const max = Math.max(1, ...data.gyms!.map((x) => x.users));
+                      return (
+                        <li key={g.gym} className="grid grid-cols-[64px_1fr_auto] items-center gap-2.5 text-note">
+                          <b>{g.name}</b>
+                          <span className="h-2.5 overflow-hidden rounded-full bg-sunk">
+                            <span className="block h-full rounded-full bg-accent" style={{ width: `${(g.users / max) * 100}%` }} />
+                          </span>
+                          <span className="text-muted">
+                            <b className="font-num text-ink">{g.users}</b> 人・完攀 <span className="font-num">{g.sends}</span>
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              )}
+
+              {insights && <PeopleInsights u={insights} />}
+              {!insights && moreNote}
             </>
           )}
 
-          <SectionTitle>熱門路線（最近 30 天最多人完攀）</SectionTitle>
-          {data.top_routes.length ? (
-            <ul className="m-0 grid list-none gap-2 p-0">
-              {data.top_routes.map((r, i) => (
-                <li key={r.id} className="flex items-center gap-3 rounded-btn bg-surface px-3 py-2 shadow-card">
-                  <span className="w-4 font-num text-muted">{i + 1}</span>
-                  <Grade grade={r.grade} className="text-num-bar w-[52px]" />
-                  <span className="min-w-0 flex-1 truncate text-note">
-                    {r.zone} {r.name ?? `${r.code} ${r.color}色`}
-                  </span>
-                  <span className="flex-none text-meta text-muted">
-                    <b className="font-num text-ink">{r.n}</b> 人完攀
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Empty>最近 30 天還沒有完攀紀錄。</Empty>
-          )}
+          {tab === "routes" &&
+            (!all && routes ? (
+              <RouteInsightsView data={routes} />
+            ) : (
+              <>
+                {all ? <Empty>完攀率、冷門路線、各區熱度、換線效果、難度供需一次看一間館，請在上面選館。</Empty> : moreNote}
+                <SectionTitle>熱門路線（最近 30 天最多人完攀）</SectionTitle>
+                {data.top_routes.length ? (
+                  <ul className="m-0 grid list-none gap-2 p-0">
+                    {data.top_routes.map((r, i) => (
+                      <li key={r.id} className="flex items-center gap-3 rounded-btn bg-surface px-3 py-2 shadow-card">
+                        <span className="w-4 font-num text-muted">{i + 1}</span>
+                        <Grade grade={r.grade} className="text-num-bar w-[52px]" />
+                        <span className="min-w-0 flex-1 truncate text-note">
+                          {r.zone} {r.name ?? `${r.code} ${r.color}色`}
+                        </span>
+                        <span className="flex-none text-meta text-muted">
+                          <b className="font-num text-ink">{r.n}</b> 人完攀
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <Empty>最近 30 天還沒有完攀紀錄。</Empty>
+                )}
+              </>
+            ))}
+
+          {tab === "social" && (insights ? <SocialInsights u={insights} /> : moreNote)}
         </>
       )}
 

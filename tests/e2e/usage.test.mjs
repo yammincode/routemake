@@ -50,7 +50,11 @@ test("使用狀況：記錄打開；店長要老闆授權才看得到、只看�
   await m.waitForURL("**/ops/usage");
   await m.waitForTimeout(1000);
   const text = await m.textContent("main");
-  assert.ok(text.includes("活躍人數") && text.includes("每天使用人數") && text.includes("註冊") && text.includes("熱門路線"), "授權後看得到使用狀況");
+  assert.ok(text.includes("活躍人數") && text.includes("每天使用人數") && text.includes("註冊"), "授權後看得到使用狀況");
+  await m.click('main [role="tab"]:text-is("路線")');
+  await m.waitForTimeout(300);
+  assert.ok((await m.textContent("main")).includes("熱門路線"), "熱門路線在路線分頁");
+  await m.click('main [role="tab"]:text-is("人")');
   assert.equal(await m.locator('main button:text-is("全部館")').count(), 0, "不能看全部館");
   assert.equal(await m.locator('main button:has-text("重新開始統計")').count(), 0, "不能重新開始統計");
   assert.equal(await m.locator('main [aria-label="最近 30 天每天使用人數"] button').count(), 30, "30 天趨勢");

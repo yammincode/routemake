@@ -97,7 +97,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, noRoutePhoto: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, noRoutePhoto: false, noInsights: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -720,6 +720,77 @@ export function createMock() {
         daily: days.map((d) => ({ day: d, users: new Set(opens.filter((o) => o.day === d).map((o) => o.user_id)).size, sends: sends.filter((s) => s.climbed_on === d).length })),
         gyms: a.p_gym == null ? db.gyms.filter((g) => g.is_live).map((g) => ({ gym: g.id, name: g.name, users: new Set(opens.filter((o) => o.gym_id === g.id).map((o) => o.user_id)).size, sends: 0 })) : null,
         top_routes: [],
+      });
+    }
+    // 數據分析（step45）；state.noInsights 模擬資料庫還沒套用
+    if (fn === "usage_insights" || fn === "route_insights") {
+      if (state.noInsights) return J(route, 404, { code: "PGRST202", message: `Could not find the function public.${fn}` });
+      const gym = a.p_gym ?? null;
+      const ok =
+        fn === "usage_insights"
+          ? gym == null ? isOwner(uid) : canViewUsage(uid, gym)
+          : gym != null && (canViewUsage(uid, gym) || db.staff_roles.some((x) => x.user_id === uid && x.gym_id === gym));
+      if (!ok) return J(route, 403, { code: "42501", message: fn === "usage_insights" ? "使用狀況要老闆授權才看得到" : "只有這間館的員工和老闆授權的人看得到路線分析" });
+      const gymOfRoute = (rid) => zoneOf(db.routes.find((r) => r.id === rid)?.zone_id)?.gym_id;
+      const tday = (ts) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date(ts));
+      const today = taipeiDay();
+      const daysAgo = (d) => Math.round((Date.parse(today) - Date.parse(d)) / 86400000);
+      if (fn === "usage_insights") {
+        const opens = db.opens.filter((o) => gym == null || o.gym_id === gym);
+        const wk = (w) => new Set(opens.filter((o) => Math.floor(daysAgo(o.day) / 7) === w).map((o) => o.user_id));
+        const ret = (w) => { const b = wk(w), n = wk(w - 1); return { base: b.size, back: [...b].filter((u) => n.has(u)).length }; };
+        const days = new Map();
+        for (const o of opens.filter((o) => daysAgo(o.day) < 30)) days.set(o.user_id, (days.get(o.user_id) ?? 0) + 1);
+        const best = new Map();
+        for (const x of db.ascents.filter((x) => x.status !== "project" && (gym == null || gymOfRoute(x.route_id) === gym))) {
+          const g = db.routes.find((r) => r.id === x.route_id).grade;
+          if (g <= 10) best.set(x.user_id, Math.max(best.get(x.user_id) ?? -9, g));
+        }
+        const lv = [...best.values()];
+        const hours = Array(24).fill(0);
+        hours[(new Date().getUTCHours() + 8) % 24] = opens.filter((o) => o.day === today).length;
+        const d14 = Array.from({ length: 14 }, (_, i) => taipeiDay(i - 13));
+        const mascots = {};
+        if (!state.noMascot) for (const p of db.profiles) mascots[p.mascot?.id ?? ""] = (mascots[p.mascot?.id ?? ""] ?? 0) + 1;
+        return J(route, 200, {
+          since: state.usageSince,
+          retention: { now: ret(1), prev: ret(2), cohort: null },
+          newbie: { n: 0, next_day: 0, first_route: 0, two_days: 0 },
+          groups: { regular: [...days.values()].filter((n) => n >= 8).length, sometimes: [...days.values()].filter((n) => n >= 2 && n < 8).length, once: [...days.values()].filter((n) => n === 1).length },
+          levels: { easy: lv.filter((g) => g <= 2).length, mid: lv.filter((g) => g >= 3 && g <= 5).length, hard: lv.filter((g) => g >= 6).length },
+          progress: { climbers: 0, improved: 0 },
+          hours,
+          daily: d14.map((d) => ({
+            day: d,
+            comments: db.comments.filter((c) => !c.deleted_at && tday(c.created_at) === d && (gym == null || gymOfRoute(c.route_id) === gym)).length,
+            videos: db.videos.filter((v) => tday(v.created_at) === d && (gym == null || gymOfRoute(v.route_id) === gym)).length,
+            likes: 0,
+          })),
+          top_video: null,
+          top_comment: null,
+          mascots: state.noMascot ? null : mascots,
+        });
+      }
+      const zs = db.zones.filter((z) => z.gym_id === gym && z.kind !== "spray");
+      const wall = db.routes.filter((r) => zs.some((z) => z.id === r.zone_id) && r.kind !== "community" && !r.archived_at);
+      const ofRoute = (r) => db.ascents.filter((x) => x.route_id === r.id);
+      const ref = (r) => ({ zone: zoneOf(r.zone_id).name, code: r.code, grade: r.grade, color: r.hold_color, name: r.name ?? null });
+      const sends = db.ascents.filter((x) => x.status !== "project" && zs.some((z) => z.id === db.routes.find((r) => r.id === x.route_id)?.zone_id));
+      const bands = [["easy", -1, 2], ["mid", 3, 5], ["hard", 6, 10], ["rope_easy", 100, 103], ["rope_mid", 104, 107], ["rope_hard", 108, 119]];
+      const gradeOf = (x) => db.routes.find((r) => r.id === x.route_id).grade;
+      const counts = new Map();
+      for (const x of sends) counts.set(x.route_id, new Set([...(counts.get(x.route_id) ?? []), x.user_id]));
+      return J(route, 200, {
+        since: state.usageSince,
+        routes: wall.map((r) => ({
+          id: r.id, ...ref(r), days: daysAgo(tday(r.created_at)),
+          tried: ofRoute(r).length, sent: ofRoute(r).filter((x) => x.status !== "project").length, flash: ofRoute(r).filter((x) => x.status === "flash").length,
+          soft: ofRoute(r).filter((x) => x.grade_feel === -1).length, hard: ofRoute(r).filter((x) => x.grade_feel === 1).length,
+        })),
+        zones: zs.map((z) => ({ name: z.name, records: db.ascents.filter((x) => db.routes.find((r) => r.id === x.route_id)?.zone_id === z.id).length, users: 0, routes: wall.filter((r) => r.zone_id === z.id).length })),
+        supply: bands.map(([band, lo, hi]) => ({ band, wall: wall.filter((r) => r.grade >= lo && r.grade <= hi).length, sends: sends.filter((x) => gradeOf(x) >= lo && gradeOf(x) <= hi).length })),
+        resets: [],
+        top: [...counts].sort((x, y) => y[1].size - x[1].size).slice(0, 5).map(([rid, us]) => ({ id: rid, ...ref(db.routes.find((r) => r.id === rid)), n: us.size })),
       });
     }
     if (fn === "set_usage_since") {
