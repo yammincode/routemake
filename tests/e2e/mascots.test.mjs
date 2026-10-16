@@ -183,6 +183,7 @@ test("夥伴說話：區域頁講這一區、記錄 Flash 破紀錄撒彩帶、�
   assert.ok((await toast.textContent()).includes("完攀！手感不錯喔！"), `完攀：${await toast.textContent()}`);
   assert.equal(await p.locator("[data-party]").count(), 0, "完攀不撒彩帶");
   await p.keyboard.press("Escape");
+  await p.waitForTimeout(300); // 等退完全螢幕卡片多記的那一筆瀏覽紀錄再換頁
 
   // 我的紀錄：講這個月
   await p.goto(`${BASE}/me`, { waitUntil: "networkidle" });

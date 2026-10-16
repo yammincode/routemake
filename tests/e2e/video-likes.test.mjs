@@ -96,6 +96,7 @@ test("路線卡片「影片」分頁按讚；New~ 打開卡片（Spray Wall）�
   assert.ok(mock.db.videoLikes.some((l) => l.video_id === v.id && l.user_id === me), "卡片裡按讚有存");
   assert.equal(await text(card.locator('button[aria-pressed="true"]')), "👍1");
   await c.keyboard.press("Escape");
+  await c.waitForTimeout(300); // 等退完全螢幕卡片多記的那一筆瀏覽紀錄再換頁
 
   // New~：牆上那條在卡片裡按的讚，列表也是按過的
   await c.goto(`${BASE}/new`, { waitUntil: "networkidle" });
