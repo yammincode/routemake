@@ -58,7 +58,7 @@ import {
 } from "@/lib/design";
 import { MINGDE_PLAN } from "@/lib/floorplan";
 import { GYMS, LIVE_GYM } from "@/lib/gyms";
-import { MASCOTS, type MascotPick } from "@/lib/mascots";
+import { MASCOT_MODES, MASCOTS, type MascotMode, type MascotPick } from "@/lib/mascots";
 import { ReportAction, ReportCount, ReportItem, ReportLink, ReportList, ReportMark, ReportSpot } from "@/components/ui/Report";
 import { ShareButton, ShareOffer, SharePicker, SharePreview } from "@/components/ui/Share";
 import { SHOW_DEFAULT } from "@/lib/share-options";
@@ -1076,35 +1076,37 @@ export default function DesignShowcase() {
   );
 }
 
-// 原岩夥伴：選夥伴、換色、角色卡、頭像、館首頁對話泡泡、幹話模式（刀疤＋棒棒糖）
+// 原岩夥伴：選夥伴、換色、角色卡、頭像、館首頁對話泡泡、夥伴風格（幹話：刀疤＋棒棒糖；文青：貝雷帽＋圓眼鏡＋拿鐵，40px 以下的頭像不畫拿鐵）
 function MascotDemo() {
   const [pick, setPick] = useState<MascotPick>({ id: "wanhua" });
-  const [troll, setTroll] = useState(false);
+  const [mode, setMode] = useState<MascotMode>("plain");
   const [buddy, setBuddy] = useState(true);
   const [toast, setToast] = useState(0);
   return (
     <>
-      <Toggle checked={troll} onChange={setTroll} label="幹話模式" hint="所有夥伴加刀疤、叼棒棒糖" />
-      <CharacterTop pick={pick} troll={troll} />
+      <div className="mb-3">
+        <Segmented small options={MASCOT_MODES} value={mode} onChange={setMode} />
+      </div>
+      <CharacterTop pick={pick} mode={mode} />
       <p className="mt-1 mb-1 text-tiny text-muted">還在讀的時候：</p>
       <CharacterTop pick={null} small />
       <div className="mt-3 flex items-center gap-2">
         {MASCOTS.map((m) => (
-          <MascotAvatar key={m.id} pick={{ id: m.id }} size={36} troll={troll} />
+          <MascotAvatar key={m.id} pick={{ id: m.id }} size={36} mode={mode} />
         ))}
         <MascotAvatar pick={null} size={36} />
       </div>
-      <p className="mt-1 mb-3 text-tiny text-muted">最後一個是還在讀的頭像（空的圓）</p>
-      <MascotBubble pick={pick} troll={troll} text="慢慢來，爬完一條是一條。" onClose={() => setTroll(false)} />
+      <p className="mt-1 mb-3 text-tiny text-muted">最後一個是還在讀的頭像（空的圓）；40px 以下文青不畫拿鐵</p>
+      <MascotBubble pick={pick} mode={mode} text="慢慢來，爬完一條是一條。" onClose={() => setMode("plain")} />
       <p className="mt-1 mb-1 text-tiny text-muted">右下角小夥伴（點牠說話、「閉嘴」今天不說）：</p>
       <div className="mb-3 flex justify-end">
-        <MascotBuddyView pick={pick} troll={troll} text={buddy ? "今天爬哪一區？" : null} onTap={() => setBuddy(!buddy)} onHush={() => setBuddy(false)} />
+        <MascotBuddyView pick={pick} mode={mode} text={buddy ? "今天爬哪一區？" : null} onTap={() => setBuddy(!buddy)} onHush={() => setBuddy(false)} />
       </div>
       <Button className="mb-3" onClick={() => setToast(Date.now())}>
         模擬記錄 Flash（夥伴從上面跳出來、撒彩帶）
       </Button>
-      {toast > 0 && <MascotToastView key={toast} pick={pick} troll={troll} text="Flash！一次就上，太強了吧！" party onClose={() => setToast(0)} />}
-      <MascotPicker value={pick.id} onChange={(id) => setPick({ id })} troll={troll} />
+      {toast > 0 && <MascotToastView key={toast} pick={pick} mode={mode} text="Flash！一次就上，太強了吧！" party onClose={() => setToast(0)} />}
+      <MascotPicker value={pick.id} onChange={(id) => setPick({ id })} mode={mode} />
       <div className="mt-3">
         <MascotColors pick={pick} onChange={setPick} />
       </div>

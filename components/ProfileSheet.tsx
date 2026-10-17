@@ -13,7 +13,7 @@ import { cardGyms, clearCardBio, getAccountInfo, getProfileCard, NO_ACCOUNTS, ty
 import { md } from "@/lib/date";
 import { ABILITY_AXES, CLIMBING_YEARS, gradeLabel } from "@/lib/design";
 import { GYMS } from "@/lib/gyms";
-import { useMascot, useTroll } from "@/lib/mascot-store";
+import { useMascot, useMascotMode } from "@/lib/mascot-store";
 import { mascotInfo, type MascotPick } from "@/lib/mascots";
 
 // 最高完攀：抱石、上攀都有就一起列
@@ -52,7 +52,7 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const pick = useMascot(userId);
-  const [troll] = useTroll();
+  const [mode] = useMascotMode();
 
   useEffect(() => {
     getProfileCard(userId)
@@ -65,7 +65,7 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
   const name = card.nickname ?? "攀岩者";
 
   // 角色卡上半段：夥伴（所有人都看得到，跟留言旁的頭像一樣）；還在讀先空著
-  const top = <CharacterTop pick={pick} troll={troll} />;
+  const top = <CharacterTop pick={pick} mode={mode} />;
   // 店長、老闆：人物卡下面可以停權（1A 案）；沒公開人物卡也一樣
   const staffBox = !card.self && isManagerOf(access, gymId) ? <StaffBox userId={userId} gymId={gymId} /> : null;
   if (!card.public && !card.self) {

@@ -4,7 +4,7 @@
 import { eventLine, type EventKind } from "./cheer";
 import { getSendFacts, myCommentCount } from "./data";
 import { gradeLabel } from "./design";
-import { sayEvent, trollOn } from "./mascot-store";
+import { mascotMode, sayEvent } from "./mascot-store";
 
 const tpe = (d: Date) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(d);
 
@@ -18,7 +18,7 @@ export function streakDays(days: string[], today = tpe(new Date())): number {
 
 // 記錄完攀、Flash 之後（queued＝沒網路先排隊：不查紀錄，直接說完攀／Flash）
 export async function cheerSend(o: { userId: string; routeId: string; grade: number; status: "flash" | "send"; climbedOn: string; queued: boolean }) {
-  const troll = trollOn();
+  const mode = mascotMode();
   let kind: EventKind = o.status;
   let vars: { grade?: string; days?: number } = {};
   const today = tpe(new Date());
@@ -35,7 +35,7 @@ export async function cheerSend(o: { userId: string; routeId: string; grade: num
       // 讀不到就照一般的完攀／Flash 說
     }
   }
-  sayEvent(eventLine(kind, troll, vars), kind === "flash" || kind === "best");
+  sayEvent(eventLine(kind, mode, vars), kind === "flash" || kind === "best");
 }
 
 // 留言送出之後：第一則留言才說；說過（或之前就留過）記在這支手機，之後不再查（刪掉留言再留也不會再說）
@@ -49,6 +49,6 @@ export async function cheerComment(userId: string) {
     try {
       localStorage.setItem(key, "1");
     } catch {}
-    if (n === 1) sayEvent(eventLine("comment", trollOn()));
+    if (n === 1) sayEvent(eventLine("comment", mascotMode()));
   } catch {}
 }
