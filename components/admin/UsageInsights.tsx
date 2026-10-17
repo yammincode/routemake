@@ -209,7 +209,7 @@ export function SocialInsights({ u }: { u: UsageInsights }) {
               />
             ))}
           </MeterList>
-          <Tip>還沒選的人算在預設的高山猛牛。幹話模式存在客人自己的手機裡，算不到有幾個人開。</Tip>
+          <Tip>還沒選的人算在預設的高山猛牛。夥伴風格（幹話、文青）存在客人自己的手機裡，算不到有幾個人選。</Tip>
         </>
       ) : (
         <Empty>{mascots ? "還沒有人。" : "資料庫還沒套用原岩夥伴（step41），套用後就算得出來。"}</Empty>

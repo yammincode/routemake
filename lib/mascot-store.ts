@@ -2,7 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { getMascots } from "./data";
-import { normalizePick, type MascotPick } from "./mascots";
+import { normalizePick, type MascotMode, type MascotPick } from "./mascots";
 
 // 每個人的夥伴（留言、影片、人物卡共用）：同一輪畫面要的人一起讀一次，讀過的記在記憶體
 // 沒選、讀不到（沒網路、資料庫還沒套用 step41）都是預設的高山猛牛
@@ -87,24 +87,28 @@ export function rememberMascot(userId: string, pick: MascotPick) {
   notify();
 }
 
-// 幹話模式：記在這支手機，只影響自己看到的（所有夥伴加刀疤和棒棒糖、說的話全部是幹話）
-const TROLL_KEY = "routemake:troll";
-const readTroll = () => {
+// 夥伴風格（平常／幹話／文青）：記在這支手機，只影響自己看到的（夥伴的打扮、說的話）
+// 以前的「幹話模式」開關記在 routemake:troll，開過的人自動當成選了幹話；改選之後就只看新的
+const MODE_KEY = "routemake:mascot-mode";
+const OLD_TROLL_KEY = "routemake:troll";
+const readMode = (): MascotMode => {
   try {
-    return localStorage.getItem(TROLL_KEY) === "1";
+    const v = localStorage.getItem(MODE_KEY);
+    if (v === "troll" || v === "artsy" || v === "plain") return v;
+    return localStorage.getItem(OLD_TROLL_KEY) === "1" ? "troll" : "plain";
   } catch {
-    return false;
+    return "plain";
   }
 };
-export const trollOn = readTroll;
-export function useTroll(): [boolean, (on: boolean) => void] {
-  const on = useSyncExternalStore(subscribe, readTroll, () => false);
+export const mascotMode = readMode;
+export function useMascotMode(): [MascotMode, (m: MascotMode) => void] {
+  const mode = useSyncExternalStore(subscribe, readMode, () => "plain" as const);
   return [
-    on,
-    (v: boolean) => {
+    mode,
+    (m: MascotMode) => {
       try {
-        if (v) localStorage.setItem(TROLL_KEY, "1");
-        else localStorage.removeItem(TROLL_KEY);
+        localStorage.setItem(MODE_KEY, m);
+        localStorage.removeItem(OLD_TROLL_KEY);
       } catch {}
       notify();
     },

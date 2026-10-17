@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { MascotBuddyView, MascotToastView } from "@/components/ui/Mascot";
 import { buddyLine } from "@/lib/cheer";
-import { useMascot, useMascotEvent, useTalk, useTroll } from "@/lib/mascot-store";
+import { useMascot, useMascotEvent, useTalk, useMascotMode } from "@/lib/mascot-store";
 
 // 顧客的頁面右下角站著小夥伴（館首頁、區域頁、New~、人物卡、我的紀錄、Spray Wall）
 const BUDDY_PAGES = ["/gym", "/zone", "/new", "/card", "/me", "/spray"];
@@ -18,7 +18,7 @@ export default function MascotBuddy() {
   const { session } = useAuth();
   const uid = session?.user.id;
   const pick = useMascot(uid ?? null);
-  const [troll] = useTroll();
+  const [mode] = useMascotMode();
   const talk = useTalk();
   const [text, setText] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -27,10 +27,10 @@ export default function MascotBuddy() {
   // 說一句，5 秒後收起來
   const say = useCallback(() => {
     if (!pick) return;
-    setText(buddyLine(pick.id, troll));
+    setText(buddyLine(pick.id, mode));
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setText(null), 5000);
-  }, [pick, troll]);
+  }, [pick, mode]);
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
 
   // 換頁：先把上一頁的話收起來；New~、人物卡、Spray Wall 打開時說一句
@@ -50,7 +50,7 @@ export default function MascotBuddy() {
     <MascotBuddyView
       fixed
       pick={pick}
-      troll={troll}
+      mode={mode}
       text={text}
       onTap={say}
       onHush={() => {
@@ -66,7 +66,7 @@ export function MascotToast() {
   const { session } = useAuth();
   const ev = useMascotEvent();
   const pick = useMascot(session?.user.id ?? null);
-  const [troll] = useTroll();
+  const [mode] = useMascotMode();
   const [hidden, setHidden] = useState<number | null>(null);
   useEffect(() => {
     if (!ev) return;
@@ -74,5 +74,5 @@ export function MascotToast() {
     return () => clearTimeout(t);
   }, [ev]);
   if (!ev || !pick || hidden === ev.at) return null;
-  return <MascotToastView key={ev.at} pick={pick} troll={troll} text={ev.text} party={ev.party} onClose={() => setHidden(ev.at)} />;
+  return <MascotToastView key={ev.at} pick={pick} mode={mode} text={ev.text} party={ev.party} onClose={() => setHidden(ev.at)} />;
 }

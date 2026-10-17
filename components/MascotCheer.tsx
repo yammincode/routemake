@@ -5,7 +5,7 @@ import { MascotBubble } from "@/components/ui/Mascot";
 import { abilityLines, pickFrom, recordLines, type CheerInput } from "@/lib/cheer";
 import { getCheerFacts, getMonthlyStats, getProfileCard } from "@/lib/data";
 import { daysUntil, todayYmd } from "@/lib/date";
-import { closePage, pageClosed, useMascot, useTalk, useTroll } from "@/lib/mascot-store";
+import { closePage, pageClosed, useMascot, useTalk, useMascotMode } from "@/lib/mascot-store";
 import type { MascotId } from "@/lib/mascots";
 
 // 頁面上面夥伴的泡泡（館首頁、區域頁、我的紀錄）：每次打開那一頁就說一句；✕ 關掉後這次打開 App 不再出現
@@ -13,7 +13,7 @@ import type { MascotId } from "@/lib/mascots";
 export type Pool = string[] | ((mascot: MascotId) => string[]) | null;
 export function PageCheer({ uid, page, pool }: { uid: string; page: string; pool: Pool }) {
   const pick = useMascot(uid);
-  const [troll] = useTroll();
+  const [mode] = useMascotMode();
   const { state } = useTalk();
   const [closed, setClosed] = useState(false);
   const [text, setText] = useState<string | null>(null);
@@ -21,15 +21,15 @@ export function PageCheer({ uid, page, pool }: { uid: string; page: string; pool
   useEffect(() => {
     if (state !== "on" || text || closed || !pick || pool == null) return;
     const shut = pageClosed(page);
-    const t = shut ? null : pickFrom(typeof pool === "function" ? pool(pick.id) : pool, pick.id, troll);
+    const t = shut ? null : pickFrom(typeof pool === "function" ? pool(pick.id) : pool, pick.id, mode);
     void Promise.resolve().then(() => (shut ? setClosed(true) : setText(t)));
-  }, [state, text, closed, pick, pool, troll, page]);
+  }, [state, text, closed, pick, pool, mode, page]);
 
   if (state !== "on" || closed || !pick || !text || pool == null) return null;
   return (
     <MascotBubble
       pick={pick}
-      troll={troll}
+      mode={mode}
       text={text}
       onClose={() => {
         closePage(page);
@@ -75,7 +75,7 @@ export default function MascotCheer({ uid, gymId, gymName, goal, fresh }: { uid:
     void homeFacts(uid, gymId).then((f) => {
       if (!alive) return;
       const away = f.facts?.lastClimbed ? -(daysUntil(f.facts.lastClimbed) ?? 0) : null;
-      const c = (mascot: MascotId): CheerInput => ({ mascot, troll: false, ...ctx.current, project: f.facts?.project ?? null, daysAway: away, month: f.month, ability: f.ability, self: f.self });
+      const c = (mascot: MascotId): CheerInput => ({ mascot, mode: "plain", ...ctx.current, project: f.facts?.project ?? null, daysAway: away, month: f.month, ability: f.ability, self: f.self });
       setPool(() => (m: MascotId) => [...recordLines(c(m)), ...abilityLines(c(m))]);
     });
     return () => {

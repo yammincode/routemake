@@ -1,10 +1,10 @@
-// 夥伴說的話：館首頁、區域頁、我的紀錄上面的泡泡、右下角小夥伴、做了事情（事件）；幹話模式只講幹話（跟平常的話分開）
+// 夥伴說的話：館首頁、區域頁、我的紀錄上面的泡泡、右下角小夥伴、做了事情（事件）；夥伴風格選幹話、文青就只講那一種（跟平常的話分開）
 import { ABILITY_AXES, gradeLabel } from "./design";
-import { MASCOT_LINES, TROLL_LINES, mascotInfo, type MascotId } from "./mascots";
+import { ARTSY_LINES, MASCOT_LINES, TROLL_LINES, mascotInfo, type MascotId, type MascotMode } from "./mascots";
 
 export type CheerInput = {
   mascot: MascotId;
-  troll: boolean;
+  mode: MascotMode;
   gymName: string;
   goal?: { zone: string; days: number; left: number } | null; // 快換線、還有沒完攀的區（館首頁「下一個目標」）
   project?: { code: string; grade: number; hold_color: string } | null; // 這間館牆上最近的嘗試中
@@ -51,16 +51,20 @@ export function abilityLines(c: CheerInput): string[] {
   return out;
 }
 
-// 挑一句：幹話模式只講幹話（跟平常的話分開，不混）；平常紀錄、能力的話一起抽，偶爾（1/4）講夥伴自己的話，沒有可以講的就講夥伴的話
-export function pickFrom(pool: string[], mascot: MascotId, troll: boolean, rand: () => number = Math.random): string {
+// 幹話、文青的句子（平常＝null）
+const styled = (mode: MascotMode) => (mode === "troll" ? TROLL_LINES : mode === "artsy" ? ARTSY_LINES : null);
+
+// 挑一句：幹話、文青只講那一種（跟平常的話分開，不混）；平常紀錄、能力的話一起抽，偶爾（1/4）講夥伴自己的話，沒有可以講的就講夥伴的話
+export function pickFrom(pool: string[], mascot: MascotId, mode: MascotMode, rand: () => number = Math.random): string {
   const any = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length) % xs.length];
-  if (troll) return any(TROLL_LINES);
+  const only = styled(mode);
+  if (only) return any(only);
   const own = MASCOT_LINES[mascot];
   if (!pool.length || rand() < 0.25) return any(own);
   return any(pool);
 }
 // 館首頁
-export const pickCheer = (c: CheerInput, rand: () => number = Math.random) => pickFrom([...recordLines(c), ...abilityLines(c)], c.mascot, c.troll, rand);
+export const pickCheer = (c: CheerInput, rand: () => number = Math.random) => pickFrom([...recordLines(c), ...abilityLines(c)], c.mascot, c.mode, rand);
 
 // 區域頁：這一區還有幾條沒完攀、嘗試中、新路線、全部完攀
 export type ZoneTalk = {
@@ -98,7 +102,7 @@ export function meLines(m: MeTalk): string[] {
 
 // 右下角小夥伴（點牠、換頁時）
 const BUDDY = ["今天爬哪一區？", "喝水了沒？", "爬累了就休息一下，我在這裡等你。", "要不要挑戰一條沒爬過的？", "我在這裡幫你加油！", "記得暖身喔！"];
-export const buddyLine = (mascot: MascotId, troll: boolean, rand: () => number = Math.random) => pickFrom(BUDDY, mascot, troll, rand);
+export const buddyLine = (mascot: MascotId, mode: MascotMode, rand: () => number = Math.random) => pickFrom(BUDDY, mascot, mode, rand);
 
 // 做了事情：記錄完攀、Flash、破自己的最高難度、連續爬好幾天、第一次留言
 export type EventKind = "send" | "flash" | "best" | "streak" | "comment";
@@ -109,9 +113,10 @@ const EVENT: Record<EventKind, string[]> = {
   streak: ["連續爬 {days} 天了，你是牆上的常客！", "第 {days} 天！記得讓手指休息一下。"],
   comment: ["謝謝分享 beta，大家會感謝你的！", "第一則留言！你的心得會幫到別人喔。"],
 };
-// 事件的話：幹話模式只講幹話（要撒彩帶的照樣撒）
-export function eventLine(kind: EventKind, troll: boolean, vars: { grade?: string; days?: number } = {}, rand: () => number = Math.random): string {
+// 事件的話：幹話、文青只講那一種（要撒彩帶的照樣撒）
+export function eventLine(kind: EventKind, mode: MascotMode, vars: { grade?: string; days?: number } = {}, rand: () => number = Math.random): string {
   const any = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length) % xs.length];
-  if (troll) return any(TROLL_LINES);
+  const only = styled(mode);
+  if (only) return any(only);
   return any(EVENT[kind]).replace("{grade}", vars.grade ?? "").replace("{days}", String(vars.days ?? ""));
 }

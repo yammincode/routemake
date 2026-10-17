@@ -1,4 +1,4 @@
-// 原岩夥伴：選夥伴、換色、存起來；留言、影片旁的頭像；別人的人物卡；夥伴說話（每頁上面、右下角、做了事情）；閉嘴；幹話模式；還沒套用 step41 照常
+// 原岩夥伴：選夥伴、換色、存起來；留言、影片旁的頭像；別人的人物卡；夥伴說話（每頁上面、右下角、做了事情）；閉嘴；夥伴風格（幹話、文青）；還沒套用 step41 照常
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { after, before, test } from "node:test";
@@ -8,8 +8,11 @@ let browser;
 before(async () => (browser = await launch()));
 after(async () => browser?.close());
 
-// 幹話：直接讀 lib/mascots.ts 的 TROLL_LINES（老闆加句子不用改測試）
-const TROLL = [...fs.readFileSync(new URL("../../lib/mascots.ts", import.meta.url), "utf8").match(/TROLL_LINES = \[([\s\S]*?)\];/)[1].matchAll(/"([^"]*)"/g)].map((m) => m[1]);
+// 幹話、文青：直接讀 lib/mascots.ts 的 TROLL_LINES、ARTSY_LINES（老闆加句子不用改測試）
+const SRC = fs.readFileSync(new URL("../../lib/mascots.ts", import.meta.url), "utf8");
+const lines = (name) => [...SRC.match(new RegExp(`${name} = \\[([\\s\\S]*?)\\];`))[1].matchAll(/"([^"]*)"/g)].map((m) => m[1]);
+const TROLL = lines("TROLL_LINES");
+const ARTSY = lines("ARTSY_LINES");
 // 每天一句要固定挑哪一句：Math.random 固定成 v（0.3：不講夥伴自己的話、挑第一句紀錄）
 const fixRandom = (ctx, v) => ctx.addInitScript((x) => (Math.random = () => x), v);
 
@@ -66,12 +69,13 @@ test("原岩夥伴：選夥伴、換色、太空小熊即將登場；留言和�
   await V.ctx.close();
 });
 
-test("原岩夥伴：館首頁每次打開說一句（看紀錄）、✕ 關掉後這次打開 App 不再出現；幹話模式加刀疤棒棒糖、只講幹話（關掉沒有幹話）", async () => {
+test("原岩夥伴：館首頁每次打開說一句（看紀錄）、✕ 關掉後這次打開 App 不再出現；夥伴風格：幹話（舊開關帶過來）加刀疤棒棒糖只講幹話、文青加貝雷帽眼鏡拿鐵只講文青（小頭像不畫拿鐵）、選回平常", async () => {
   const mock = createMock();
   const a = mock.addUser("climbera", "password1", { nickname: "小岩" });
   const zone = mock.db.zones[0];
   const r = mock.addRoute(zone, 5, "藍", ["指力"]);
   mock.addAscent(a, r, "project", new Date().toISOString().slice(0, 10));
+  mock.db.comments.push({ id: crypto.randomUUID(), route_id: r.id, user_id: a, body: "腳點很滑", created_at: new Date().toISOString(), edited_at: null, deleted_at: null });
 
   const A = await phone(browser, mock);
   await fixRandom(A.ctx, 0.3);
@@ -98,41 +102,71 @@ test("原岩夥伴：館首頁每次打開說一句（看紀錄）、✕ 關掉�
   await p.waitForTimeout(800);
   assert.equal(await bubble.count(), 0, "這次打開 App 不再出現");
 
-  // 幹話模式：人物卡打開開關 → 夥伴加刀疤和棒棒糖；重新打開 App 館首頁講老闆給的幹話（Math.random 0.3）
+  // 夥伴風格「幹話」：以前開過幹話模式（舊的開關）的人自動選在幹話 → 夥伴加刀疤和棒棒糖；重新打開 App 館首頁講老闆給的幹話（Math.random 0.3）
   await p.goto(`${BASE}/card`, { waitUntil: "networkidle" });
   await p.waitForSelector('main [data-mascot="mingde"]');
   assert.equal(await p.locator("main [data-troll]").count(), 0);
-  await p.click('main button[role=switch][aria-label="幹話模式"]');
+  assert.equal(await p.locator('main [role=switch][aria-label="幹話模式"]').count(), 0, "幹話模式開關換成夥伴風格三選一");
+  const style = (name) => p.locator("main button[aria-pressed]", { hasText: name });
+  assert.equal(await style("平常").getAttribute("aria-pressed"), "true");
+  await p.evaluate(() => localStorage.setItem("routemake:troll", "1"));
+  await p.reload({ waitUntil: "networkidle" });
+  await p.waitForSelector('main [data-mascot="mingde"]');
+  assert.equal(await style("幹話").getAttribute("aria-pressed"), "true", "舊的幹話模式自動選幹話");
   assert.ok((await p.locator("main [data-troll]").count()) >= 1, "加上刀疤和棒棒糖");
   const reopen = () => p.evaluate(() => sessionStorage.clear()); // 當作重新打開 App
   await reopen();
   await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
   await bubble.waitFor();
-  const troll = TROLL;
   const said = await bubble.textContent();
-  assert.ok(troll.some((t) => said.includes(t)), `講幹話：${said}`);
+  assert.ok(TROLL.some((t) => said.includes(t)), `講幹話：${said}`);
   assert.equal(await bubble.locator("[data-troll]").count(), 1, "泡泡旁的夥伴也有刀疤");
-  // 幹話模式只講幹話（跟平常的話分開）：Math.random 0.7（以前會講紀錄）也照樣講幹話
+  // 幹話只講幹話（跟平常的話分開）：Math.random 0.7（以前會講紀錄）也照樣講幹話
   await fixRandom(A.ctx, 0.7);
   await reopen();
   await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
   await bubble.waitFor();
   const again = await bubble.textContent();
-  assert.ok(troll.some((t) => again.includes(t)) && !again.includes("新路線"), `幹話模式只講幹話：${again}`);
+  assert.ok(TROLL.some((t) => again.includes(t)) && !again.includes("新路線"), `幹話只講幹話：${again}`);
   // 右下角小夥伴點牠也只講幹話
   await p.goto(`${BASE}/card`, { waitUntil: "networkidle" });
   const buddy = p.locator('[data-testid="mascot-buddy"] [role=status]');
   await buddy.waitFor();
   const bt = await buddy.textContent();
-  assert.ok(troll.some((t) => bt.includes(t)), `小夥伴只講幹話：${bt}`);
-  // 關掉幹話模式：沒有幹話
-  await p.click('main button[role=switch][aria-label="幹話模式"]');
+  assert.ok(TROLL.some((t) => bt.includes(t)), `小夥伴只講幹話：${bt}`);
+
+  // 夥伴風格「文青」：貝雷帽、圓眼鏡、拿鐵，沒有刀疤；只講文青句子（館首頁、右下角）；舊的幹話設定拿掉
+  await style("文青").click();
+  assert.equal(await style("文青").getAttribute("aria-pressed"), "true");
+  assert.ok((await p.locator("main [data-artsy]").count()) >= 1, "加上貝雷帽和眼鏡");
+  assert.equal(await p.locator("main [data-troll]").count(), 0, "沒有刀疤");
+  assert.equal(await p.evaluate(() => localStorage.getItem("routemake:troll")), null, "舊的幹話設定拿掉");
+  await reopen();
+  await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
+  await bubble.waitFor();
+  const artsy = await bubble.textContent();
+  assert.ok(ARTSY.some((t) => artsy.includes(t)) && !artsy.includes("新路線"), `只講文青：${artsy}`);
+  assert.equal(await bubble.locator("[data-artsy] [data-latte]").count(), 1, "泡泡旁的夥伴（40px）有拿鐵");
+  await p.goto(`${BASE}/card`, { waitUntil: "networkidle" });
+  await buddy.waitFor();
+  const bt2 = await buddy.textContent();
+  assert.ok(ARTSY.some((t) => bt2.includes(t)), `小夥伴只講文青：${bt2}`);
+  // 留言旁的小頭像（22px）：有貝雷帽眼鏡、不畫拿鐵
+  await p.goto(`${BASE}/zone?id=${zone.id}`, { waitUntil: "networkidle" });
+  await p.locator("main ul li button", { hasText: "A1-01" }).click();
+  await p.click('[role=dialog] [role=tab]:has-text("留言")');
+  await p.waitForSelector("[role=dialog] [data-artsy]");
+  assert.equal(await p.locator("[role=dialog] [data-artsy] [data-latte]").count(), 0, "小頭像不畫拿鐵");
+
+  // 選回平常：沒有幹話、文青
+  await p.goto(`${BASE}/card`, { waitUntil: "networkidle" });
+  await style("平常").click();
   await reopen();
   await p.goto(`${BASE}/gym/mingde`, { waitUntil: "networkidle" });
   await bubble.waitFor();
   const normal = await bubble.textContent();
-  assert.ok(normal.includes("明德館這週有 1 條新路線") && !troll.some((t) => normal.includes(t)), `關掉幹話模式講平常的話：${normal}`);
-  assert.equal(await bubble.locator("[data-troll]").count(), 0, "關掉後沒有刀疤");
+  assert.ok(normal.includes("明德館這週有 1 條新路線") && ![...TROLL, ...ARTSY].some((t) => normal.includes(t)), `選平常講平常的話：${normal}`);
+  assert.equal(await bubble.locator("[data-troll], [data-artsy]").count(), 0, "平常沒有刀疤、貝雷帽");
   assert.deepEqual(A.errors, []);
   await A.ctx.close();
 });
