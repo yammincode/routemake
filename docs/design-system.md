@@ -114,7 +114,7 @@ Spray Wall 圈圈顏色：`--hold-start`（起攀 S）、`--hold-mid`（路線�
 | `Comments.tsx` | `CommentItem`（含 👍 按讚 LikeButton；刪除要按兩次；New~ 用：place 路線一行＋onOpen「看路線 ›」、clamp 最多 3 行）、`CommentList`、`CommentForm`、`ClosedNotice`、`PrivateHint` |
 | `Spray.tsx` | `HoldMarks`（照片上的圈圈：起攀 S 綠、路線點 藍、完攀 T 紅；細框 1.5px＋外圈極細深色邊，兩指放大時框不變粗；S／T 標籤 15px）、`HoldLegend`、`HoldTools`（選種類與大小）、`SprayRow`、`RouteThumb`（列表縮圖，放大到路線範圍）、`PhotoThumb`（岩館路線自己照片的縮圖，整張裁正方形）、`HOLD_TYPES`、`HOLD_SIZES` |
 | `Profile.tsx` | `Avatar`（暱稱第一個字）、`HexChart`（六角形能力表）、`ProfileCardView`（人物卡） |
-| `Tabs.tsx` | `Tabs`（分頁：路線卡片的紀錄／影片／留言、New~ 的影片／留言、我的紀錄路線進度的牆上進度／我的進度） |
+| `Tabs.tsx` | `Tabs`（分頁：路線卡片的紀錄／影片／留言、我的紀錄路線進度的牆上進度／我的進度） |
 | `SortList.tsx` | `SortList`（拖曳排序，例如整理區域順序） |
 | `Video.tsx` | 省流量：列表只放縮圖 `thumb`（`<img loading="lazy">`，沒有縮圖是 `bg-line` 灰色方塊＋▶），不放 `<video>`；`VideoViewer` 從列表點開的那支直接播，滑到別支先顯示縮圖和 ▶、按了才載入。`VideoRow`、`VideoList`（路線卡片影片分頁：一支一列，方形縮圖＋片長、心得、誰・攀爬日（沒有紀錄時「○ 天前分享」，`videoWhen`）、`VideoResult` 分享者紀錄、New~ 的哪條路線（`place`）、型態一行（`feel`，`feelTagText`）、身高・動作一行（`tags`）；有 `onLike` 時右下角 👍 讚（`likes`、`liked`，獨立按鈕疊在列上，按讚不播放；全螢幕播放在名字那一行））、`VideoStrip`（橫向滑動縮圖，後台用）、`VideoThumb`、`VideoViewer`（全螢幕播放，左右滑換支）、`VideoPickButton`、`PickedFile`、`VideoTrim`（顧客分享影片；VideoTrim 剪輯長度：預覽、▶ 播放選的這段、時間軸、開始／結束拉桿＋－／＋ 0.5 秒，最長 max 秒，結束不超過影片長度；disabled：處理中不能改） |
 | `Stats.tsx` | `DailyBars`、`TrendBars`（使用狀況趨勢）、`MonthSwitcher`、`StatGrid`、`StatTile`、`Delta`、`CalendarHeat`、`MonthGradeChart`（我的紀錄本月完攀直條圖：每個難度一根、黃色那段是 Flash、難度下面膠帶色；點一根選它其他變淡；上攀用主色；沒有完攀只有其他紀錄的那根畫虛線、沒紀錄的變淡點不了）、`TotalRow`、`SetBox` |

@@ -1015,7 +1015,6 @@ export type FeedPlace = {
   gym: { id: string; name: string; comments_enabled: boolean };
 };
 export type FeedVideo = Video & FeedPlace;
-export type FeedComment = Comment & FeedPlace;
 export type Feed<T> = { today: T[]; older: T[] };
 const FEED_ROUTE = `routes!inner(${ROUTE_COLS},zones!inner(id,gym_id,code,name,kind,grade_system,photo_path,gyms!inner(id,name,is_live,comments_enabled)))`;
 type FeedRouteRow = Route & { zones: FeedPlace["zone"] & { gyms: FeedPlace["gym"] } };
@@ -1032,35 +1031,6 @@ export async function getFeedVideos(): Promise<Feed<FeedVideo>> {
       return (today ? q.gte("created_at", since) : q.lt("created_at", since)).order("created_at", { ascending: false }).limit(today ? 100 : FEED_SIZE);
     })) as unknown as (VideoRow & { routes: FeedRouteRow })[];
     return rows.map(({ routes, ...v }) => ({ ...toVideo(v), ...toPlace(routes) }));
-  };
-  const [today, older] = await Promise.all([read(true), read(false)]);
-  return { today, older };
-}
-// 留言：開放的館、路線在牆上、路線和場館的留言都開著（關掉時路線卡片也看不到留言）
-export async function getFeedComments(): Promise<Feed<FeedComment>> {
-  const since = dayStartIso();
-  const read = async (today: boolean) => {
-    const q = supabase()
-      .from("comments")
-      .select(`id,route_id,user_id,body,created_at,edited_at,profiles!comments_user_id_fkey(nickname),comment_likes(user_id),${FEED_ROUTE}`)
-      .is("deleted_at", null)
-      .eq("routes.zones.gyms.is_live", true)
-      .eq("routes.zones.gyms.comments_enabled", true)
-      .eq("routes.comments_enabled", true)
-      .is("routes.archived_at", null);
-    const rows = must(
-      await (today ? q.gte("created_at", since) : q.lt("created_at", since)).order("created_at", { ascending: false }).limit(today ? 100 : FEED_SIZE)
-    ) as unknown as (Omit<Comment, "nickname" | "likers"> & {
-      profiles: { nickname: string | null } | null;
-      comment_likes: { user_id: string }[] | null;
-      routes: FeedRouteRow;
-    })[];
-    return rows.map(({ profiles, comment_likes, routes, ...c }) => ({
-      ...c,
-      nickname: profiles?.nickname ?? "攀岩者",
-      likers: (comment_likes ?? []).map((l) => l.user_id),
-      ...toPlace(routes),
-    }));
   };
   const [today, older] = await Promise.all([read(true), read(false)]);
   return { today, older };

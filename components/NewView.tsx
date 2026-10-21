@@ -7,22 +7,17 @@ import ProfileSheet from "@/components/ProfileSheet";
 import RouteSheet, { type RouteTab } from "@/components/RouteSheet";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Empty } from "@/components/ui/Card";
-import { CommentItem, CommentList } from "@/components/ui/Comments";
 import { UserAvatar } from "@/components/ui/Mascot";
 import { RouteTag } from "@/components/ui/Route";
 import { SheetSub } from "@/components/ui/Sheet";
-import { Tabs } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
 import { VideoList, VideoRow, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import {
   FEED_SIZE,
-  getComments,
-  getFeedComments,
   getFeedVideos,
   getMyAscents,
   getSprayExtras,
   getVideos,
-  likeComment,
   likeRoute,
   likeVideo,
   photoUrl,
@@ -30,7 +25,6 @@ import {
   seqPhotoUrl,
   heroPhoto,
   seqTotal,
-  unlikeComment,
   unlikeRoute,
   unlikeVideo,
   videoThumbUrl,
@@ -38,23 +32,21 @@ import {
   type Ascent,
   type DbError,
   type Feed,
-  type FeedComment,
   type FeedPlace,
   type FeedVideo,
 } from "@/lib/data";
-import { ago, dayStartIso, videoWhen } from "@/lib/date";
+import { dayStartIso, videoWhen } from "@/lib/date";
 import { feelTagText, videoTagText } from "@/lib/design";
 import { herePath, zoneRoutePath } from "@/lib/nav";
 import { overlayPending } from "@/lib/offline";
 import { loginExpired } from "@/lib/supabase";
 
-// New~：大家最新分享的影片、留言（所有開放的館）
+// New~：大家最新分享的影片（所有開放的館；10/21 使用者決定拿掉「留言」分頁，只放影片）
 // - 今天（台北時間）的隨機排、最多 10 筆；今天不到 10 筆用之前最新的補滿
 // - 今天超過 10 筆時可以「↻ 換一批」：先換成還沒看過的，看完一輪才重複
-// - 影片全螢幕播放的「看這條路線 ›」、留言的「看路線 ›」：跳到那條路線的區域頁（標出那一條、打開卡片停在紀錄）
-//   跳之前記下這一批、分頁、捲動位置，從區域頁回來照原樣（不重新洗牌）；Spray Wall 的路線卡片本來就有照片和圈圈，照舊在這頁打開
+// - 影片全螢幕播放的「看這條路線 ›」：跳到那條路線的區域頁（標出那一條、打開卡片停在紀錄）
+//   跳之前記下這一批、捲動位置，從區域頁回來照原樣（不重新洗牌）；Spray Wall 的路線卡片本來就有照片和圈圈，照舊在這頁打開
 // - 卡片馬上打開；自己的紀錄讀到之前先寫「讀取中…」，讀到才顯示記錄按鈕（不然再點一次狀態會蓋掉原本的心得和日期）
-type Kind = "video" | "comment";
 type Picked<T> = { feed: Feed<T>; shown: T[]; seen: Set<string> };
 // Spray Wall 的出題者和讚（讀不到時 failed）
 type SprayInfo = { routeId: string; author: string | null; likers: string[]; photo_path: string | null } | { routeId: string; failed: true };
@@ -69,7 +61,7 @@ const withMe = (likers: string[], me: string, on: boolean) => (on ? [...likers.f
 
 // 跳去區域頁前記下的這一批（存在這支手機這次打開的 App 裡；回來用一次就丟，30 分鐘後不用）
 const BACK_KEY = "routemake-new-back";
-type Back = { at: number; kind: Kind; v: string[]; c: string[]; vSeen: string[]; cSeen: string[]; y: number };
+type Back = { at: number; v: string[]; vSeen: string[]; y: number };
 function readBack(): Back | null {
   try {
     const b = JSON.parse(sessionStorage.getItem(BACK_KEY) ?? "null") as Back | null;
@@ -105,7 +97,7 @@ function edit<T extends { id: string }>(p: Picked<T>, f: (x: T) => T | null): Pi
   const m = (xs: T[]) => xs.flatMap((x) => f(x) ?? []);
   return { ...p, feed: { today: m(p.feed.today), older: m(p.feed.older) }, shown: m(p.shown) };
 }
-// 關掉卡片後，用重讀的這條路線的留言或影片更新列表：改過的換新、刪掉的拿掉，順序和分段不變
+// 關掉卡片後，用重讀的這條路線的影片更新列表：改過的換新、刪掉的拿掉，順序和分段不變
 function syncRoute<T extends FeedPlace & { id: string }, F extends { id: string }>(p: Picked<T>, routeId: string, fresh: F[], merge: (x: T, n: F) => T): Picked<T> {
   const byId = new Map(fresh.map((n) => [n.id, n]));
   return edit(p, (x) => {
@@ -120,9 +112,7 @@ export default function NewView() {
   const toast = useToast();
   const { session } = useAuth();
   const uid = session?.user.id;
-  const [kind, setKind] = useState<Kind>("video");
   const [videos, setVideos] = useState<Picked<FeedVideo> | null>(null);
-  const [comments, setComments] = useState<Picked<FeedComment> | null>(null);
   const [failed, setFailed] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null); // 記影片 id，列表更新時不會跳到別支
   const [open, setOpen] = useState<{ place: FeedPlace; tab: RouteTab } | null>(null);
@@ -133,26 +123,22 @@ export default function NewView() {
   const [spray, setSpray] = useState<SprayInfo | null>(null);
   const [sprayTry, setSprayTry] = useState(0);
   const [profile, setProfile] = useState<{ userId: string; gymId: string } | null>(null);
-  const liking = useRef(new Set<string>()); // 正在送出讚的留言、影片：重讀列表時保留手機上的讚
+  const liking = useRef(new Set<string>()); // 正在送出讚的影片：重讀列表時保留手機上的讚
   const syncSeq = useRef<Record<string, number>>({}); // 每條路線最後一次重讀，舊的回來晚了不用
   const staleOpen = useRef<string | null>(null); // 打開時離線紀錄送出了：這條關掉後要重讀
   const backY = useRef<number | null>(null); // 從區域頁回來：列表排好後捲回這個位置
 
   useEffect(() => {
     let live = true;
-    Promise.all([getFeedVideos(), getFeedComments()])
-      .then(([v, c]) => {
+    getFeedVideos()
+      .then((v) => {
         if (!live) return;
         const back = readBack();
         try {
           sessionStorage.removeItem(BACK_KEY);
         } catch {}
         setVideos((back && restore(v, back.v, back.vSeen)) ?? start(v));
-        setComments((back && restore(c, back.c, back.cSeen)) ?? start(c));
-        if (back) {
-          setKind(back.kind);
-          backY.current = back.y;
-        }
+        if (back) backY.current = back.y;
       })
       .catch(() => live && setFailed(true));
     return () => {
@@ -162,11 +148,11 @@ export default function NewView() {
 
   // 從區域頁回來：列表畫好了再捲回剛剛的位置
   useEffect(() => {
-    if (backY.current == null || !videos || !comments) return;
+    if (backY.current == null || !videos) return;
     const y = backY.current;
     backY.current = null;
     requestAnimationFrame(() => window.scrollTo({ top: y }));
-  }, [videos, comments]);
+  }, [videos]);
 
   const o = open?.place ?? null;
   const routeId = o?.route.id ?? null;
@@ -225,19 +211,12 @@ export default function NewView() {
   // 看路線：跳到區域頁標出那一條（Spray Wall 照舊打開卡片）；先記下這一批，回來照原樣
   const goRoute = (p: FeedPlace, tab: RouteTab) => {
     if (p.zone.kind === "spray") return openRoute(p, tab);
-    saveBack({
-      kind,
-      v: videos?.shown.map((x) => x.id) ?? [],
-      c: comments?.shown.map((x) => x.id) ?? [],
-      vSeen: [...(videos?.seen ?? [])],
-      cSeen: [...(comments?.seen ?? [])],
-      y: window.scrollY,
-    });
+    saveBack({ v: videos?.shown.map((x) => x.id) ?? [], vSeen: [...(videos?.seen ?? [])], y: window.scrollY });
     setPlayingId(null);
     router.push(zoneRoutePath(p.zone.id, p.route.id));
   };
 
-  // 關掉卡片：重讀這條路線的留言和影片（卡片裡按的讚、改的留言、刪的影片）
+  // 關掉卡片：重讀這條路線的影片（卡片裡按的讚、刪的影片）
   const closeRoute = () => {
     setOpen(null);
     if (!routeId) return;
@@ -253,9 +232,6 @@ export default function NewView() {
     const seq = (syncSeq.current[routeId] ?? 0) + 1;
     syncSeq.current[routeId] = seq;
     const latest = () => syncSeq.current[routeId] === seq;
-    void getComments(routeId)
-      .then((cs) => latest() && setComments((p) => p && syncRoute(p, routeId, cs, (x, n) => ({ ...x, ...n, likers: liking.current.has(x.id) ? x.likers : n.likers }))))
-      .catch(() => {});
     void getVideos(routeId)
       .then((vs) => latest() && setVideos((p) => p && syncRoute(p, routeId, vs, (x, n) => ({ ...x, ...n, likers: liking.current.has(x.id) ? x.likers : n.likers }))))
       .catch(() => {});
@@ -282,26 +258,6 @@ export default function NewView() {
       if (already(e)) return;
       flip(had);
       toast((e as Error).message);
-    }
-  };
-
-  const toggleLike = async (c: FeedComment) => {
-    if (!session) return toLogin();
-    const me = session.user.id;
-    const had = c.likers.includes(me);
-    const flip = (on: boolean) =>
-      setComments((p) => p && edit(p, (x) => (x.id === c.id ? { ...x, likers: on ? [...x.likers.filter((u) => u !== me), me] : x.likers.filter((u) => u !== me) } : x)));
-    flip(!had);
-    liking.current.add(c.id);
-    try {
-      await (had ? unlikeComment(c.id) : likeComment(c.id));
-    } catch (e) {
-      if (!already(e)) {
-        flip(had);
-        toast((e as Error).message);
-      }
-    } finally {
-      liking.current.delete(c.id);
     }
   };
 
@@ -357,10 +313,10 @@ export default function NewView() {
           <>
             <div className="mb-2 flex items-center justify-between gap-2">
               <Heading>
-                今天新{unit === "則" ? "留言" : "分享"}（{more ? `${p.feed.today.length} ${unit}裡隨機 ${today.length} ${unit}` : `${today.length} ${unit}`}）
+                今天新分享（{more ? `${p.feed.today.length} ${unit}裡隨機 ${today.length} ${unit}` : `${today.length} ${unit}`}）
               </Heading>
               {more && (
-                <LinkButton onClick={() => (kind === "video" ? setVideos((x) => x && next(x)) : setComments((x) => x && next(x)))}>↻ 換一批</LinkButton>
+                <LinkButton onClick={() => setVideos((x) => x && next(x))}>↻ 換一批</LinkButton>
               )}
             </div>
             {wrap(today.map((x) => row(x, p.shown.indexOf(x))))}
@@ -369,7 +325,7 @@ export default function NewView() {
         {older.length > 0 && (
           <>
             <div className={`mb-2 ${today.length ? "mt-5" : ""}`}>
-              <Heading>{today.length ? `今天不到 ${FEED_SIZE} ${unit}，補上最近的` : unit === "則" ? "最近的留言" : "最近分享的"}</Heading>
+              <Heading>{today.length ? `今天不到 ${FEED_SIZE} ${unit}，補上最近的` : "最近分享的"}</Heading>
             </div>
             {wrap(older.map((x) => row(x, p.shown.indexOf(x))))}
           </>
@@ -398,46 +354,12 @@ export default function NewView() {
 
   return (
     <>
-      <Tabs
-        tabs={[
-          { key: "video", label: "影片" },
-          { key: "comment", label: "留言" },
-        ]}
-        value={kind}
-        onChange={(k: Kind) => setKind(k)}
-      />
-      <div role="tabpanel" hidden={kind !== "video"}>
-        {sections(
-          videos,
-          "支",
-          (v, i) => <VideoRow key={v.id} v={cards[i]} onClick={() => setPlayingId(v.id)} />,
-          (rows) => <VideoList>{rows}</VideoList>
-        )}
-      </div>
-      <div role="tabpanel" hidden={kind !== "comment"}>
-        {sections(
-          comments,
-          "則",
-          (c) => (
-            <CommentItem
-              key={c.id}
-              name={c.nickname}
-              avatar={<UserAvatar userId={c.user_id} />}
-              ago={ago(c.created_at)}
-              body={c.body}
-              edited={!!c.edited_at}
-              clamp
-              onName={() => setProfile({ userId: c.user_id, gymId: c.gym.id })}
-              likes={c.likers.length}
-              liked={!!uid && c.likers.includes(uid)}
-              onLike={() => void toggleLike(c)}
-              place={place(c)}
-              onOpen={() => goRoute(c, "comment")}
-            />
-          ),
-          (rows) => <CommentList>{rows}</CommentList>
-        )}
-      </div>
+      {sections(
+        videos,
+        "支",
+        (v, i) => <VideoRow key={v.id} v={cards[i]} onClick={() => setPlayingId(v.id)} />,
+        (rows) => <VideoList>{rows}</VideoList>
+      )}
 
       <VideoViewer
         items={cards}
