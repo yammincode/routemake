@@ -119,7 +119,7 @@ begin
   end if;
   if new.is_beta then
     -- 同一條路線同時只有一支：先鎖住這條路線，兩個人同時放時一個一個來
-    perform 1 from public.routes where id = new.route_id for update;
+    perform 1 from public.routes where id = new.route_id for no key update;
     select * into v_old from public.route_videos v where v.route_id = new.route_id and v.is_beta;
     if v_old.id is not null then
       delete from public.route_videos where id = v_old.id;
@@ -127,7 +127,8 @@ begin
     perform public.write_audit(public.route_gym(new.route_id), 'video.beta', new.id, jsonb_build_object(
       'code', (select code from public.routes where id = new.route_id),
       'replaced', v_old.id is not null,
-      'old_author_nickname', (select nickname from public.profiles where id = v_old.user_id)));
+      'old_author_nickname', (select nickname from public.profiles where id = v_old.user_id),
+      'old_path', v_old.path)); -- 舊的檔案萬一 App 沒刪成功，之後找得到
   end if;
   return new;
 end $$;

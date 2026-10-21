@@ -141,11 +141,12 @@ export default function RouteVideos({
   const [confirmDel, setConfirmDel] = useState<string | null>(null); // 刪除要按兩次（刪了不能復原）；換到別支影片就重來
   const [asBeta, setAsBeta] = useState(false); // 員工：這支是官方 beta
   const [confirmBeta, setConfirmBeta] = useState(false); // 換掉原本的官方 beta 要按兩次
+  const [loadFailed, setLoadFailed] = useState(false); // 影片讀不到：不知道有沒有官方 beta，先不能放
 
   useEffect(() => {
     getVideos(r.id)
       .then(setVideos)
-      .catch(() => setVideos([]));
+      .catch(() => (setVideos([]), setLoadFailed(true)));
   }, [r.id]);
   useEffect(() => {
     if (videos) onCount?.(videos.length);
@@ -154,6 +155,12 @@ export default function RouteVideos({
   const beta = videos?.find((v) => v.is_beta) ?? null;
   const betaName = beta?.nickname ?? null;
   const betaDur = beta?.duration_s ?? null;
+  // 官方 beta 換了（別人刪掉、重讀到別支）：「再按一次」要重來
+  const [betaId, setBetaId] = useState<string | null>(null);
+  if ((beta?.id ?? null) !== betaId) {
+    setBetaId(beta?.id ?? null);
+    setConfirmBeta(false);
+  }
   useEffect(() => {
     if (videos) onBeta?.(betaName == null ? null : { name: betaName, duration: betaDur });
   }, [videos, betaName, betaDur, onBeta]);
@@ -226,7 +233,7 @@ export default function RouteVideos({
   };
 
   // 員工可以放官方 beta：岩館路線、還在牆上、資料庫有這個功能；留言關掉時客人不能分享，員工照樣可以放官方 beta
-  const betaOk = staff && videoBetaSupported() && (r.kind ?? "gym") === "gym" && !r.archived_at;
+  const betaOk = staff && videoBetaSupported() && !loadFailed && (r.kind ?? "gym") === "gym" && !r.archived_at;
   const onlyBeta = betaOk && !open;
   const canShare = (open || betaOk) && !r.archived_at;
   const sendBeta = onlyBeta || (betaOk && asBeta);
@@ -310,7 +317,8 @@ export default function RouteVideos({
   const edit: VideoEdit | undefined =
     editable && (trimmed || mute || useHi) ? { start: trimmed ? trim![0] : 0, end: trimmed ? trim![1] : dur!, mute, ...(useHi ? { fps60: true } : {}) } : undefined;
   // 上傳時順便做 IG 版：只在這支影片本來就要重錄（剪輯、靜音、要壓縮的大檔案）時一起做，小影片不為了 IG 多等一次
-  const prepFits = igOk && igPrep && !!compressType() && !!file && (!!edit || file.size >= compressMinBytes());
+  // 官方 beta 不做 IG 版（貼紙會放分享者的紀錄；留言關掉時也不會先畫好貼紙）
+  const prepFits = igOk && igPrep && !sendBeta && !!compressType() && !!file && (!!edit || file.size >= compressMinBytes());
   // 要順便做時，等小貼紙準備好才能按「分享影片」（不然這次就沒順便做到）
   const prepWait = prepFits && sticker === undefined;
   const upload = async () => {
@@ -347,7 +355,7 @@ export default function RouteVideos({
           caption: caption.trim() || null,
           status: sendBeta ? null : myStatus,
           climbed_on: myStatus && !sendBeta ? myDay : null,
-          ...(sendBeta ? { beta: { replaces: beta?.path ?? null } } : {}),
+          ...(sendBeta ? { beta: true } : {}),
           height_band: height,
           move,
           feel_tags: feel,
@@ -360,7 +368,7 @@ export default function RouteVideos({
         if (height) localStorage.setItem(heightKey(session.user.id), height);
         else localStorage.removeItem(heightKey(session.user.id));
       } catch {}
-      if (igOk) {
+      if (igOk && !sendBeta) {
         const src = small ?? file;
         setIgSrc({ file: src, plain: igName(src, r.code), base: thumb });
         setIgReady(took.v ? { src, key: prepKey, file: igName(took.v, r.code) } : null);
@@ -603,7 +611,7 @@ export default function RouteVideos({
                   "你還沒記錄這條，影片上不會顯示紀錄"
                 )}
               </p>
-              {igOk && !!compressType() && sticker !== null && (
+              {igOk && !sendBeta && !!compressType() && sticker !== null && (
                 <Toggle
                   checked={igPrep}
                   onChange={(on) => (setIgPrep(on), writeIgPrep(on))}

@@ -297,13 +297,15 @@ export function VideoViewer({
           />
         ) : (
           <button aria-label="播放這支影片" onClick={() => setPlayKey(v.key)} className="relative grid h-full w-full place-items-center">
-            {v.thumb && (
+            {/* 官方 beta 滑過來時也先蓋住（會暴雷），按了才播 */}
+            {v.thumb && !v.beta && (
               // eslint-disable-next-line @next/next/no-img-element -- Supabase 的縮圖，已經是小圖
               <img src={v.thumb} alt="" className="pointer-events-none absolute inset-0 size-full object-contain opacity-80" />
             )}
             <span className="relative grid size-16 place-items-center rounded-full bg-black/55 text-white">
               <Icon name="play" className="size-7" />
             </span>
+            {v.beta && <span className="absolute inset-x-0 bottom-6 text-center text-sub font-bold text-white/85">官方 beta・會暴雷，按了才播</span>}
           </button>
         )}
         {index > 0 && (

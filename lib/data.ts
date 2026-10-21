@@ -892,8 +892,8 @@ export async function uploadVideo(
   file: File,
   // climbed_on：本人紀錄的攀爬日，有送才表示要在影片上顯示（實際的日期、完成狀態由資料庫從本人紀錄帶入）
   // thumb：縮圖（WebP 或 JPEG）；沒有、或上傳失敗都照樣分享
-  // beta：官方 beta（員工；不算 24 小時 15 支；資料庫會換掉這條原本的那支，replaces＝舊的那支檔案，存好後在這裡刪）
-  info: { caption: string | null; status: Status | null; climbed_on?: string | null; height_band?: HeightBand | null; move?: ClimbMove | null; feel_tags?: FeelTag[]; thumb?: Blob | null; beta?: { replaces: string | null } },
+  // beta：官方 beta（員工；不算 24 小時 15 支；資料庫會換掉這條原本的那支，舊的檔案存好後在這裡刪）
+  info: { caption: string | null; status: Status | null; climbed_on?: string | null; height_band?: HeightBand | null; move?: ClimbMove | null; feel_tags?: FeelTag[]; thumb?: Blob | null; beta?: boolean },
   // 長度：剪輯過的直接給（剪下來的長度）；只壓縮的從壓縮前的原檔讀（壓縮後的檔有時讀不到長度）
   len?: { source?: File; duration?: number },
   lim: VideoLimit = VIDEO_LIMIT
@@ -947,6 +947,9 @@ export async function uploadVideo(
   const feel = info.feel_tags?.length && videoFeel ? { feel_tags: info.feel_tags } : {};
   let body: Record<string, unknown> = { ...row, ...tags, ...day, ...feel, ...(thumb_path ? { thumb_path } : {}), ...(info.beta ? { is_beta: true, status: null } : {}) };
   const groups = [["thumb_path"], ["feel_tags"], ["climbed_on"], ["height_band", "move"]];
+  // 官方 beta：存之前再讀一次現在的那支（畫面上的可能是舊的，例如別人剛換過），存好後刪它的檔案
+  // 讀不到也照樣存（舊的檔案之後用後台「清理漏刪的檔案」找出來）
+  const replaces = info.beta ? ((await supabase().from("route_videos").select("path").eq("route_id", routeId).eq("is_beta", true)).data ?? []).map((x) => x.path as string) : [];
   let ins = await supabase().from("route_videos").insert(body);
   for (let n = 0; n < groups.length && noTagCols(ins.error); n++) {
     const present = groups.filter((g) => g.some((c) => c in body));
@@ -961,7 +964,8 @@ export async function uploadVideo(
     throw new Error(dbError(ins.error));
   }
   // 換掉了原本的官方 beta：資料庫已經刪了舊的資料，這裡刪舊的檔案（失敗不擋，之後用「清理」找出來）
-  if (info.beta?.replaces && info.beta.replaces !== path) await removeVideoFiles([info.beta.replaces]).catch(() => undefined);
+  const old = replaces.filter((p) => p !== path);
+  if (old.length) await removeVideoFiles(old).catch(() => undefined);
 }
 
 // 影片按讚、收回（跟留言按讚一樣：已經按過回 23505）
