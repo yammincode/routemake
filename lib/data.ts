@@ -1,5 +1,6 @@
 // 讀寫 Supabase 的資料函式；權限一律由資料庫 RLS 擋，這裡只負責呼叫
 import { isYds, type ClimbMove, type FeelTag, type GradeSystem, type HeightBand, type HoldColor, type Status } from "@/lib/design";
+import type { ClimbStats, Climber } from "@/lib/climber";
 import type { ResetEvent } from "@/lib/resets";
 import { dayStartIso } from "@/lib/date";
 import { NETWORK_RE } from "@/lib/net";
@@ -1136,16 +1137,25 @@ export async function clearCardBio(userId: string, gym: string) {
 export const NO_MASCOT = "資料庫還沒套用原岩夥伴（step41），請先請老闆在 Supabase 執行 step41";
 let mascotDb = true;
 export const mascotSupported = () => mascotDb;
-// 一次讀好幾個人的夥伴（沒選的人回 null）
-export async function getMascots(userIds: string[]): Promise<Record<string, unknown>> {
+// 一次讀好幾個人的夥伴和攀岩角色（沒選的人回 null）
+// 資料庫還沒套用 step48（沒有 climber 欄位）：只讀夥伴，大家都還沒有角色
+let climberDb = true;
+export const climberSupported = () => climberDb;
+export async function getMascots(userIds: string[]): Promise<Record<string, { mascot: unknown; climber: unknown }>> {
   if (!mascotDb || !userIds.length) return {};
-  const r = await supabase().from("profiles").select("id,mascot").in("id", userIds);
+  const read = (cols: string) => supabase().from("profiles").select(cols).in("id", userIds);
+  let r = await read(climberDb ? "id,mascot,climber" : "id,mascot");
+  // （不看 climberDb：同一時間 my_climb_stats 可能已經先把它改成 false，這裡照樣要重讀，不然會當成連夥伴都沒有）
+  if (NO_COLUMN.has(r.error?.code ?? "") && /climber/.test(r.error?.message ?? "")) {
+    climberDb = false;
+    r = await read("id,mascot");
+  }
   if (NO_COLUMN.has(r.error?.code ?? "")) {
     mascotDb = false;
     return {};
   }
-  const rows = must(r) as { id: string; mascot: unknown }[];
-  return Object.fromEntries(rows.map((x) => [x.id, x.mascot]));
+  const rows = must(r) as unknown as { id: string; mascot: unknown; climber?: unknown }[];
+  return Object.fromEntries(rows.map((x) => [x.id, { mascot: x.mascot, climber: x.climber ?? null }]));
 }
 // 館首頁每天一句要用的紀錄（一天只讀一次）：這間館牆上最近的嘗試中、最後攀爬日；讀不到的就是 null
 export type CheerFacts = {
@@ -1207,6 +1217,24 @@ export async function myCommentCount(userId: string): Promise<number> {
 export async function saveMyMascot(pick: { id: string; colors: (string | null)[]; bg: string | null }) {
   const r = await supabase().rpc("save_my_mascot", { p_mascot: pick });
   if (r.error?.code === "PGRST202") throw new Error(NO_MASCOT);
+  must(r);
+}
+
+// ---------- 攀岩角色（step48） ----------
+export const NO_CLIMBER = "資料庫還沒套用攀岩角色（step48），請先請老闆在 Supabase 執行 step48";
+// 自己的攀岩數字（攀爬日、上攀、Flash、V5 以上）：還沒套用 step48 回 null
+export async function getClimbStats(): Promise<ClimbStats | null> {
+  const r = await supabase().rpc("my_climb_stats");
+  if (r.error?.code === "PGRST202") {
+    climberDb = false;
+    return null;
+  }
+  return must(r) as ClimbStats | null;
+}
+// 存自己的角色（null＝不用角色，只用夥伴）
+export async function saveMyClimber(c: Climber | null) {
+  const r = await supabase().rpc("save_my_climber", { p_climber: c });
+  if (r.error?.code === "PGRST202") throw new Error(NO_CLIMBER);
   must(r);
 }
 

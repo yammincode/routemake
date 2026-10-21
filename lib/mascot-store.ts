@@ -2,24 +2,25 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { getMascots } from "./data";
+import { normalizeClimber, type Climber } from "./climber";
 import { normalizePick, type MascotMode, type MascotPick } from "./mascots";
 
-// 每個人的夥伴（留言、影片、人物卡共用）：同一輪畫面要的人一起讀一次，讀過的記在記憶體
-// 沒選、讀不到（沒網路、資料庫還沒套用 step41）都是預設的高山猛牛
-// 這次打開 App 讀過的記在 sessionStorage：重新整理、換頁不用重讀（省流量；別人換了夥伴，下次打開 App 就看到）
-const SAVED_KEY = "routemake:mascots";
-const picks = new Map<string, MascotPick>(
-  (() => {
-    try {
-      return Object.entries(JSON.parse(sessionStorage.getItem(SAVED_KEY) ?? "{}") as Record<string, unknown>).map(([k, v]) => [k, normalizePick(v)] as const);
-    } catch {
-      return [];
-    }
-  })()
-);
+// 每個人的夥伴和攀岩角色（留言、影片、人物卡共用）：同一輪畫面要的人一起讀一次，讀過的記在記憶體
+// 夥伴沒選、讀不到（沒網路、資料庫還沒套用 step41）都是預設的高山猛牛；角色沒做（或還沒套用 step48）是 null
+// 這次打開 App 讀過的記在 sessionStorage：重新整理、換頁不用重讀（省流量；別人換了，下次打開 App 就看到）
+// （step48 起改存 routemake:people，連角色一起；舊的 routemake:mascots 沒有角色，不用）
+const SAVED_KEY = "routemake:people";
+const picks = new Map<string, MascotPick>();
+const climbers = new Map<string, Climber | null>();
+try {
+  for (const [k, v] of Object.entries(JSON.parse(sessionStorage.getItem(SAVED_KEY) ?? "{}") as Record<string, { m?: unknown; c?: unknown }>)) {
+    picks.set(k, normalizePick(v?.m));
+    climbers.set(k, normalizeClimber(v?.c));
+  }
+} catch {}
 const keep = () => {
   try {
-    sessionStorage.setItem(SAVED_KEY, JSON.stringify(Object.fromEntries(picks)));
+    sessionStorage.setItem(SAVED_KEY, JSON.stringify(Object.fromEntries([...picks].map(([k, m]) => [k, { m, c: climbers.get(k) ?? null }]))));
   } catch {}
 };
 const asked = new Set<string>(picks.keys());
@@ -50,7 +51,8 @@ function want(userId: string) {
       try {
         const got = await getMascots(part);
         for (const id of part) {
-          picks.set(id, normalizePick(got[id]));
+          picks.set(id, normalizePick(got[id]?.mascot));
+          climbers.set(id, normalizeClimber(got[id]?.climber));
           failed.delete(id);
         }
       } catch {
@@ -79,6 +81,22 @@ export function useMascot(userId: string | null | undefined, exact = false): Mas
   if (!userId) return normalizePick(null);
   return picks.get(userId) ?? (!exact && failed.has(userId) ? normalizePick(null) : null);
 }
+// 某個人的攀岩角色：undefined＝還在讀（或讀不到）；null＝沒做角色
+export function useClimber(userId: string | null | undefined): Climber | null | undefined {
+  useEffect(() => {
+    if (userId) want(userId);
+  }, [userId]);
+  useSyncExternalStore(subscribe, () => version, () => 0);
+  if (!userId) return null;
+  return climbers.has(userId) ? climbers.get(userId) : undefined;
+}
+// 自己存了新的角色：馬上換掉畫面上所有自己的頭像
+export function rememberClimber(userId: string, c: Climber | null) {
+  climbers.set(userId, c);
+  keep();
+  notify();
+}
+
 // 自己存了新的夥伴：馬上換掉畫面上所有自己的頭像
 export function rememberMascot(userId: string, pick: MascotPick) {
   picks.set(userId, pick);
@@ -164,13 +182,16 @@ export const closePage = (page: string) => {
 };
 
 // 做了事情（記錄完攀、Flash、破紀錄…）：夥伴從上面跳出來說一句（MascotToast 接）
-export type MascotEvent = { text: string; party: boolean; at: number };
+// href：點了跳過去（解鎖新款式「去換上」）
+export type MascotEvent = { text: string; party: boolean; at: number; href?: string };
 let lastEvent: MascotEvent | null = null;
-export function sayEvent(text: string, party = false) {
+export function sayEvent(text: string, party = false, href?: string) {
   if (talkState() !== "on") return;
-  lastEvent = { text, party, at: Date.now() };
+  lastEvent = { text, party, at: Date.now(), href };
   notify();
 }
+// 上一句跳出來的時間（解鎖提示要等上一句說完再跳）
+export const lastEventAt = () => lastEvent?.at ?? 0;
 export const useMascotEvent = () => {
   useSyncExternalStore(subscribe, () => version, () => 0);
   return lastEvent;

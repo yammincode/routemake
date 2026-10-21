@@ -11,6 +11,10 @@ export const SB = "https://ngvlymkevcqhlaphoost.supabase.co";
 const uuid = () => crypto.randomUUID();
 // 影片縮圖用的小圖（測試裡的縮圖內容不重要，只要瀏覽器畫得出來）
 const THUMB_IMG = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "wall.png"));
+// 攀岩角色（0054）：款式和開放條件跟 App、資料庫一樣（lib/climber-*.json）
+const LIB = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "lib");
+const CLIMBER_VALUES = JSON.parse(fs.readFileSync(path.join(LIB, "climber-values.json"), "utf8"));
+const CLIMBER_RULES = JSON.parse(fs.readFileSync(path.join(LIB, "climber-rules.json"), "utf8"));
 // 拆 multipart 上傳（supabase-js 上傳 Blob 時用 FormData）：取出檔案內容、格式和 cacheControl
 function multipart(req) {
   const ct = req.headers()["content-type"] || "";
@@ -98,7 +102,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, noRoutePhoto: false, noInsights: false, noRouteZone: false, noReports: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, noRoutePhoto: false, noInsights: false, noRouteZone: false, noReports: false, noClimber: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -356,7 +360,7 @@ export function createMock() {
     // 帳號管理（step43）：state.noAccounts 模擬資料庫還沒套用（沒有這些函式）
     const ACCOUNT_FNS = ["search_accounts", "account_info", "suspended_accounts", "account_comments", "suspend_user", "unsuspend_user", "issue_reset_code", "cancel_reset_code", "reset_password_with_code", "delete_user_videos", "delete_user", "delete_my_videos", "delete_my_account"];
     if (state.noAccounts && ACCOUNT_FNS.includes(fn)) return J(route, 404, { code: "PGRST202", message: `Could not find the function public.${fn} in the schema cache` });
-    if (["edit_comment", "save_my_card", "save_my_mascot"].includes(fn) && suspended(uid)) return J(route, 403, SUSPENDED);
+    if (["edit_comment", "save_my_card", "save_my_mascot", "save_my_climber"].includes(fn) && suspended(uid)) return J(route, 403, SUSPENDED);
     const noPerm = () => J(route, 403, { code: "42501", message: "沒有權限" });
     if (["search_accounts", "account_info", "suspended_accounts", "account_comments"].includes(fn) && !isStaff(uid, a.p_gym)) return noPerm();
     if (fn === "search_accounts") {
@@ -651,6 +655,38 @@ export function createMock() {
       if (!ok) return J(route, 400, { code: "22023", message: "夥伴或顏色不對，請重新選一次" });
       if (v && !db.gyms.find((g) => g.id === GYM_OF[v.id])?.is_live) return J(route, 400, { code: "22023", message: "這隻夥伴即將登場，現在還不能選" });
       prof(uid).mascot = v;
+      return J(route, 200, null);
+    }
+    // 攀岩角色（0054）：自己的數字（攀爬日、上攀、Flash、V5 以上；完攀類不算岩友路線）、存角色（款式要認得、還沒解鎖的擋下）
+    // state.noClimber 模擬資料庫還沒套用 step48
+    const climbStats = (u) => {
+      const mine = db.ascents.filter((x) => x.user_id === u);
+      const sent = mine.filter((x) => x.status !== "project").map((x) => ({ x, r: db.routes.find((r) => r.id === x.route_id) })).filter(({ r }) => r && r.kind !== "community");
+      return {
+        days: new Set(mine.map((x) => x.climbed_on)).size,
+        rope: sent.filter(({ r }) => r.grade >= 100).length,
+        flash: sent.filter(({ x }) => x.status === "flash").length,
+        v5: sent.filter(({ r }) => r.grade >= 5 && r.grade < 100).length,
+      };
+    };
+    if (fn === "my_climb_stats") {
+      if (state.noClimber) return J(route, 404, { code: "PGRST202", message: "Could not find the function public.my_climb_stats in the schema cache" });
+      return J(route, 200, uid ? climbStats(uid) : null);
+    }
+    if (fn === "save_my_climber") {
+      if (state.noClimber) return J(route, 404, { code: "PGRST202", message: "Could not find the function public.save_my_climber(p_climber) in the schema cache" });
+      if (!uid) return J(route, 401, { code: "42501", message: "請先登入" });
+      const v = a.p_climber;
+      const ok = v == null || (typeof v === "object" && !Array.isArray(v) && Object.entries(v).every(([k, x]) => CLIMBER_VALUES[k]?.includes(x)));
+      if (!ok) return J(route, 400, { code: "22023", message: "角色的款式不對，請重新選一次" });
+      const st = climbStats(uid);
+      const locked = v && Object.entries(v).some(([k, x]) => {
+        const r = CLIMBER_RULES[`${k}:${x}`];
+        return r && (r.sp || st[r.t] < r.n);
+      });
+      if (locked) return J(route, 400, { code: "22023", message: "有款式還沒解鎖，請重新選一次" });
+      state.climberSaves = (state.climberSaves ?? 0) + 1;
+      prof(uid).climber = v;
       return J(route, 200, null);
     }
     if (fn === "save_my_card") {
@@ -1495,6 +1531,11 @@ export function createMock() {
       // 原岩夥伴（0047）：所有人讀得到 mascot；state.noMascot 模擬資料庫還沒套用 step41（沒有這個欄位）
       if (sel.includes("mascot")) {
         if (state.noMascot) return J(route, 400, { code: "42703", message: "column profiles.mascot does not exist" });
+        // 攀岩角色（0054）：跟夥伴一起讀；state.noClimber 模擬還沒套用 step48（沒有這個欄位）
+        if (sel.includes("climber")) {
+          if (state.noClimber) return J(route, 400, { code: "42703", message: "column profiles.climber does not exist" });
+          return out(filt(db.profiles, sp).map((p) => ({ id: p.id, mascot: p.mascot ?? null, climber: p.climber ?? null })));
+        }
         return out(filt(db.profiles, sp).map((p) => ({ id: p.id, mascot: p.mascot ?? null })));
       }
       return out(filt(db.profiles, sp).map((p) => ({ id: p.id, nickname: p.nickname })));

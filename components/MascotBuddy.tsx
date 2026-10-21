@@ -1,10 +1,11 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { MascotBuddyView, MascotToastView } from "@/components/ui/Mascot";
 import { buddyLine } from "@/lib/cheer";
+import { primeClimbStats } from "@/lib/climber-events";
 import { useMascot, useMascotEvent, useTalk, useMascotMode } from "@/lib/mascot-store";
 
 // 顧客的頁面右下角站著小夥伴（館首頁、區域頁、New~、人物卡、我的紀錄、Spray Wall）
@@ -62,17 +63,36 @@ export default function MascotBuddy() {
 }
 
 // 做了事情夥伴跳出來說一句（記錄完攀、Flash、破紀錄、連續爬、第一次留言），3 秒後收起；點一下也收起
+// 解鎖新款式（攀岩角色）：多停一下（6 秒），點了到人物卡換上
 export function MascotToast() {
   const { session } = useAuth();
+  const router = useRouter();
+  const uid = session?.user.id ?? null;
   const ev = useMascotEvent();
-  const pick = useMascot(session?.user.id ?? null);
+  const pick = useMascot(uid);
   const [mode] = useMascotMode();
   const [hidden, setHidden] = useState<number | null>(null);
   useEffect(() => {
     if (!ev) return;
-    const t = setTimeout(() => setHidden(ev.at), 3000);
+    const t = setTimeout(() => setHidden(ev.at), ev.href ? 6000 : 3000);
     return () => clearTimeout(t);
   }, [ev]);
+  // 這支手機第一次：先記下現在的攀岩數字，之後記錄完才比得出新解鎖了什麼
+  useEffect(() => {
+    if (uid) void primeClimbStats(uid);
+  }, [uid]);
   if (!ev || !pick || hidden === ev.at) return null;
-  return <MascotToastView key={ev.at} pick={pick} mode={mode} text={ev.text} party={ev.party} onClose={() => setHidden(ev.at)} />;
+  return (
+    <MascotToastView
+      key={ev.at}
+      pick={pick}
+      mode={mode}
+      text={ev.text}
+      party={ev.party}
+      onClose={() => {
+        setHidden(ev.at);
+        if (ev.href) router.push(ev.href);
+      }}
+    />
+  );
 }

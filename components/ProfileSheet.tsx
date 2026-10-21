@@ -13,7 +13,7 @@ import { cardGyms, clearCardBio, getAccountInfo, getProfileCard, NO_ACCOUNTS, ty
 import { md } from "@/lib/date";
 import { ABILITY_AXES, CLIMBING_YEARS, gradeLabel } from "@/lib/design";
 import { GYMS } from "@/lib/gyms";
-import { useMascot, useMascotMode } from "@/lib/mascot-store";
+import { useClimber, useMascot, useMascotMode } from "@/lib/mascot-store";
 import { mascotInfo, type MascotPick } from "@/lib/mascots";
 
 // 最高完攀：抱石、上攀都有就一起列
@@ -52,6 +52,7 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const pick = useMascot(userId);
+  const climber = useClimber(userId);
   const [mode] = useMascotMode();
 
   useEffect(() => {
@@ -64,8 +65,8 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
   if (!card) return <p className="text-note text-muted">讀取中…</p>;
   const name = card.nickname ?? "攀岩者";
 
-  // 角色卡上半段：夥伴（所有人都看得到，跟留言旁的頭像一樣）；還在讀先空著
-  const top = <CharacterTop pick={pick} mode={mode} />;
+  // 角色卡上半段：攀岩角色＋夥伴（所有人都看得到，跟留言旁的頭像一樣）；還在讀先空著
+  const top = <CharacterTop pick={pick} climber={climber} mode={mode} />;
   // 店長、老闆：人物卡下面可以停權（1A 案）；沒公開人物卡也一樣
   const staffBox = !card.self && isManagerOf(access, gymId) ? <StaffBox userId={userId} gymId={gymId} /> : null;
   if (!card.public && !card.self) {

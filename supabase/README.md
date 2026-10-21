@@ -53,6 +53,7 @@
 | `setup/step44-spray-route-photos.sql` | migration 0050：Spray Wall 岩館路線改成員工上傳照片（routes.photo_path：只有 Spray Wall 的岩館路線能放，路徑一定是那間館的 {館}/routes/；有照片圈圈可以不畫；Storage {館}/routes/ 只有那館員工能上傳；spray_list 多回傳 photo_path）。還沒執行時 App 照常（岩館路線照舊在公版照片上畫圈） | 已套用 |
 | `setup/step45-usage-insights.sql` | migration 0051：使用狀況更多數據分析（app_opens 多一欄 hours：當天幾點有打開，record_open 每次補上那一格，之前的紀錄沒有時間；usage_insights：「人」「互動」分頁的回頭率、新客人第一週、常客分群、程度分布、進步、幾點最多人用、每天留言影片按讚、熱門影片和留言、夥伴，權限跟 usage_stats 一樣；route_insights：「路線」分頁的每條路線試過／完攀／Flash／難度體感、各區熱度、換線前後、難度供需、熱門路線，老闆、被授權看那一館的人和那一館的員工（定線員、店長）看得到；usage_activity 內部用，App 不能直接叫；都只回傳總數，不回傳客人的帳號）。還沒執行 step41、step42 也可以執行（沒有的就不算）。再執行一次不會改到東西（最後登記那一行會報錯，代表已經套用過）。新舊版 App 都能用（還沒執行時新版照舊顯示現在的使用狀況，多的分析寫要套用 step45） | 已套用 |
 | `setup/step46-route-insights-zone.sql` | migration 0052：路線分析點路線跳到區域頁（route_insights 的每條路線、熱門路線多回傳 zone_id；只換掉這個函式，權限照舊）。要先套用 step45。再執行一次不會改到東西（最後登記那一行會報錯，代表已經套用過）。新舊版 App 都能用（還沒執行時新版路線分析的路線不能點，其他照常） | 未套用 |
+| `setup/step48-climber.sql` | migration 0054：攀岩角色（profiles.climber：人物卡上的真人角色選了哪幾款（動作、髮型、衣服、褲子、背景…）；所有人看得到（人物卡、留言和影片旁的小頭像），不能直接改，只能用 save_my_climber 改自己的；款式只能是固定的那幾種（climber_values）；進階款照自己的紀錄開放（climber_rules：攀爬日 1／2／3／5／7／10 天、上攀完攀 1／10／30 條、Flash 5 條、V5 以上完攀 10 條，岩友路線不算；金色、琉璃、各館門口背景是特殊獎品，現在一律存不進去），存的時候資料庫再算一次；my_climb_stats：自己的數字；停權中不能改）。要先套用 step41、step43。再執行一次不會改到東西（最後登記那一行會報錯，代表已經套用過）。新舊版 App 都能用（還沒執行時新版人物卡照舊只有夥伴，編輯寫要套用 step48） | 未套用 |
 
 ## 規則摘要
 

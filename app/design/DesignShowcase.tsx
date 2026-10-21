@@ -18,6 +18,7 @@ import { HighpointPicker, NumberMarks } from "@/components/ui/Endurance";
 import { Tabs } from "@/components/ui/Tabs";
 import { HighlightCard, InsightPill, InsightRouteRow, MeterList, MeterRow, SplitBar } from "@/components/ui/Insights";
 import { HoldLegend, HoldMarks, HoldTools, PhotoThumb, RouteThumb, SprayRow } from "@/components/ui/Spray";
+import { ClimberEditor, ClimberHead } from "@/components/ui/Climber";
 import { CharacterTop, MascotAvatar, MascotBubble, MascotBuddyView, MascotColors, MascotPicker, MascotToastView } from "@/components/ui/Mascot";
 import { Avatar, HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { LogList, LogRow } from "@/components/ui/Log";
@@ -58,6 +59,7 @@ import {
 } from "@/lib/design";
 import { MINGDE_PLAN } from "@/lib/floorplan";
 import { GYMS, LIVE_GYM } from "@/lib/gyms";
+import { DEFAULT_CLIMBER, randomClimber, type Climber } from "@/lib/climber";
 import { MASCOT_MODES, MASCOTS, type MascotMode, type MascotPick } from "@/lib/mascots";
 import { ReportAction, ReportCount, ReportItem, ReportLink, ReportList, ReportMark, ReportSpot } from "@/components/ui/Report";
 import { ShareButton, ShareOffer, SharePicker, SharePreview } from "@/components/ui/Share";
@@ -855,6 +857,10 @@ export default function DesignShowcase() {
         <MascotDemo />
       </Block>
 
+      <Block title="攀岩角色">
+        <ClimberDemo />
+      </Block>
+
       <Block title="數據分析（HighlightCard、MeterRow、SplitBar、InsightPill、InsightRouteRow）">
         <HighlightCard big="62%" title="回頭率比前一週好 5%" detail="上週用過的 40 人，這週有 25 人回來" onClick={() => toast("跳到回頭率")} />
         <div className="mt-3">
@@ -1072,6 +1078,26 @@ export default function DesignShowcase() {
         )}
       </Sheet>
 
+    </>
+  );
+}
+
+// 攀岩角色（step48）：人物卡上半段（背景＋角色＋夥伴）、小頭像、編輯（鎖住的寫還差多少、點了跳解鎖卡）
+// 這裡假設爬了 4 天、上攀 3 條、Flash 2 條、V5 以上 1 條
+function ClimberDemo() {
+  const [c, setC] = useState<Climber>({ ...DEFAULT_CLIMBER, hair: "pony", hairC: "brown", top: "tank", print: "hold", topC: "wanhua", pants: "crop", pantsC: "khaki" });
+  const stats = { days: 4, rope: 3, flash: 2, v5: 1 };
+  return (
+    <>
+      <CharacterTop pick={{ id: "mingde" }} climber={c} />
+      <div className="mt-3 flex items-center gap-2">
+        {(["short", "bob", "afro", "spiky", "long"] as const).map((h, i) => (
+          <ClimberHead key={h} climber={{ ...c, hair: h, skin: "abcde"[i], hat: i === 3 ? "helmet" : "none", hatC: "orange" }} size={36} />
+        ))}
+        <ClimberHead climber={c} size={22} />
+      </div>
+      <p className="mt-1 mb-3 text-tiny text-muted">小頭像（36px、22px）：留言和影片旁邊；沒做角色的人照舊是夥伴</p>
+      <ClimberEditor value={c} onChange={setC} stats={stats} onRandom={() => setC(randomClimber(stats))} />
     </>
   );
 }

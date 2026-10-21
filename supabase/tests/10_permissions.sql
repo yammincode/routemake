@@ -2367,6 +2367,84 @@ select tests.ok('回報：路線下架了，那條的回報不在清單上', (se
 reset role;
 select tests.ok('回報：回報的人看到處理結果', (select count(*) from public.route_reports where user_id = :A and status <> 'new') = 8);
 
+-- ---------------------------------------------------------------------
+-- 攀岩角色（0054）：所有人看得到、只能用 save_my_climber 改自己的、款式要認得、還沒解鎖的存不進去
+-- ---------------------------------------------------------------------
+\set CL '''00000000-0000-0000-0000-0000000006c1'''
+select tests.login(null);
+insert into auth.users (id, email, encrypted_password) values
+  (:CL, 'climber_cl@users.routemake.local', extensions.crypt('climbpass1', extensions.gen_salt('bf')));
+update public.profiles set nickname = '小岩' where id = :CL;
+-- 30 天前設的路線：V3 六條、V6 一條（明德 B1）、5.10a 一條（上攀區）
+with r as (insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, created_at)
+  select (select v from ids where k = 'zoneB'), 3, '綠', g, 5, now() - interval '30 days' from generate_series(1, 6) g returning id, pin_x)
+insert into ids select 'clV' || pin_x::int, id from r;
+with r as (insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, created_at)
+  values ((select v from ids where k = 'zoneB'), 6, '紅', 6, 6, now() - interval '30 days') returning id)
+insert into ids select 'clHard', id from r;
+with r as (insert into public.routes (zone_id, grade, hold_color, pin_x, pin_y, created_at)
+  values ((select id from public.zones where grade_system = 'yds' and kind = 'wall' order by code limit 1), 106, '藍', 7, 7, now() - interval '30 days') returning id)
+insert into ids select 'clYds', id from r;
+\set BASIC '''{"pose":"hang","holdC":"yellow","harness":"none","gear":"none","hands":"tape","back":"none","bag":"yellow","effort":"none","skin":"b","eyes":"dot","mouth":"smile","beard":"none","glasses":"none","hair":"pony","hairC":"brown","top":"tank","print":"hold","topC":"wanhua","pants":"crop","pantsC":"khaki","shoe":"red","hat":"none","hatC":"black","bg":"longdong"}'''
+set role authenticated; select tests.login(:CL);
+select tests.ok('角色：還沒記錄，數字都是 0', public.my_climb_stats() = '{"days":0,"rope":0,"flash":0,"v5":0}'::jsonb);
+select tests.lives('角色：基本款一開始就能存', format('select public.save_my_climber(%L)', :BASIC));
+select tests.ok('角色：存進去了', (select climber ->> 'hair' from public.profiles where id = :CL) = 'pony');
+select tests.throws('角色：伸手抓點要攀爬 1 天', $q$select public.save_my_climber('{"pose":"reach"}')$q$, '還沒解鎖');
+select tests.lives('角色：記一條嘗試中', format('insert into public.ascents (route_id, status) values (%L, ''project'')', (select v from ids where k = 'clV1')));
+select tests.ok('角色：嘗試中也算攀爬日', (public.my_climb_stats() ->> 'days')::int = 1);
+select tests.lives('角色：爬 1 天就能伸手抓點', $q$select public.save_my_climber('{"pose":"reach"}')$q$);
+select tests.throws('角色：腳跟勾要 5 天', $q$select public.save_my_climber('{"pose":"heel"}')$q$, '還沒解鎖');
+reset role;
+-- 前幾天的 Flash（V3，四天）
+insert into public.ascents (user_id, route_id, status, climbed_on)
+  select :CL, (select v from ids where k = 'clV' || g), 'flash', public.taipei_today() - (g - 1) from generate_series(2, 5) g;
+set role authenticated; select tests.login(:CL);
+select tests.ok('角色：數字（5 天、4 條 Flash）', public.my_climb_stats() = '{"days":5,"rope":0,"flash":4,"v5":0}'::jsonb);
+select tests.lives('角色：5 天就能腳跟勾', $q$select public.save_my_climber('{"pose":"heel"}')$q$);
+select tests.throws('角色：滿手粉要 7 天', $q$select public.save_my_climber('{"hands":"chalk"}')$q$, '還沒解鎖');
+select tests.throws('角色：Dyno 要 5 條 Flash', $q$select public.save_my_climber('{"pose":"dyno"}')$q$, '還沒解鎖');
+select tests.lives('角色：再 Flash 一條', format('insert into public.ascents (route_id, status) values (%L, ''flash'')', (select v from ids where k = 'clHard')));
+select tests.lives('角色：5 條 Flash 就能 Dyno', $q$select public.save_my_climber('{"pose":"dyno"}')$q$);
+select tests.ok('角色：V6 算 V5 以上', (public.my_climb_stats() ->> 'v5')::int = 1);
+select tests.throws('角色：星空要 V5 以上 10 條', $q$select public.save_my_climber('{"bg":"night"}')$q$, '還沒解鎖');
+select tests.throws('角色：確保要上攀完攀 1 條', $q$select public.save_my_climber('{"pose":"belay","harness":"black"}')$q$, '還沒解鎖');
+select tests.lives('角色：完攀一條上攀', format('insert into public.ascents (route_id, status) values (%L, ''send'')', (select v from ids where k = 'clYds')));
+select tests.ok('角色：5.x 算上攀、不算 V5 以上', public.my_climb_stats() ->> 'rope' = '1' and public.my_climb_stats() ->> 'v5' = '1');
+select tests.lives('角色：上攀 1 條就能確保、黑色吊帶', $q$select public.save_my_climber('{"pose":"belay","harness":"black"}')$q$);
+select tests.throws('角色：快扣要上攀 10 條', $q$select public.save_my_climber('{"gear":"qd"}')$q$, '還沒解鎖');
+select tests.throws('角色：特殊獎品（金色）現在存不進去', $q$select public.save_my_climber('{"topC":"gold"}')$q$, '還沒解鎖');
+select tests.throws('角色：特殊獎品（萬華門口）現在存不進去', $q$select public.save_my_climber('{"bg":"wanhua"}')$q$, '還沒解鎖');
+select tests.throws('角色：不認得的欄位', $q$select public.save_my_climber('{"wings":"yes"}')$q$, '款式不對');
+select tests.throws('角色：不認得的款式', $q$select public.save_my_climber('{"hair":"mohawk"}')$q$, '款式不對');
+select tests.throws('角色：值不能是別的型別', $q$select public.save_my_climber('{"hair":["pony"]}')$q$, '款式不對');
+select tests.throws('角色：陣列不行', $q$select public.save_my_climber('["pony"]')$q$, '款式不對');
+select tests.ok('角色：被擋下的沒有改到', (select climber ->> 'pose' from public.profiles where id = :CL) = 'belay');
+select tests.throws('角色：不能直接改欄位', $q$update public.profiles set climber = '{"pose":"dyno"}' where id = auth.uid()$q$);
+select tests.throws('角色：不能查別人的數字', format('select public.climb_stats(%L)', :A));
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.ok('角色：別人看得到我的角色', (select climber ->> 'pose' from public.profiles where id = :CL) = 'belay');
+select tests.lives('角色：乙存自己的', format('select public.save_my_climber(%L)', :BASIC));
+select tests.ok('角色：甲的沒有被改', (select climber ->> 'pose' from public.profiles where id = :CL) = 'belay');
+select tests.ok('角色：自己的數字只算自己的', (public.my_climb_stats() ->> 'rope')::int = 0);
+reset role;
+set role anon; select tests.login(null);
+select tests.ok('角色：沒登入也看得到（留言旁的頭像）', (select climber ->> 'pose' from public.profiles where id = :CL) = 'belay');
+select tests.throws('角色：沒登入不能存', format('select public.save_my_climber(%L)', :BASIC));
+select tests.throws('角色：沒登入不能查數字', 'select public.my_climb_stats()');
+reset role;
+update public.profiles set suspended_until = now() + interval '1 day' where id = :CL;
+set role authenticated; select tests.login(:CL);
+select tests.throws('角色：停權中不能換角色', format('select public.save_my_climber(%L)', :BASIC), '暫停中');
+reset role;
+update public.profiles set suspended_until = null where id = :CL;
+set role authenticated; select tests.login(:CL);
+select tests.lives('角色：不用角色了（null）', $q$select public.save_my_climber(null)$q$);
+select tests.ok('角色：不用角色後是 null', (select climber from public.profiles where id = :CL) is null);
+reset role;
+select tests.throws('角色：資料庫也擋不合格的值（check）', format($q$update public.profiles set climber = '{"hair":"mohawk"}' where id = %L$q$, :CL));
+
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));
 

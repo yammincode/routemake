@@ -47,6 +47,7 @@ import { loadShow, saveShow, type SendShow } from "@/lib/share-options";
 import { useMascot } from "@/lib/mascot-store";
 import { FEEL, GRADE_FEEL, STATUS_LABEL, type Status } from "@/lib/design";
 import { herePath, zoneRoutePath } from "@/lib/nav";
+import { checkUnlocks } from "@/lib/climber-events";
 import { cheerComment, cheerSend } from "@/lib/mascot-events";
 import { isRetryable, queueAscent, unqueue } from "@/lib/offline";
 import { loginExpired } from "@/lib/supabase";
@@ -317,8 +318,13 @@ function RouteBody({
             : "已記錄：嘗試中";
     const saved = await persist(current(s, day), msg);
     // 原岩夥伴：第一次記完攀、Flash（原本沒紀錄或嘗試中）就跳出來說一句；完攀、Flash 互換不算；岩友路線不算
-    if (saved !== "failed" && s !== "project" && (before == null || before === "project") && r.kind !== "community" && session)
-      void cheerSend({ userId: session.user.id, routeId: r.id, grade: r.grade, status: s, climbedOn: day || todayYmd(), queued: saved === "queued" });
+    // 攀岩角色：存好了（不是排隊）再看有沒有新解鎖的款式；夥伴先說完攀，有解鎖再換成解鎖的那句
+    const uid = session?.user.id;
+    void (async () => {
+      if (saved !== "failed" && s !== "project" && (before == null || before === "project") && r.kind !== "community" && uid)
+        await cheerSend({ userId: uid, routeId: r.id, grade: r.grade, status: s, climbedOn: day || todayYmd(), queued: saved === "queued" });
+      if (saved !== "failed" && saved !== "queued" && uid) await checkUnlocks(uid);
+    })();
   };
 
   // 攀爬日膠囊：還沒記錄只是先選好（按 Flash／完攀／嘗試中時用）；記過的馬上存，存不進去改回原本的日期

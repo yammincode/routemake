@@ -3,7 +3,9 @@
 import type { CSSProperties, ReactNode } from "react";
 import { HOLD_COLORS } from "@/lib/design";
 import { MASCOT_ART } from "@/lib/mascot-art";
-import { useMascot, useMascotMode } from "@/lib/mascot-store";
+import type { Climber } from "@/lib/climber";
+import { useClimber, useMascot, useMascotMode } from "@/lib/mascot-store";
+import { ClimberHead, ClimberScene } from "./Climber";
 import {
   MASCOTS,
   ARTSY_DECO,
@@ -127,17 +129,39 @@ export function MascotAvatar({ pick, size = 48, mode = "plain", label }: { pick:
   );
 }
 
-// 某個人的頭像（留言、影片用）：自動讀那個人的夥伴；夥伴風格照這支手機選的
+// 某個人的頭像（留言、影片用）：做了攀岩角色就是角色的頭（step48），沒做照舊是夥伴；夥伴風格照這支手機選的
+// 夥伴和角色一起讀：還在讀先畫空的圓
 export function UserAvatar({ userId, size = 22 }: { userId: string | null | undefined; size?: number }) {
   const pick = useMascot(userId);
+  const climber = useClimber(userId);
   const [mode] = useMascotMode();
+  if (pick && climber) return <ClimberHead climber={climber} size={size} />;
   return <MascotAvatar pick={pick} size={size} mode={mode} />;
 }
 
 // 人物卡上半段（角色卡）：大大的夥伴、背景色、右上角夥伴名字
+// 做了攀岩角色（climber）：換成背景＋角色＋夥伴站旁邊（ClimberScene）
 // pick 是 null＝還在讀（先畫一樣高的灰色方塊）
-export function CharacterTop({ pick, mode = "plain", small = false, children }: { pick: MascotPick | null; mode?: MascotMode; small?: boolean; children?: ReactNode }) {
+export function CharacterTop({
+  pick,
+  climber,
+  mode = "plain",
+  small = false,
+  children,
+}: {
+  pick: MascotPick | null;
+  climber?: Climber | null;
+  mode?: MascotMode;
+  small?: boolean;
+  children?: ReactNode;
+}) {
   if (!pick) return <div aria-hidden className={`rounded-card bg-sunk ${small ? "h-[120px]" : "h-[190px]"}`} />;
+  if (climber)
+    return (
+      <ClimberScene climber={climber} pick={pick} mode={mode} small={small}>
+        {children}
+      </ClimberScene>
+    );
   const info = mascotInfo(pick.id);
   return (
     <div style={{ background: mascotBg(pick) }} className={`relative grid place-items-center overflow-hidden rounded-card ${small ? "h-[120px]" : "h-[190px]"}`}>

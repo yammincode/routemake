@@ -173,6 +173,8 @@ test("原岩夥伴：館首頁每次打開說一句（看紀錄）、✕ 關掉�
 
 test("夥伴說話：區域頁講這一區、記錄 Flash 破紀錄撒彩帶、完攀、第一則留言、我的紀錄、右下角小夥伴、🤫 閉嘴、人物卡關掉說話", async () => {
   const mock = createMock();
+  // 這裡只測夥伴說的話：關掉攀岩角色（記錄後的「解鎖新款式」在 climber 測）
+  mock.state.noClimber = true;
   const a = mock.addUser("climbera", "password1", { nickname: "小岩" });
   const zone = mock.db.zones[0];
   const easy = mock.addRoute(zone, 2, "藍", ["技巧"]);
