@@ -13,7 +13,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ShareOffer, SharePicker, SharePreview } from "@/components/ui/Share";
 import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { captureThumb, compressMinBytes, compressType, compressVideo, hiMaxSeconds, sourceFps, type VideoEdit } from "@/lib/video";
-import { checkPickedVideo, deleteVideo, seqTotal, durText, getVideos, likeVideo, unlikeVideo, uploadVideo, videoDaySupported, videoLimit, videoMaxSeconds, videoThumbUrl, videoUrl, type DbError, type Route, type Video } from "@/lib/data";
+import { checkPickedVideo, deleteVideo, seqTotal, durText, getVideos, likeVideo, unlikeVideo, uploadVideo, videoBetaSupported, videoDaySupported, videoLimit, videoMaxSeconds, videoThumbUrl, videoUrl, type DbError, type Route, type Video } from "@/lib/data";
 import { HEIGHT_KEY_PREFIX } from "@/lib/offline";
 import { videoWhen } from "@/lib/date";
 import { findGym } from "@/lib/gyms";
@@ -71,8 +71,13 @@ export default function RouteVideos({
   onLogin,
   onCount,
   onProfile,
+  onBeta,
+  betaPlay = 0,
 }: {
   onProfile?: (userId: string) => void;
+  // 官方 beta（step49）：告訴外面有沒有、誰拍的（路線卡片評語下面放「看官方 beta」）；betaPlay 每加 1 就打開全螢幕播放官方 beta
+  onBeta?: (b: { name: string; duration: number | null } | null) => void;
+  betaPlay?: number;
   route: Route;
   gymId: string;
   zoneName?: string; // 分享到 IG 的角落小貼紙用
@@ -134,6 +139,8 @@ export default function RouteVideos({
   const [prepMiss, setPrepMiss] = useState(false); // 有順便做、但沒做成（例如這支手機不能同時錄兩份）
   const igRun = useRef<AbortController | null>(null); // 正在重錄的那一次：關掉預覽、改勾選、關掉卡片就停
   const [confirmDel, setConfirmDel] = useState<string | null>(null); // 刪除要按兩次（刪了不能復原）；換到別支影片就重來
+  const [asBeta, setAsBeta] = useState(false); // 員工：這支是官方 beta
+  const [confirmBeta, setConfirmBeta] = useState(false); // 換掉原本的官方 beta 要按兩次
 
   useEffect(() => {
     getVideos(r.id)
@@ -143,6 +150,23 @@ export default function RouteVideos({
   useEffect(() => {
     if (videos) onCount?.(videos.length);
   }, [videos, onCount]);
+  // 官方 beta：排在最上面那一支（getVideos 已經排好）
+  const beta = videos?.find((v) => v.is_beta) ?? null;
+  const betaName = beta?.nickname ?? null;
+  const betaDur = beta?.duration_s ?? null;
+  useEffect(() => {
+    if (videos) onBeta?.(betaName == null ? null : { name: betaName, duration: betaDur });
+  }, [videos, betaName, betaDur, onBeta]);
+  // 外面按了「看官方 beta」：回到全部（篩選可能把它藏起來）、從它開始播
+  const [betaSeen, setBetaSeen] = useState(betaPlay);
+  if (betaPlay !== betaSeen) {
+    setBetaSeen(betaPlay);
+    if (beta) {
+      setFilter(null);
+      setConfirmDel(null);
+      setPlaying(0);
+    }
+  }
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
   // 小貼紙先畫好（要等字型），按「也分享到 IG」、「套用並處理」時才能直接開始重錄（iPhone 只允許在點的那一下開始播放）
   useEffect(() => {
@@ -201,7 +225,11 @@ export default function RouteVideos({
     }
   };
 
-  const canShare = open && !r.archived_at;
+  // 員工可以放官方 beta：岩館路線、還在牆上、資料庫有這個功能；留言關掉時客人不能分享，員工照樣可以放官方 beta
+  const betaOk = staff && videoBetaSupported() && (r.kind ?? "gym") === "gym" && !r.archived_at;
+  const onlyBeta = betaOk && !open;
+  const canShare = (open || betaOk) && !r.archived_at;
+  const sendBeta = onlyBeta || (betaOk && asBeta);
   // 篩選鈕只出現這條路線影片裡有的標籤：身高由矮到高，再來動態、靜態，最後型態；選的標籤不見了（例如刪掉影片）就回到全部
   const tagOpts = [
     ...HEIGHT_BANDS.map((h) => ({ v: h.v as TagFilter, label: h.cm })),
@@ -223,6 +251,7 @@ export default function RouteVideos({
     feel: feelTagText(v.feel_tags),
     tags: videoTagText(v.height_band, v.move),
     onName: onProfile ? () => (setPlaying(null), onProfile(v.user_id)) : undefined,
+    beta: !!v.is_beta,
     ...(v.likers ? { likes: v.likers.length, liked: !!session && v.likers.includes(session.user.id), onLike: () => void toggleLike(v) } : {}),
   }));
   if (!canShare && videos && !videos.length) return <ClosedNotice>這條路線目前不開放分享影片</ClosedNotice>;
@@ -256,6 +285,8 @@ export default function RouteVideos({
 
   const reset = () => {
     setFile(null);
+    setAsBeta(false);
+    setConfirmBeta(false);
     setCaption("");
     setMove(null);
     setFeel([]);
@@ -284,6 +315,8 @@ export default function RouteVideos({
   const prepWait = prepFits && sticker === undefined;
   const upload = async () => {
     if (!session || !file || !consent) return;
+    // 換掉原本的官方 beta：舊的會刪掉，要按兩次
+    if (sendBeta && beta && !confirmBeta) return setConfirmBeta(true);
     setBusy(true);
     try {
       // 先在手機上壓成 720p（不支援或沒變小就傳原檔）；剪輯、靜音一定重錄，失敗就不傳（不然長度、聲音不對）
@@ -312,8 +345,9 @@ export default function RouteVideos({
         small ?? file,
         {
           caption: caption.trim() || null,
-          status: myStatus,
-          climbed_on: myStatus ? myDay : null,
+          status: sendBeta ? null : myStatus,
+          climbed_on: myStatus && !sendBeta ? myDay : null,
+          ...(sendBeta ? { beta: { replaces: beta?.path ?? null } } : {}),
           height_band: height,
           move,
           feel_tags: feel,
@@ -336,7 +370,7 @@ export default function RouteVideos({
       reset();
       setFilter(null); // 回到全部，剛分享的才看得到
       setVideos(await getVideos(r.id));
-      toast("已分享影片");
+      toast(sendBeta ? (beta ? "已換成新的官方 beta" : "已放上官方 beta") : "已分享影片");
     } catch (e) {
       toast((e as Error).message);
     }
@@ -436,24 +470,26 @@ export default function RouteVideos({
                 支
               </p>
             )}
-            <VideoViewer
-              items={cards}
-              index={playing}
-              onIndex={(i) => (setConfirmDel(null), setPlaying(i))}
-              actions={(i) => {
-                const v = shown[i];
-                return session && (v.user_id === session.user.id || staff) ? (
-                  <button onClick={() => void remove(v.id)} className={`text-meta text-warn ${confirmDel === v.id ? "font-bold" : ""}`}>
-                    {confirmDel === v.id ? "確定刪除？再按一次" : "刪除這支影片"}
-                  </button>
-                ) : null;
-              }}
-            />
           </>
         )
       ) : (
         <p className="mt-1 mb-2.5 text-note text-muted">{videos ? "還沒有人分享影片，拍下你的攀爬過程吧。" : "讀取中…"}</p>
       )}
+      {/* 放在分頁外面：路線卡片的「看官方 beta」在別的分頁也能打開 */}
+      <VideoViewer
+        items={cards}
+        index={playing}
+        onIndex={(i) => (setConfirmDel(null), setPlaying(i))}
+        actions={(i) => {
+          const v = shown[i];
+          return session && (v.user_id === session.user.id || staff) ? (
+            <button onClick={() => void remove(v.id)} className={`text-meta text-warn ${confirmDel === v.id ? "font-bold" : ""}`}>
+              {confirmDel === v.id ? "確定刪除？再按一次" : "刪除這支影片"}
+            </button>
+          ) : null;
+        }}
+      />
+
       {canShare && (
         <div className={videos?.length && active ? "mt-3" : ""}>
           {!session ? (
@@ -490,6 +526,21 @@ export default function RouteVideos({
           ) : (
             <>
               <PickedFile name={file.name} size={file.size} onClear={busy ? undefined : reset} />
+              {betaOk && (
+                <Toggle
+                  checked={sendBeta}
+                  onChange={(on) => (setAsBeta(on), setConfirmBeta(false))}
+                  label="這是官方 beta"
+                  hint={
+                    onlyBeta
+                      ? "這條路線留言關閉，客人不能分享影片，只能放官方 beta"
+                      : beta
+                        ? `會換掉現在的官方 beta（${beta.nickname} 放的），舊的那支會刪掉`
+                        : "定線員示範設計的爬法：放在路線卡片評語下面，客人點了才看；不算 24 小時 15 支"
+                  }
+                  disabled={busy || onlyBeta}
+                />
+              )}
               {editable && preview && (
                 <>
                   {trim ? (
@@ -540,7 +591,9 @@ export default function RouteVideos({
               <Label>動作（選填）</Label>
               <OptionGrid cols={2} options={CLIMB_MOVES} value={move} onChange={setMove} />
               <p className="mt-4 mb-0 flex flex-wrap items-center gap-x-1 text-note text-muted">
-                {myStatus ? (
+                {sendBeta ? (
+                  "官方 beta 不顯示你的 Flash／完攀和攀爬日"
+                ) : myStatus ? (
                   <>
                     你在這條的紀錄會一起顯示：
                     {myDay && videoDaySupported() && <span>{videoWhen(myDay, myDay)}</span>}
@@ -566,7 +619,7 @@ export default function RouteVideos({
                 </Link>
               </Check>
               <Button variant="primary" className="mt-3.5" disabled={!consent || busy || prepWait} onClick={upload}>
-                {prepWait && !busy ? "準備原岩標記中…" : squeeze != null ? `${editing ? "剪輯中" : "壓縮中"} ${Math.round(squeeze * 100)}%，請不要關閉畫面…` : busy ? "上傳中，請不要關閉畫面…" : "分享影片"}
+                {sendBeta && beta && confirmBeta && !busy ? "確定換掉現在的官方 beta？舊的會刪掉，再按一次" : prepWait && !busy ? "準備原岩標記中…" : squeeze != null ? `${editing ? "剪輯中" : "壓縮中"} ${Math.round(squeeze * 100)}%，請不要關閉畫面…` : busy ? "上傳中，請不要關閉畫面…" : "分享影片"}
               </Button>
               {prepping && squeeze != null && <p className="mt-1.5 mb-0 text-tiny text-muted">同時在做 IG 版（加原岩標記），上傳完馬上可以分享</p>}
               {!busy && <LinkButton onClick={reset}>取消</LinkButton>}

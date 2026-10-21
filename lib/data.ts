@@ -757,6 +757,7 @@ export type Video = {
   climbed_on?: string | null; // 分享者在這條的攀爬日（分享時由資料庫從本人紀錄帶入；沒有紀錄、或資料庫還沒套用 step34 時沒有）
   thumb_path?: string | null; // 縮圖（video-thumbs）；舊影片還沒補、或資料庫還沒套用 step38 時沒有
   likers?: string[]; // 按讚的人（user id）；資料庫還沒套用 step42 時沒有（不顯示讚）
+  is_beta?: boolean; // 官方 beta（定線員示範，step49）；還沒套用時沒有
   created_at: string;
   nickname: string;
 };
@@ -783,21 +784,27 @@ let videoThumbs = true;
 // 資料庫有沒有影片按讚（step42）：沒有時讀影片不帶讚（PostgREST 找不到關聯回 PGRST200）
 let videoLikes = true;
 const VIDEO_LIKES = "video_likes(user_id)";
+// 資料庫有沒有官方 beta（step49）：沒有時不讀這個欄位、分享表單沒有「官方 beta」開關
+let videoBeta = true;
+export const videoBetaSupported = () => videoBeta;
 const missingLikes = (e: { code?: string; message?: string } | null) => e?.code === "PGRST200" && (e.message ?? "").includes("video_likes");
 const missingCol = (e: { code?: string; message?: string } | null, col: string) => noTagCols(e) && (e?.message ?? "").includes(col);
 // 讀影片：缺型態（還沒套用 step35）先退回攀爬日；缺攀爬日（step34）退回身高、動作；再缺（step25）退回原本的欄位
-// 每一層都先帶縮圖、讚讀；缺縮圖（還沒套用 step38）、缺讚（step42）就之後都不帶
+// 每一層都先帶縮圖、官方 beta、讚讀；缺縮圖（還沒套用 step38）、官方 beta（step49）、讚（step42）就之後都不帶
 async function selectVideos<T>(q: (cols: string) => PromiseLike<{ data: T | null; error: { message?: string; code?: string } | null }>): Promise<T> {
   for (const cols of [VIDEO_COLS, VIDEO_DAYS, VIDEO_TAGS, VIDEO_BASE]) {
     // 看這次有沒有帶縮圖、讚（同時有兩個讀取時，另一個可能已經把旗標改掉）
     let thumb = videoThumbs;
     let likes = videoLikes;
-    let r = await q([cols, thumb && "thumb_path", likes && VIDEO_LIKES].filter(Boolean).join(","));
-    for (let n = 0; n < 2; n++) {
+    let beta = videoBeta;
+    const all = () => [cols, thumb && "thumb_path", beta && "is_beta", likes && VIDEO_LIKES].filter(Boolean).join(",");
+    let r = await q(all());
+    for (let n = 0; n < 3; n++) {
       if (thumb && missingCol(r.error, "thumb_path")) thumb = videoThumbs = false;
+      else if (beta && missingCol(r.error, "is_beta")) beta = videoBeta = false;
       else if (likes && missingLikes(r.error)) likes = videoLikes = false;
       else break;
-      r = await q([cols, thumb && "thumb_path", likes && VIDEO_LIKES].filter(Boolean).join(","));
+      r = await q(all());
     }
     if (cols === VIDEO_BASE || !noTagCols(r.error)) {
       if (!r.error) {
@@ -822,7 +829,8 @@ export async function getVideos(routeId: string): Promise<Video[]> {
   const rows = (await selectVideos((cols) =>
     supabase().from("route_videos").select(cols).eq("route_id", routeId).order("created_at", { ascending: false })
   )) as unknown as VideoRow[];
-  return rows.map(toVideo);
+  // 官方 beta 排最上面，其他照新到舊
+  return rows.map(toVideo).sort((a, b) => Number(!!b.is_beta) - Number(!!a.is_beta));
 }
 
 // 讀影片長度（秒）；讀不到回傳 null
@@ -884,7 +892,8 @@ export async function uploadVideo(
   file: File,
   // climbed_on：本人紀錄的攀爬日，有送才表示要在影片上顯示（實際的日期、完成狀態由資料庫從本人紀錄帶入）
   // thumb：縮圖（WebP 或 JPEG）；沒有、或上傳失敗都照樣分享
-  info: { caption: string | null; status: Status | null; climbed_on?: string | null; height_band?: HeightBand | null; move?: ClimbMove | null; feel_tags?: FeelTag[]; thumb?: Blob | null },
+  // beta：官方 beta（員工；不算 24 小時 15 支；資料庫會換掉這條原本的那支，replaces＝舊的那支檔案，存好後在這裡刪）
+  info: { caption: string | null; status: Status | null; climbed_on?: string | null; height_band?: HeightBand | null; move?: ClimbMove | null; feel_tags?: FeelTag[]; thumb?: Blob | null; beta?: { replaces: string | null } },
   // 長度：剪輯過的直接給（剪下來的長度）；只壓縮的從壓縮前的原檔讀（壓縮後的檔有時讀不到長度）
   len?: { source?: File; duration?: number },
   lim: VideoLimit = VIDEO_LIMIT
@@ -893,9 +902,13 @@ export async function uploadVideo(
   if (tooLong(duration, lim)) throw longError(duration!, lim);
   const { ext, type } = videoKind(file);
   if (file.size > lim.bytes) throw bigError(file.size, lim);
-  const since = new Date(Date.now() - 86400000).toISOString();
-  const recent = await supabase().from("route_videos").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", since);
-  if ((recent.count ?? 0) >= VIDEO_DAILY_LIMIT) throw new Error(`每人 24 小時內最多分享 ${VIDEO_DAILY_LIMIT} 支影片，明天再來`);
+  if (!info.beta) {
+    const since = new Date(Date.now() - 86400000).toISOString();
+    let q = supabase().from("route_videos").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", since);
+    if (videoBeta) q = q.eq("is_beta", false);
+    const recent = await q;
+    if ((recent.count ?? 0) >= VIDEO_DAILY_LIMIT) throw new Error(`每人 24 小時內最多分享 ${VIDEO_DAILY_LIMIT} 支影片，明天再來`);
+  }
   const path = `${gymId}/${routeId}/${userId}/${newId()}.${ext}`;
   // 快取 1 小時：影片刪掉後，看過的手機、CDN 不會留著太久
   const up = await supabase().storage.from("route-videos").upload(path, file, { contentType: type, cacheControl: "3600" });
@@ -932,7 +945,7 @@ export async function uploadVideo(
   const tags = { ...(info.height_band ? { height_band: info.height_band } : {}), ...(info.move ? { move: info.move } : {}) };
   const day = info.status && info.climbed_on && videoDays ? { climbed_on: info.climbed_on } : {};
   const feel = info.feel_tags?.length && videoFeel ? { feel_tags: info.feel_tags } : {};
-  let body: Record<string, unknown> = { ...row, ...tags, ...day, ...feel, ...(thumb_path ? { thumb_path } : {}) };
+  let body: Record<string, unknown> = { ...row, ...tags, ...day, ...feel, ...(thumb_path ? { thumb_path } : {}), ...(info.beta ? { is_beta: true, status: null } : {}) };
   const groups = [["thumb_path"], ["feel_tags"], ["climbed_on"], ["height_band", "move"]];
   let ins = await supabase().from("route_videos").insert(body);
   for (let n = 0; n < groups.length && noTagCols(ins.error); n++) {
@@ -947,6 +960,8 @@ export async function uploadVideo(
     if (thumb_path) await supabase().storage.from("video-thumbs").remove([thumb_path]).catch(() => undefined);
     throw new Error(dbError(ins.error));
   }
+  // 換掉了原本的官方 beta：資料庫已經刪了舊的資料，這裡刪舊的檔案（失敗不擋，之後用「清理」找出來）
+  if (info.beta?.replaces && info.beta.replaces !== path) await removeVideoFiles([info.beta.replaces]).catch(() => undefined);
 }
 
 // 影片按讚、收回（跟留言按讚一樣：已經按過回 23505）
@@ -1022,12 +1037,13 @@ const toPlace = ({ zones, ...route }: FeedRouteRow): FeedPlace => {
   const { gyms, ...zone } = zones;
   return { route, zone, gym: { id: gyms.id, name: gyms.name, comments_enabled: gyms.comments_enabled } };
 };
-// 影片：開放的館、路線在牆上（下架時影片會一起刪掉，這裡再擋一次）
+// 影片：開放的館、路線在牆上（下架時影片會一起刪掉，這裡再擋一次）；官方 beta 不放
 export async function getFeedVideos(): Promise<Feed<FeedVideo>> {
   const since = dayStartIso();
   const read = async (today: boolean) => {
     const rows = (await selectVideos((cols) => {
-      const q = supabase().from("route_videos").select(`${cols},${FEED_ROUTE}`).eq("routes.zones.gyms.is_live", true).is("routes.archived_at", null);
+      let q = supabase().from("route_videos").select(`${cols},${FEED_ROUTE}`).eq("routes.zones.gyms.is_live", true).is("routes.archived_at", null);
+      if (cols.includes("is_beta")) q = q.eq("is_beta", false); // 官方 beta 不放 New~（會暴雷，使用者 10/21 同意）
       return (today ? q.gte("created_at", since) : q.lt("created_at", since)).order("created_at", { ascending: false }).limit(today ? 100 : FEED_SIZE);
     })) as unknown as (VideoRow & { routes: FeedRouteRow })[];
     return rows.map(({ routes, ...v }) => ({ ...toVideo(v), ...toPlace(routes) }));

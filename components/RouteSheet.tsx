@@ -21,6 +21,7 @@ import { HoldMarks } from "@/components/ui/Spray";
 import { useToast } from "@/components/ui/Toast";
 import { Pin, WallPhoto } from "@/components/ui/Wall";
 import { ShareButton, SharePicker, SharePreview } from "@/components/ui/Share";
+import { BetaBar } from "@/components/ui/Video";
 import { isStaffOf } from "@/lib/auth";
 import {
   clearAscent,
@@ -193,6 +194,10 @@ function RouteBody({
   const [sendShow, setSendShow] = useState<SendShow | null>(null); // 勾選要放的資料（打開預覽時從手機讀）
   const myMascot = useMascot(session?.user.id); // 圖上的原岩夥伴（讀過會記在手機）
   const onVideoCount = useCallback((n: number) => setVideoCount(n), []);
+  // 官方 beta（step49，10/21 使用者選 B）：評語下面一條「看官方 beta」，點了全螢幕播放（影片資料由影片分頁讀）
+  const [beta, setBeta] = useState<{ name: string; duration: number | null } | null>(null);
+  const [betaPlay, setBetaPlay] = useState(0);
+  const onBeta = useCallback((b: { name: string; duration: number | null } | null) => setBeta(b), []);
   // 路線回報（step47）：資料庫有這個功能才顯示分頁下面的入口
   const [canReport, setCanReport] = useState(false);
   const [report, setReport] = useState<ReportTarget>(null);
@@ -529,6 +534,7 @@ function RouteBody({
       <Tags tags={r.style_tags} />
       {r.setter_note && <SetterNote>{r.setter_note}</SetterNote>}
       {r.description && <SetterNote>{r.description}</SetterNote>}
+      {beta && <BetaBar name={beta.name} duration={beta.duration} onClick={() => setBetaPlay((n) => n + 1)} />}
       {spray && (
         <div className="mt-2 flex items-center gap-2">
           <button
@@ -636,7 +642,7 @@ function RouteBody({
       </div>
 
       <div role="tabpanel" hidden={shownTab !== "video"}>
-        <RouteVideos route={r} gymId={gymId} zoneName={zoneName} open={commentsOpen} active={shownTab === "video"} staff={staff} myStatus={ascent?.status ?? null} myDay={ascent?.climbed_on ?? null} onLogin={toLogin} onCount={onVideoCount} onProfile={setProfile} />
+        <RouteVideos route={r} gymId={gymId} zoneName={zoneName} open={commentsOpen} active={shownTab === "video"} staff={staff} myStatus={ascent?.status ?? null} myDay={ascent?.climbed_on ?? null} onLogin={toLogin} onCount={onVideoCount} onProfile={setProfile} onBeta={onBeta} betaPlay={betaPlay} />
       </div>
 
       <div role="tabpanel" hidden={shownTab !== "comment"}>

@@ -27,7 +27,31 @@ export type VideoCard = {
   likes?: number;
   liked?: boolean;
   onLike?: () => void;
+  beta?: boolean; // 官方 beta（定線員示範）：酒紅框、「官方 beta」標籤，縮圖先蓋住（會暴雷），點了才看
 };
+
+// 「官方 beta」小標籤（酒紅底）
+export function BetaBadge() {
+  return <span className="inline-flex flex-none items-center rounded-full bg-accent px-2 py-px align-[0.1em] text-tiny font-bold whitespace-nowrap text-surface">官方 beta</span>;
+}
+
+// 路線卡片評語下面一條「▶ 看官方 beta」（10/21 使用者選 B）：預設蓋住、不下載縮圖和影片，點了才全螢幕播放
+export function BetaBar({ name, duration, onClick }: { name: string; duration?: number | null; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="mt-2 flex w-full items-center gap-2.5 rounded-tile border-[1.5px] border-accent bg-accent-soft px-3 py-2 text-left">
+      <span className="grid size-9 flex-none place-items-center rounded-full bg-accent text-surface">
+        <Icon name="play" className="size-4" />
+      </span>
+      <span className="min-w-0">
+        <b className="block text-sub font-bold">看官方 beta</b>
+        <span className="block truncate text-meta text-muted">
+          定線員 {name}
+          {duration != null && `・${clock(duration)}`}・會暴雷
+        </span>
+      </span>
+    </button>
+  );
+}
 
 // 片長 0:42
 const clock = (s: number) => {
@@ -76,17 +100,22 @@ function ThumbImage({ src }: { src?: string | null }) {
 // 影片一列（像 Spray Wall 路線列）：方形縮圖（第一格畫面、▶、片長）｜標題（心得，沒寫就是「某某的攀爬」）、誰・攀爬日（或分享時間）＋紀錄、型態、身高・動作
 // 整列點了就播放；有讚時右下角放「👍 讚」（另一顆按鈕疊在列上，按讚不會播放）
 export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) {
-  const title = v.caption || `${v.name}的攀爬`;
+  const title = v.caption || (v.beta ? `${v.name}示範設計的爬法` : `${v.name}的攀爬`);
   const likes = v.likes ?? 0;
   return (
     <li className="relative">
       <button
-        aria-label={[`播放 ${v.name} 的影片：${title}`, v.duration != null && clock(v.duration), v.status && STATUS_LABEL[v.status], v.feel, v.tags].filter(Boolean).join("，")}
+        aria-label={[`播放 ${v.name} 的${v.beta ? "官方 beta" : "影片"}：${title}`, v.duration != null && clock(v.duration), v.status && STATUS_LABEL[v.status], v.feel, v.tags].filter(Boolean).join("，")}
         onClick={onClick}
-        className="flex w-full items-start gap-3 rounded-tile bg-sunk p-2.5 text-left"
+        className={`flex w-full items-start gap-3 rounded-tile p-2.5 text-left ${v.beta ? "border-[1.5px] border-accent bg-accent-soft" : "bg-sunk"}`}
       >
-        <span className="relative block size-[72px] flex-none overflow-hidden rounded-field bg-black">
-          <ThumbImage key={v.thumb ?? ""} src={v.thumb} />
+        <span className={`relative block size-[72px] flex-none overflow-hidden rounded-field ${v.beta ? "bg-accent" : "bg-black"}`}>
+          {/* 官方 beta：縮圖先蓋住（會暴雷），也不下載縮圖 */}
+          {v.beta ? (
+            <span className="absolute inset-x-0 top-1.5 text-center text-tiny font-bold text-surface">會暴雷</span>
+          ) : (
+            <ThumbImage key={v.thumb ?? ""} src={v.thumb} />
+          )}
           <span className="absolute inset-0 grid place-items-center">
             <span className="grid size-[26px] place-items-center rounded-full bg-black/45 text-white">
               <Icon name="play" className="size-3.5" />
@@ -97,7 +126,14 @@ export function VideoRow({ v, onClick }: { v: VideoCard; onClick: () => void }) 
           )}
         </span>
         <span className="min-w-0 flex-1 pt-px">
-          <b className="line-clamp-2 text-sub leading-snug font-bold break-words">{title}</b>
+          <b className="line-clamp-2 text-sub leading-snug font-bold break-words">
+            {v.beta && (
+              <>
+                <BetaBadge />{" "}
+              </>
+            )}
+            {title}
+          </b>
           {v.place && <span className="mt-1 block text-meta text-ink">{v.place}</span>}
           <span className="mt-1 flex items-center justify-between gap-2 text-meta text-muted">
             {/* 沒寫說明時標題已經有名字，這行只寫時間 */}
@@ -283,6 +319,7 @@ export function VideoViewer({
       </div>
       <div className="px-4 pt-3 pb-[calc(16px+env(safe-area-inset-bottom,0px))]">
         <div className="flex items-center gap-2 text-meta text-white/75">
+          {v.beta && <BetaBadge />}
           {v.avatar}
           {v.onName ? (
             <button onClick={v.onName} className="text-sub font-bold text-white underline decoration-white/40 underline-offset-2">
