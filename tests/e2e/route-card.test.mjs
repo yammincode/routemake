@@ -11,7 +11,7 @@ after(async () => browser?.close());
 
 const md = (d) => `${d.slice(5, 7)}/${d.slice(8, 10)}`;
 
-test("攀爬日膠囊：預設今天；先選昨天再按完攀就記昨天；記過的直接改日期；嘗試中改完攀時自己選的日期優先", async () => {
+test("攀爬日膠囊：預設今天；先選昨天再按完攀就記昨天；記過的直接改日期；嘗試中改完攀時自己選的日期優先；最早到路線放上 App 前 7 天、選太早寫範圍", async () => {
   const mock = createMock();
   const me = mock.addUser("climber88", "password1", { nickname: "小安" });
   const zA = mock.db.zones[0];
@@ -19,7 +19,7 @@ test("攀爬日膠囊：預設今天；先選昨天再按完攀就記昨天；�
   const r1 = mock.addRoute(zA, 3, "藍", [], 40, 50, created);
   const r2 = mock.addRoute(zA, 4, "紅", [], 60, 40, created);
   const r3 = mock.addRoute(zA, 5, "綠", [], 70, 60, created);
-  const fresh = mock.addRoute(zA, 2, "黃", [], 20, 30); // 今天才設定：昨天、前天點不了
+  const fresh = mock.addRoute(zA, 2, "黃", [], 20, 30); // 今天才放上 App：最早可以選到 7 天前
   mock.addAscent(me, r3, "project", taipeiDay(-5));
   const { page, errors } = await phone(browser, mock);
   await login(page, "climber88", "password1", "/zone?id=" + zA.id);
@@ -90,13 +90,23 @@ test("攀爬日膠囊：預設今天；先選昨天再按完攀就記昨天；�
   assert.equal(asc(r3).climbed_on, taipeiDay(-1), "自己選的日期優先，不自動改成今天");
   await close();
 
-  // 今天才設定的路線：昨天、前天點不了
+  // 今天才放上 App 的路線（step50）：可以選到 7 天前（定線員常常先上牆才放上 App）；8 天前不改、寫可以選的範圍
   await row("黃").click();
   await page.waitForTimeout(400);
   await pill.click();
-  assert.ok(await day.locator('button:text-is("昨天")').isDisabled(), "早於設定日點不了");
-  assert.ok(await day.locator('button:text-is("前天")').isDisabled());
-  assert.equal(asc(fresh), undefined);
+  assert.ok(await day.locator('button:text-is("前天")').isEnabled(), "放上 App 前幾天也能選");
+  await day.locator('button:has-text("選日期")').click();
+  await day.locator("input[type=date]").fill(taipeiDay(-8));
+  await page.waitForTimeout(1200);
+  assert.match(await day.locator("[role=alert]").textContent(), new RegExp(`只能選 ${md(taipeiDay(-7))}～${md(taipeiDay(0))}`), "選太早寫可以選的範圍");
+  assert.ok((await pill.textContent()).includes("今天"), "選太早不改");
+  await day.locator("input[type=date]").fill(taipeiDay(-7));
+  await page.waitForTimeout(1200);
+  assert.equal(await day.locator("[role=alert]").count(), 0, "選對了說明就拿掉");
+  assert.ok((await pill.textContent()).includes(md(taipeiDay(-7))));
+  await dlg.locator('button:has-text("完攀")').first().click();
+  await page.waitForTimeout(600);
+  assert.equal(asc(fresh).climbed_on, taipeiDay(-7), "記在放上 App 前 7 天");
   assert.deepEqual(errors, []);
 });
 

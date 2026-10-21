@@ -40,7 +40,7 @@ import {
   type DbError,
   type Route,
 } from "@/lib/data";
-import { ago, md, todayYmd, ymd } from "@/lib/date";
+import { ago, climbMinYmd, md, todayYmd, ymd } from "@/lib/date";
 import { findGym } from "@/lib/gyms";
 import { canShareIg, shareUrl } from "@/lib/share";
 import { drawSendCard } from "@/lib/share-cards";
@@ -211,7 +211,7 @@ function RouteBody({
 
   const commentsOpen = gymCommentsOn && r.comments_enabled;
   const staff = isStaffOf(access, gymId);
-  const minDate = ymd(r.created_at);
+  const minDate = climbMinYmd(r.created_at);
   const maxDate = r.archived_at ? ymd(r.archived_at) : todayYmd();
 
   useEffect(() => {

@@ -1279,7 +1279,7 @@ export function createMock() {
         const tpe = (iso) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date(iso));
         const bad = (message) => J(route, 400, { code: "22008", message });
         if (rt && body.climbed_on) {
-          if (body.climbed_on < tpe(rt.created_at)) return bad("日期不能早於路線設定日");
+          if (body.climbed_on < tpe(new Date(rt.created_at).getTime() - 7 * 86400000)) return bad("日期不能早於路線放上 App 前 7 天"); // step50：放上 App 前 7 天內可以
           if (body.climbed_on > taipeiDay(0)) return bad("日期不能晚於今天");
           if (rt.archived_at && body.climbed_on > tpe(rt.archived_at)) return bad("日期不能晚於路線下架日");
         }

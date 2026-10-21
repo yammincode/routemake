@@ -209,7 +209,9 @@ select tests.ok('紀錄的使用者一律是本人（傳別人的 id 也沒用�
   (select user_id from public.ascents where route_id = (select v from ids where k = 'r2')) = :A
   and (select feel from public.ascents where route_id = (select v from ids where k = 'r2')) is null);
 select tests.throws('同一條路線不能記兩筆', format('insert into public.ascents (route_id, status) values (%L, ''send'')', (select v from ids where k = 'r1')));
-select tests.throws('日期不能早於路線設定日', format('update public.ascents set climbed_on = public.taipei_today() - 3 where route_id = %L', (select v from ids where k = 'r1')));
+select tests.throws('日期不能早於路線放上 App 前 7 天', format('update public.ascents set climbed_on = public.taipei_today() - 8 where route_id = %L', (select v from ids where k = 'r1')));
+select tests.lives('日期可以早到路線放上 App 前 7 天（step50）', format('update public.ascents set climbed_on = public.taipei_today() - 7 where route_id = %L', (select v from ids where k = 'r1')));
+select tests.lives('（改回今天）', format('update public.ascents set climbed_on = public.taipei_today() where route_id = %L', (select v from ids where k = 'r1')));
 select tests.throws('日期不能晚於今天', format('update public.ascents set climbed_on = public.taipei_today() + 3 where route_id = %L', (select v from ids where k = 'r1')));
 select tests.throws('心得超過 300 字會被擋', format('update public.ascents set private_note = repeat(''字'', 301) where route_id = %L', (select v from ids where k = 'r1')));
 select tests.ok('顧客甲：讀得到自己的心得', (select private_note from public.ascents where route_id = (select v from ids where k = 'r1')) = '甲的秘密心得');
