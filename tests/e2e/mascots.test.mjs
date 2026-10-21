@@ -31,18 +31,21 @@ test("原岩夥伴：選夥伴、換色、太空小熊即將登場；留言和�
   await p.waitForSelector('main [data-mascot="mingde"]');
   assert.ok((await p.textContent("main")).includes("夥伴：高山猛牛（耐力）"), "還沒選：預設高山猛牛，有夥伴簡介");
 
-  await p.click('main button:text-is("編輯人物卡")');
-  const bear = p.locator("main button", { hasText: "太空小熊" });
+  // 換裝室最後一個分頁「夥伴」（使用者 10/21 選的：夥伴也搬進換裝室）
+  await p.click('main button:has-text("換裝")');
+  const room = p.getByTestId("climber-room");
+  await room.locator('[role=tab]:has-text("夥伴")').click();
+  const bear = room.locator("button", { hasText: "太空小熊" });
   assert.ok(await bear.isDisabled(), "太空小熊點不了");
   assert.ok((await bear.textContent()).includes("即將登場"));
-  await p.locator("main button", { hasText: "星際猿猿" }).click();
-  await p.click('main button[aria-label="身體 #d7263d"]');
-  await p.click('main button[aria-label="卡片背景 #006382"]');
-  // 預覽馬上換
-  assert.equal(await p.locator('main [data-mascot="wanhua"]').count() >= 1, true, "上面的角色卡換成星際猿猿");
-  assert.ok((await p.textContent("main")).includes("夥伴：星際猿猿（動態）"));
-  await p.click('main button:text-is("儲存人物卡")');
+  await room.locator("button", { hasText: "星際猿猿" }).click();
+  await room.locator('button[aria-label="身體 #d7263d"]').click();
+  await room.locator('button[aria-label="卡片背景 #006382"]').click();
+  // 換裝室上面的預覽馬上換
+  assert.equal(await room.locator('[data-mascot="wanhua"]').count() >= 1, true, "上面的角色卡換成星際猿猿");
+  await room.locator('button:text-is("完成")').click();
   await p.waitForTimeout(600);
+  assert.ok((await p.textContent("main")).includes("夥伴：星際猿猿（動態）"));
   assert.deepEqual(mock.db.profiles.find((x) => x.id === b).mascot, { id: "wanhua", colors: ["#d7263d", null, null], bg: "#006382" }, "存進資料庫");
   assert.deepEqual(B.errors, []);
 
@@ -261,9 +264,13 @@ test("原岩夥伴：資料庫還沒套用 step41 照常（大家都是猛牛、
   await login(B.page, "climberb", "password1", "/card");
   const p = B.page;
   await p.waitForSelector('main [data-mascot="mingde"]');
-  await p.click('main button:text-is("編輯人物卡")');
+  await p.click('main button:has-text("換裝")');
+  const room = p.getByTestId("climber-room");
+  await room.locator('[role=tab]:has-text("夥伴")').click();
+  assert.ok((await room.textContent()).includes("暫時不能選夥伴"), "說明資料庫還沒更新");
+  await p.locator('[role=dialog] button[aria-label="關閉"]').click();
   await p.waitForTimeout(300);
-  assert.ok((await p.textContent("main")).includes("暫時不能選夥伴"), "說明資料庫還沒更新");
+  await p.click('main button:text-is("編輯人物卡")');
   await p.fill("#cbio", "喜歡長路線");
   await p.click('main button:text-is("儲存人物卡")');
   await p.waitForTimeout(500);

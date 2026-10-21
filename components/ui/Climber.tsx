@@ -2,25 +2,25 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "./Button";
-import { Chip } from "./Chip";
-import { MascotArt } from "./Mascot";
+import { CharacterTop, MascotArt, MascotColors, MascotPicker } from "./Mascot";
 import Sheet from "./Sheet";
 import { Tabs } from "./Tabs";
 import {
   CLIMBER_GROUPS,
   CLIMBER_KEYS,
   CLIMBER_TABS,
+  DEFAULT_CLIMBER,
   climberColor,
   climberItemName,
   climberLock,
   lockCond,
   lockLeft,
   lockProgress,
+  randomClimber,
   type ClimbStats,
   type Climber,
   type ClimberKey,
   type ClimberRule,
-  type ClimberTab,
 } from "@/lib/climber";
 import { climberBgSvg, climberHeadSvg, climberSvg } from "@/lib/climber-art";
 import { mascotInfo, type MascotMode, type MascotPick } from "@/lib/mascots";
@@ -107,6 +107,7 @@ export function ClimberScene({
 }
 
 // 鎖住的款式點了跳出來的解鎖卡（B 案）：先看穿上去的樣子、怎麼解鎖、進度
+// 蓋在換裝室上面（換裝室本身是全螢幕面板，不再疊一層面板，手機返回鍵照樣只關換裝室）
 export function UnlockCard({
   climber,
   item,
@@ -118,30 +119,35 @@ export function UnlockCard({
   stats: ClimbStats | null;
   onClose: () => void;
 }) {
-  const tryOn = item ? { ...climber, [item.key]: item.v } : climber;
-  const r = item?.rule;
-  const count = r && !("sp" in r) && stats ? `${stats[r.t]} / ${r.n} ${r.t === "days" ? "天" : "條"}，${lockLeft(r, stats)}` : null;
+  if (!item) return null;
+  const tryOn = { ...climber, [item.key]: item.v };
+  const r = item.rule;
+  const count = !("sp" in r) && stats ? `${stats[r.t]} / ${r.n} ${r.t === "days" ? "天" : "條"}，${lockLeft(r, stats)}` : null;
   return (
-    <Sheet open={!!item} onClose={onClose}>
-      {item && r && (
-        <div className="grid gap-2" data-testid="unlock-card">
-          <div className="relative h-[170px] overflow-hidden rounded-card">
-            <ClimberBg climber={tryOn} />
-            <span className="absolute top-2 left-2 rounded-full bg-ink/80 px-2 text-tiny font-bold text-white">試穿</span>
-            {item.key !== "bg" && <ClimberArt climber={tryOn} className="absolute bottom-0 left-1/2 aspect-[144/224] h-full -translate-x-1/2" />}
-          </div>
-          <h3 className="m-0 text-section font-bold">🔒 {climberItemName(item.key, item.v)}</h3>
-          <p className="m-0 font-bold text-accent">{"sp" in r ? r.sp : `${lockCond(r)}解鎖`}</p>
-          <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(lockProgress(r, stats) * 100)} className="h-2 overflow-hidden rounded-full bg-sunk">
-            <i className="block h-full rounded-full bg-accent" style={{ width: `${lockProgress(r, stats) * 100}%` }} />
-          </div>
-          <p className="m-0 text-note text-muted">{"sp" in r ? "特殊獎品：完成徽章或任務才拿得到（之後開放）" : (count ?? "讀取你的紀錄中…")}</p>
-          <Button variant="primary" onClick={onClose}>
-            知道了
-          </Button>
+    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/[0.42]" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`怎麼解鎖：${climberItemName(item.key, item.v)}`}
+        className="grid w-full max-w-page animate-sheet gap-2 rounded-t-sheet bg-surface px-5 pt-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))]"
+        data-testid="unlock-card"
+      >
+        <div className="relative h-[170px] overflow-hidden rounded-card">
+          <ClimberBg climber={tryOn} />
+          <span className="absolute top-2 left-2 rounded-full bg-ink/80 px-2 text-tiny font-bold text-white">試穿</span>
+          {item.key !== "bg" && <ClimberArt climber={tryOn} className="absolute bottom-0 left-1/2 aspect-[144/224] h-full -translate-x-1/2" />}
         </div>
-      )}
-    </Sheet>
+        <h3 className="m-0 text-section font-bold">🔒 {climberItemName(item.key, item.v)}</h3>
+        <p className="m-0 font-bold text-accent">{"sp" in r ? r.sp : `${lockCond(r)}解鎖`}</p>
+        <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(lockProgress(r, stats) * 100)} className="h-2 overflow-hidden rounded-full bg-sunk">
+          <i className="block h-full rounded-full bg-accent" style={{ width: `${lockProgress(r, stats) * 100}%` }} />
+        </div>
+        <p className="m-0 text-note text-muted">{"sp" in r ? "特殊獎品：完成徽章或任務才拿得到（之後開放）" : (count ?? "讀取你的紀錄中…")}</p>
+        <Button variant="primary" onClick={onClose}>
+          知道了
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -151,75 +157,190 @@ const unused = (key: ClimberKey, c: Climber) =>
   (key === "hatC" && c.hat === "none") ||
   (key === "holdC" && !["hang", "reach", "heel", "dyno", "brush"].includes(c.pose));
 
-// 編輯攀岩角色：7 個分頁；鎖住的款式變淡加 🔒、寫還差多少（A 案），點了跳解鎖卡（B 案）
-export function ClimberEditor({
-  value,
-  onChange,
+// 小圖：頭上的東西畫頭、背景畫背景、其他畫全身
+const HEAD_KEYS: ClimberKey[] = ["eyes", "mouth", "beard", "glasses", "hair", "hat", "effort"];
+function ClimberTile({ climber, k, v, pressed, rule, stats, onClick }: { climber: Climber; k: ClimberKey; v: string; pressed: boolean; rule: ClimberRule | null; stats: ClimbStats | null; onClick: () => void }) {
+  const t = useMemo(() => ({ ...climber, [k]: v }), [climber, k, v]);
+  const kind = k === "bg" ? "bg" : HEAD_KEYS.includes(k) ? "head" : "body";
+  const src = useMemo(
+    () => (kind === "bg" ? svgUrl(`bg:${t.bg}:${t.bg === "plain" ? t.topC : ""}`, () => climberBgSvg(t)) : svgUrl(keyOf(kind, t), () => (kind === "head" ? climberHeadSvg(t) : climberSvg(t)))),
+    [kind, t]
+  );
+  const name = CLIMBER_GROUPS[k].items[v];
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      aria-label={`${name}${rule ? `（🔒 ${lockCond(rule)}）` : ""}`}
+      onClick={onClick}
+      className="relative grid w-[66px] flex-none justify-items-center gap-px rounded-tile border-2 border-transparent bg-surface px-0.5 pt-1 pb-0.5 shadow-card aria-pressed:border-ink"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- 程式畫的 SVG（data URI） */}
+      <img src={src} alt="" draggable={false} className={`block h-[56px] w-[56px] select-none ${kind === "bg" ? "rounded-[8px] object-cover" : "object-contain"} ${rule ? "opacity-35" : ""}`} />
+      {rule && <span className="absolute top-0.5 right-1 text-[11px]">🔒</span>}
+      <span className="text-[11px] leading-tight whitespace-nowrap">{name}</span>
+      {rule && <small className="text-[10px] leading-tight text-accent">{lockLeft(rule, stats)}</small>}
+    </button>
+  );
+}
+
+// 換裝室分頁：攀岩角色 7 個＋夥伴
+export const ROOM_TABS = [...CLIMBER_TABS, "夥伴"] as const;
+export type RoomTab = (typeof ROOM_TABS)[number];
+
+// 換裝室（使用者 10/21 選的 A 案）：人物卡上按「👕 換裝」打開全螢幕；上面固定一大張角色（和夥伴）、分頁，
+// 下面每一項一排小圖左右滑（看得到樣子）；鎖住的變淡加 🔒、寫還差多少，點了跳解鎖卡；「完成」才存，左上「‹」不存
+// climber＝null：還沒做角色（攀岩那幾頁先放「做我的攀岩角色」）；climberNote：不能換角色時的說明（還沒套用 step48、還在讀）；mascotOk＝false：還沒套用 step41
+export function ClimberRoom({
+  open,
+  climber,
+  pick,
+  mode = "plain",
   stats,
-  onRandom,
+  climberNote,
+  mascotOk,
+  busy = false,
+  startTab,
+  onClose,
+  onSave,
 }: {
-  value: Climber;
-  onChange: (c: Climber) => void;
+  open: boolean;
+  climber: Climber | null;
+  pick: MascotPick;
+  mode?: MascotMode;
   stats: ClimbStats | null;
-  onRandom: () => void;
+  climberNote?: string | null;
+  mascotOk: boolean;
+  busy?: boolean;
+  startTab?: RoomTab;
+  onClose: () => void;
+  onSave: (climber: Climber | null, pick: MascotPick) => void;
 }) {
-  const [tab, setTab] = useState<ClimberTab>("攀岩");
+  return (
+    <Sheet open={open} onClose={onClose} full bare>
+      {open && (
+        <RoomBody
+          climber={climber}
+          pick={pick}
+          mode={mode}
+          stats={stats}
+          climberNote={climberNote ?? null}
+          mascotOk={mascotOk}
+          busy={busy}
+          startTab={startTab ?? (climberNote ? "夥伴" : "攀岩")}
+          onSave={onSave}
+        />
+      )}
+    </Sheet>
+  );
+}
+
+function RoomBody({
+  climber,
+  pick,
+  mode,
+  stats,
+  climberNote,
+  mascotOk,
+  busy,
+  startTab,
+  onSave,
+}: {
+  climber: Climber | null;
+  pick: MascotPick;
+  mode: MascotMode;
+  stats: ClimbStats | null;
+  climberNote: string | null;
+  mascotOk: boolean;
+  busy: boolean;
+  startTab: RoomTab;
+  onSave: (climber: Climber | null, pick: MascotPick) => void;
+}) {
+  const [c, setC] = useState<Climber | null>(climber);
+  const [p, setP] = useState<MascotPick>(pick);
+  const [tab, setTab] = useState<RoomTab>(startTab);
   const [lock, setLock] = useState<{ key: ClimberKey; v: string; rule: ClimberRule } | null>(null);
-  const keys = CLIMBER_KEYS.filter((k) => CLIMBER_GROUPS[k].tab === tab);
   const choose = (key: ClimberKey, v: string) => {
+    if (!c) return;
     const rule = climberLock(key, v, stats);
     if (rule) return setLock({ key, v, rule });
-    onChange({ ...value, [key]: v });
+    setC({ ...c, [key]: v });
   };
   return (
-    <div data-testid="climber-editor">
-      <Tabs tabs={CLIMBER_TABS.map((t) => ({ key: t, label: t }))} value={tab} onChange={setTab} />
-      <div className="grid gap-3">
-        {keys.map((key) => {
-          const g = CLIMBER_GROUPS[key];
-          const off = unused(key, value);
-          return (
-            <div key={key} role="group" aria-label={g.label} className={`grid gap-1.5 ${off ? "opacity-50" : ""}`}>
-              <span className="text-note font-bold text-muted">
-                {g.label}
-                {off && <span className="font-normal">（現在用不到）</span>}
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(g.items).map(([v, name]) => {
-                  const rule = climberLock(key, v, stats);
-                  const pressed = value[key] === v;
-                  if (g.colors) {
-                    const c = g.colors[v];
-                    return (
-                      <button
-                        key={v}
-                        type="button"
-                        aria-pressed={pressed}
-                        aria-label={`${g.label} ${name}${rule ? `（🔒 ${lockCond(rule)}）` : ""}`}
-                        onClick={() => choose(key, v)}
-                        style={{ background: c === "transparent" ? "repeating-linear-gradient(45deg,#ddd 0 4px,#fff 4px 8px)" : c }}
-                        className={`grid size-[30px] place-items-center rounded-full text-[11px] shadow-[inset_0_0_0_1px_rgba(0,0,0,.2)] aria-pressed:outline-3 aria-pressed:outline-offset-2 aria-pressed:outline-ink ${rule ? "opacity-50" : ""}`}
-                      >
-                        {rule ? "🔒" : ""}
-                      </button>
-                    );
-                  }
-                  return (
-                    <Chip key={v} pressed={pressed} onClick={() => choose(key, v)} className={rule ? "border-dashed opacity-60" : ""}>
-                      {rule ? `🔒 ${name}` : name}
-                      {rule && <small className="ml-1 text-tiny">{lockLeft(rule, stats)}</small>}
-                    </Chip>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+    <div data-testid="climber-room">
+      {/* 上面固定：角色（和夥伴）、完成、分頁 */}
+      <div className="sticky top-0 z-[5] -mx-5 bg-surface px-5 pt-[calc(10px+env(safe-area-inset-top,0px))] pb-1">
+        <div className="mb-2 flex items-center justify-between pl-12">
+          <b className="text-sub">換裝</b>
+          <button type="button" disabled={busy} onClick={() => onSave(c, p)} className="rounded-full bg-ink px-4 py-1 text-note font-bold text-surface disabled:opacity-50">
+            {busy ? "儲存中…" : "完成"}
+          </button>
+        </div>
+        <CharacterTop pick={p} climber={c} mode={mode} />
+        <Tabs tabs={ROOM_TABS.map((t) => ({ key: t, label: t }))} value={tab} onChange={setTab} />
       </div>
-      <Button className="mt-3" onClick={onRandom}>
-        🎲 隨機換一套（只選已解鎖的）
-      </Button>
-      <UnlockCard climber={value} item={lock} stats={stats} onClose={() => setLock(null)} />
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3 pt-1 pb-4">
+        {tab === "夥伴" ? (
+          !mascotOk ? (
+            <p className="m-0 text-note text-muted">資料庫還沒更新，暫時不能選夥伴（請老闆在 Supabase 執行 step41）。</p>
+          ) : (
+            <>
+              <MascotPicker value={p.id} onChange={(id) => setP(id === p.id ? p : { id })} mode={mode} />
+              <p className="m-0 text-tiny text-muted">夥伴站在角色旁邊、在各頁說話；沒做角色時留言和影片旁是夥伴的頭像。</p>
+              <MascotColors pick={p} onChange={setP} />
+            </>
+          )
+        ) : climberNote ? (
+          <p className="m-0 text-note text-muted">{climberNote}</p>
+        ) : !c ? (
+          <>
+            <p className="m-0 text-note text-muted">做一個自己的攀岩角色：換髮型、衣服、褲子、攀岩動作和背景，夥伴會站在旁邊。爬越多天、記越多紀錄，開放越多款式。</p>
+            <Button variant="primary" onClick={() => setC(DEFAULT_CLIMBER)}>
+              做我的攀岩角色
+            </Button>
+          </>
+        ) : (
+          <>
+            {CLIMBER_KEYS.filter((k) => CLIMBER_GROUPS[k].tab === tab).map((key) => {
+              const g = CLIMBER_GROUPS[key];
+              const off = unused(key, c);
+              return (
+                <div key={key} role="group" aria-label={g.label} className={off ? "opacity-50" : ""}>
+                  <span className="mb-1 block text-note font-bold text-muted">
+                    {g.label}
+                    {off && <span className="font-normal">（現在用不到）</span>}
+                  </span>
+                  <div className="no-scrollbar -mx-5 flex gap-1.5 overflow-x-auto px-5 py-1">
+                    {Object.entries(g.items).map(([v, name]) => {
+                      const rule = climberLock(key, v, stats);
+                      if (!g.colors) return <ClimberTile key={v} climber={c} k={key} v={v} pressed={c[key] === v} rule={rule} stats={stats} onClick={() => choose(key, v)} />;
+                      const col = g.colors[v];
+                      return (
+                        <button
+                          key={v}
+                          type="button"
+                          aria-pressed={c[key] === v}
+                          aria-label={`${g.label} ${name}${rule ? `（🔒 ${lockCond(rule)}）` : ""}`}
+                          onClick={() => choose(key, v)}
+                          style={{ background: col === "transparent" ? "repeating-linear-gradient(45deg,#ddd 0 4px,#fff 4px 8px)" : col }}
+                          className={`grid size-[32px] flex-none place-items-center rounded-full text-[11px] shadow-[inset_0_0_0_1px_rgba(0,0,0,.2)] aria-pressed:outline-3 aria-pressed:outline-offset-2 aria-pressed:outline-ink ${rule ? "opacity-50" : ""}`}
+                        >
+                          {rule ? "🔒" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <Button onClick={() => setC(randomClimber(stats))}>🎲 隨機換一套（只選已解鎖的）</Button>
+            <button type="button" onClick={() => setC(null)} className="justify-self-start text-note font-bold text-accent">
+              不用攀岩角色（人物卡只放夥伴）
+            </button>
+          </>
+        )}
+      </div>
+      <UnlockCard climber={c ?? DEFAULT_CLIMBER} item={lock} stats={stats} onClose={() => setLock(null)} />
     </div>
   );
 }

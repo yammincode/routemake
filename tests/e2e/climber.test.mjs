@@ -1,4 +1,4 @@
-// 攀岩角色（step48）：做角色、鎖住的寫還差多少（A）、點了跳解鎖卡（B）、存起來；別人看到頭像和人物卡；
+// 攀岩角色（step48）：換裝室（全螢幕）做角色、鎖住的寫還差多少（A）、點了跳解鎖卡（B）、按完成才存；別人看到頭像和人物卡；
 // 記完攀剛好解鎖：夥伴跳出來，點了到人物卡編輯；還沒套用 step48 照舊是夥伴；款式和開放條件跟資料庫一樣
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -38,23 +38,30 @@ test("攀岩角色：做角色、鎖住的寫還差多少、點了看解鎖卡�
   await login(p, "climber77", "password1", "/card");
   await p.waitForSelector('main [data-mascot="mingde"]');
   assert.equal(await p.getByTestId("climber-scene").count(), 0, "還沒做角色：人物卡照舊只有夥伴");
-  await p.click('main button:text-is("編輯人物卡")');
-  await p.click('main button:text-is("做我的攀岩角色")');
-  await p.waitForSelector("main [data-testid=climber-scene]");
-  assert.ok((await p.textContent("main [data-testid=climber-scene]")).includes("夥伴：高山猛牛"), "夥伴站在旁邊");
+  // 換裝室（A 案）：人物卡上按「👕 換裝」打開全螢幕
+  await p.click('main button:has-text("換裝")');
+  const ed = p.getByTestId("climber-room");
+  await ed.waitFor();
+  // 上面的角色和分頁固定住：點選項前先捲到下面看得到的地方（不然會點到上面那塊）
+  const tap = async (loc) => {
+    await loc.evaluate((e) => e.scrollIntoView({ block: "end" }));
+    await loc.click();
+  };
+  await ed.locator('button:text-is("做我的攀岩角色")').click();
+  await ed.locator("[data-testid=climber-scene]").waitFor();
+  assert.ok((await ed.locator("[data-testid=climber-scene]").textContent()).includes("夥伴：高山猛牛"), "夥伴站在旁邊");
 
-  const ed = p.getByTestId("climber-editor");
   // 爬了 4 天：伸手抓點（1 天）開了；腳跟勾（5 天）鎖住，寫還差多少
   const reach = ed.locator('button:has-text("伸手抓點")');
   assert.ok(!(await reach.textContent()).includes("🔒"));
-  await reach.click();
+  await tap(reach);
   assert.equal(await reach.getAttribute("aria-pressed"), "true");
   const heel = ed.locator('button:has-text("腳跟勾")');
   assert.ok((await heel.textContent()).includes("🔒"));
   assert.ok((await heel.textContent()).includes("再爬 1 天"), "選項上寫還差多少（A 案）");
   assert.ok((await ed.locator('button:has-text("Dyno")').textContent()).includes("Flash 再 5 條"));
   // 點鎖住的：跳出解鎖卡（B 案），不會選上
-  await heel.click();
+  await tap(heel);
   const card = p.getByTestId("unlock-card");
   await card.waitFor();
   const t = (await card.textContent()).replace(/\s+/g, " ");
@@ -66,19 +73,21 @@ test("攀岩角色：做角色、鎖住的寫還差多少、點了看解鎖卡�
   assert.equal(await heel.getAttribute("aria-pressed"), "false", "鎖住的點了不會選上");
   // 特殊獎品：寫怎麼拿
   await ed.locator('[role=tab]:has-text("衣服")').click();
-  await ed.locator('button[aria-label^="上衣顏色 金"]').click();
+  await tap(ed.locator('button[aria-label^="上衣顏色 金"]'));
   await card.waitFor();
   assert.ok((await card.textContent()).includes("任一徽章升到金"));
   await card.locator('button:text-is("知道了")').click();
   await p.waitForTimeout(400);
-  await ed.locator('button:text-is("攀岩背心")').click();
-  await ed.locator('button[aria-label="上衣顏色 萬華"]').click();
+  await tap(ed.getByRole("button", { name: "攀岩背心", exact: true }));
+  await tap(ed.locator('button[aria-label="上衣顏色 萬華"]'));
   await ed.locator('[role=tab]:has-text("頭髮")').click();
-  await ed.locator('button:text-is("馬尾")').click();
-  // 預覽馬上換
-  assert.equal(await p.locator("main [data-testid=climber-scene] [data-climber=reach]").count(), 1);
-  await p.click('main button:text-is("儲存人物卡")');
-  await p.waitForTimeout(700);
+  await tap(ed.getByRole("button", { name: "馬尾", exact: true }));
+  // 換裝室上面的預覽馬上換；按「完成」才存，人物卡跟著換
+  assert.equal(await ed.locator("[data-testid=climber-scene] [data-climber=reach]").count(), 1);
+  assert.equal(mock.state.climberSaves ?? 0, 0, "還沒按完成不會存");
+  await ed.locator('button:text-is("完成")').click();
+  await p.waitForSelector("main [data-testid=climber-scene] [data-climber=reach]");
+  assert.equal(await ed.count(), 0, "存好換裝室關掉");
   const saved = mock.db.profiles.find((x) => x.id === me).climber;
   assert.equal(saved.pose, "reach");
   assert.equal(saved.hair, "pony");
@@ -118,7 +127,7 @@ test("記完攀剛好解鎖：夥伴跳出來說解鎖了什麼，點了到人�
   await page.waitForFunction(() => document.querySelector("[data-testid=mascot-toast]")?.textContent.includes("解鎖新款式"), null, { timeout: 8000 });
   assert.ok((await toast.textContent()).includes("腳跟勾"), await toast.textContent());
   await toast.click();
-  await page.waitForSelector('main button:text-is("做我的攀岩角色")');
+  await page.waitForSelector('[data-testid=climber-room] button:text-is("做我的攀岩角色")');
   await page.waitForURL((u) => u.pathname === "/card" && !u.search, { timeout: 5000 });
   assert.deepEqual(errors, []);
 });
@@ -130,12 +139,16 @@ test("還沒套用 step48：人物卡、頭像照舊是夥伴，編輯寫要執�
   const { page, errors } = await phone(browser, mock);
   await login(page, "climber79", "password1", "/card");
   await page.waitForSelector('main [data-mascot="mingde"]');
-  await page.click('main button:text-is("編輯人物卡")');
-  await page.waitForSelector("main >> text=請老闆在 Supabase 執行 step48");
+  await page.click('main button:has-text("換裝")');
+  const room = page.getByTestId("climber-room");
+  await room.waitFor();
+  // 打開先在「夥伴」：夥伴照樣能換、能存；攀岩那幾頁寫要執行 step48
+  await room.locator('[role=tab]:has-text("攀岩")').click();
+  await room.locator("text=請老闆在 Supabase 執行 step48").waitFor();
   assert.equal(await page.getByTestId("climber-scene").count(), 0);
-  // 夥伴照樣能換、能存
-  await page.locator("main button", { hasText: "星際猿猿" }).click();
-  await page.click('main button:text-is("儲存人物卡")');
+  await room.locator('[role=tab]:has-text("夥伴")').click();
+  await room.locator("button", { hasText: "星際猿猿" }).click();
+  await room.locator('button:text-is("完成")').click();
   await page.waitForTimeout(600);
   assert.equal(mock.db.profiles.find((x) => x.username === "climber79").mascot.id, "wanhua");
   assert.deepEqual(errors, []);
