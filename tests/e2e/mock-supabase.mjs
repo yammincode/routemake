@@ -102,7 +102,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, noRoutePhoto: false, noInsights: false, noRouteZone: false, noReports: false, noClimber: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, noRoutePhoto: false, noInsights: false, noRouteZone: false, noReports: false, noClimber: false, noBeta: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -127,7 +127,7 @@ export function createMock() {
     db.vfiles[path] = { buf: Buffer.from("fake"), owner: userId, created_at: now() };
     const thumb_path = thumb ? path.replace(/\.mp4$/, ".webp") : null;
     if (thumb_path) db.tfiles[thumb_path] = { buf: THUMB_IMG, type: "image/png", cache: "3600", owner: userId, created_at: now() };
-    const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, height_band: null, move: null, feel_tags: [], climbed_on: null, thumb_path, created_at: now(), ...extra };
+    const v = { id: uuid(), route_id: route.id, user_id: userId, path, caption: null, status: null, duration_s: 10, size_bytes: 4, height_band: null, move: null, feel_tags: [], climbed_on: null, thumb_path, is_beta: false, created_at: now(), ...extra };
     db.videos.push(v);
     return v;
   };
@@ -240,6 +240,13 @@ export function createMock() {
     const r = db.routes.find((x) => x.id === routeId);
     const g = r && db.gyms.find((x) => x.id === zoneOf(r.zone_id).gym_id);
     return !!(uid && r && !r.archived_at && r.comments_enabled && g.comments_enabled && prof(uid)?.nickname);
+  };
+  // 同 0055 can_share_beta：那一館的員工、岩館路線、還在牆上、開放的館（留言關掉也可以）；state.noBeta 模擬還沒套用 step49
+  const canBeta = (uid, routeId) => {
+    if (state.noBeta) return false;
+    const r = db.routes.find((x) => x.id === routeId);
+    const g = r && db.gyms.find((x) => x.id === zoneOf(r.zone_id).gym_id);
+    return !!(uid && r && !r.archived_at && (r.kind ?? "gym") === "gym" && g.is_live && isStaff(uid, g.id) && prof(uid)?.nickname);
   };
   const videoPathOk = (uid, routeId, path) => {
     const parts = path.split("/");
@@ -1093,7 +1100,7 @@ export function createMock() {
       const routeId = path.split("/")[1];
       const dayAgo = new Date(Date.now() - 86400000).toISOString();
       const recent = Object.values(db.vfiles).filter((f) => f.owner === uid && f.created_at > dayAgo).length;
-      if (!videoPathOk(uid, routeId, path) || !canShare(uid, routeId) || recent >= 15)
+      if (!videoPathOk(uid, routeId, path) || !((canShare(uid, routeId) && recent < 15) || (canBeta(uid, routeId) && recent < 60)))
         return J(route, 403, { statusCode: "403", error: "Unauthorized", message: "new row violates row-level security policy" });
       // state.uploadMax：Supabase 專案的上傳上限（還沒改成 100 MB 時，超過就回 413）
       if ((req.postDataBuffer()?.length ?? 0) > state.uploadMax)
@@ -1116,7 +1123,7 @@ export function createMock() {
       const dayAgo = new Date(Date.now() - 86400000).toISOString();
       const recent = Object.values(db.tfiles).filter((f) => f.owner === uid && f.created_at > dayAgo).length;
       // 同 0043 can_upload_video_thumb
-      if (!/\.(webp|jpg)$/.test(path) || !videoPathOk(uid, routeId, path) || !canShare(uid, routeId) || recent >= 30)
+      if (!/\.(webp|jpg)$/.test(path) || !videoPathOk(uid, routeId, path) || !((canShare(uid, routeId) && recent < 30) || (canBeta(uid, routeId) && recent < 120)))
         return J(route, 403, { statusCode: "403", error: "Unauthorized", message: "new row violates row-level security policy" });
       const f = multipart(req);
       if (!["image/webp", "image/jpeg"].includes(f.type)) return J(route, 400, { statusCode: "415", error: "invalid_mime_type", message: `mime type ${f.type} is not supported` });
@@ -1427,6 +1434,12 @@ export function createMock() {
         state.tagFallbacks++;
         return J(route, 400, { code: "PGRST204", message: "Could not find the 'height_band' column of 'route_videos' in the schema cache" });
       }
+      // state.noBeta：模擬資料庫還沒套用 step49（沒有官方 beta 欄位）
+      if (state.noBeta && (m === "GET" || m === "HEAD") && (/is_beta/.test(sel) || sp.has("is_beta"))) {
+        state.betaFallbacks = (state.betaFallbacks ?? 0) + 1;
+        return J(route, 400, { code: "42703", message: "column route_videos.is_beta does not exist" });
+      }
+      if (state.noBeta && m === "POST" && "is_beta" in body) return J(route, 400, { code: "PGRST204", message: "Could not find the 'is_beta' column of 'route_videos' in the schema cache" });
       if (m === "GET" || m === "HEAD") {
         const q = new URLSearchParams(sp);
         const gym = (q.get("routes.zones.gym_id") || "").replace(/^eq\./, "");
@@ -1446,19 +1459,20 @@ export function createMock() {
         if (state.noVideoTags || state.noVideoClimb) rows = rows.map(({ climbed_on, ...v }) => v);
         if (noFeel) rows = rows.map(({ feel_tags, ...v }) => v);
         if (state.noVideoThumb) rows = rows.map(({ thumb_path, ...v }) => v);
+        rows = rows.map((v) => (state.noBeta ? (({ is_beta, ...x }) => x)(v) : { ...v, is_beta: !!v.is_beta }));
         rows.sort((x, y) => y.created_at.localeCompare(x.created_at));
         rows = filt(rows, q);
         if (m === "HEAD") return route.fulfill({ status: 200, headers: { ...cors, "content-range": `*/${rows.length}` } });
         return out(rows);
       }
       if (m === "POST") {
-        if (!canShare(uid, body.route_id) || !videoPathOk(uid, body.route_id, body.path))
+        if (!(body.is_beta ? canBeta(uid, body.route_id) : canShare(uid, body.route_id)) || !videoPathOk(uid, body.route_id, body.path))
           return J(route, 403, { code: "42501", message: 'new row violates row-level security policy for table "route_videos"' });
         // 同 0039 的 route_videos_before_insert：要先有本人上傳的檔案、24 小時 15 筆、說明不能放網址；
         // App 有送攀爬日和完成狀態時，攀爬日、完成狀態從本人在這條的紀錄帶入（App 送的日期不採用）；沒送就不記攀爬日
         if (db.vfiles[body.path]?.owner !== uid) return J(route, 400, { code: "22023", message: "找不到上傳的影片檔，請重新分享" });
         const dayAgo = new Date(Date.now() - 86400000).toISOString();
-        if (db.videos.filter((v) => v.user_id === uid && v.created_at > dayAgo).length >= 15) return J(route, 400, { code: "54000", message: "每人 24 小時內最多分享 15 支影片，明天再來" });
+        if (!body.is_beta && db.videos.filter((v) => v.user_id === uid && !v.is_beta && v.created_at > dayAgo).length >= 15) return J(route, 400, { code: "54000", message: "每人 24 小時內最多分享 15 支影片，明天再來" });
         if (hasLink(body.caption)) return J(route, 400, { code: "22023", message: "影片說明不能放網址" });
         if ((body.height_band != null && !["lt160", "160s", "170s", "ge180"].includes(body.height_band)) || (body.move != null && !["dynamic", "static"].includes(body.move)))
           return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_height_band_check"' });
@@ -1474,12 +1488,22 @@ export function createMock() {
         const feel = [...new Set(body.feel_tags ?? [])];
         if (feel.some((f) => !["power", "fingers", "hard", "risky", "footwork", "flexible"].includes(f)) || feel.length > 2)
           return J(route, 400, { code: "23514", message: 'new row violates check constraint "route_videos_feel_tags_check"' });
-        const mine = body.status && body.climbed_on ? db.ascents.find((x) => x.user_id === uid && x.route_id === body.route_id) : null;
+        const mine = !body.is_beta && body.status && body.climbed_on ? db.ascents.find((x) => x.user_id === uid && x.route_id === body.route_id) : null;
         const fromAscent = { climbed_on: mine?.climbed_on ?? null, ...(mine ? { status: mine.status } : {}) };
         // 同 0043 route_videos_thumb：縮圖要跟影片同名、本人上傳的，不對就當作沒有縮圖
         const base = body.path.replace(/\.[^./]+$/, "");
         const thumb = body.thumb_path && [base + ".webp", base + ".jpg"].includes(body.thumb_path) && db.tfiles[body.thumb_path]?.owner === uid ? body.thumb_path : null;
-        db.videos.push({ id: uuid(), caption: null, status: null, duration_s: null, size_bytes: null, height_band: null, move: null, ...body, feel_tags: feel, climbed_on: null, ...fromAscent, thumb_path: thumb, user_id: uid, created_at: now() });
+        // 同 0055：官方 beta 不帶紀錄；同一條原本的官方 beta 換掉（資料刪掉、寫操作紀錄）
+        const id = uuid();
+        if (body.is_beta) {
+          const old = db.videos.find((v) => v.route_id === body.route_id && v.is_beta);
+          if (old) {
+            db.videos = db.videos.filter((v) => v !== old);
+            db.videoLikes = db.videoLikes.filter((l) => l.video_id !== old.id);
+          }
+          audit(uid, zoneOf(vr.zone_id).gym_id, "video.beta", id, { code: vr.code, replaced: !!old, old_author_nickname: old ? prof(old.user_id)?.nickname : null });
+        }
+        db.videos.push({ id, caption: null, status: null, duration_s: null, size_bytes: null, height_band: null, move: null, is_beta: false, ...body, feel_tags: feel, climbed_on: null, ...fromAscent, ...(body.is_beta ? { status: null } : {}), thumb_path: thumb, user_id: uid, created_at: now() });
         return empty(route, 201);
       }
     }

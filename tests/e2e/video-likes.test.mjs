@@ -24,7 +24,7 @@ test("New~ 影片按讚：列表右下角按讚不會播放、全螢幕播放裡
   const v1 = mock.addVideo(other, r, { caption: "有一個讚", created_at: ago(within(1)) });
   mock.addVideo(other, r, { caption: "沒人按過", created_at: ago(within(2)) });
   mock.db.videoLikes.push({ video_id: v1.id, user_id: other });
-  const row = (page, caption) => page.locator("[role=tabpanel]:not([hidden]) li", { hasText: caption });
+  const row = (page, caption) => page.locator("main li", { hasText: caption });
 
   // 沒登入：看得到讚數；按了去登入（不會打開播放）
   const G = await phone(browser, mock);
@@ -100,9 +100,9 @@ test("路線卡片「影片」分頁按讚；New~ 打開卡片（Spray Wall）�
 
   // New~：牆上那條在卡片裡按的讚，列表也是按過的
   await c.goto(`${BASE}/new`, { waitUntil: "networkidle" });
-  await c.locator("[role=tabpanel]:not([hidden]) li", { hasText: "卡片裡按讚" }).locator('button[aria-pressed="true"]').waitFor();
+  await c.locator("main li", { hasText: "卡片裡按讚" }).locator('button[aria-pressed="true"]').waitFor();
   // Spray Wall 那條：從播放「看這條路線」在 New~ 打開卡片（停在影片分頁）按讚；關掉後 New~ 列表也是按過的
-  const row = c.locator("[role=tabpanel]:not([hidden]) li", { hasText: "Spray 卡片" });
+  const row = c.locator("main li", { hasText: "Spray 卡片" });
   await row.locator('button[aria-label^="播放"]').click();
   await c.locator('[aria-label="影片播放"] button:has-text("看這條路線")').click();
   const sheet = c.locator("[role=dialog]").filter({ has: c.locator('[role=tab]:has-text("影片")') });
@@ -127,7 +127,7 @@ test("還沒套用 step42：影片照常顯示，沒有讚的按鈕，不出錯"
 
   const { page: g, errors } = await phone(browser, mock);
   await g.goto(`${BASE}/new`, { waitUntil: "networkidle" });
-  const row = g.locator("[role=tabpanel]:not([hidden]) li", { hasText: "舊資料庫" });
+  const row = g.locator("main li", { hasText: "舊資料庫" });
   await row.waitFor();
   assert.equal(await row.locator('button[aria-label*="讚"]').count(), 0, "列表沒有讚");
   await row.locator('button[aria-label^="播放"]').click();

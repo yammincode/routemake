@@ -2453,6 +2453,67 @@ select tests.ok('角色：不用角色後是 null', (select climber from public.
 reset role;
 select tests.throws('角色：資料庫也擋不合格的值（check）', format($q$update public.profiles set climber = '{"hair":"mohawk"}' where id = %L$q$, :CL));
 
+-- ---------------------------------------------------------------------
+-- 官方 beta（0055）：那一館的員工放、一條路線一支、換新的刪舊的、不算 24 小時 15 支、留言關閉也能放
+-- ---------------------------------------------------------------------
+reset role; select tests.login(null);
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y)
+values ((select v from ids where k = 'zoneA'), 'A1-BT', 4, '紅', 10, 10);
+insert into ids select 'bt', id from public.routes where code = 'A1-BT';
+create temp table bp (k text primary key, v text);
+grant all on bp to anon, authenticated;
+insert into bp select 's1', format('mingde/%s/%s/s1.mp4', (select v from ids where k = 'bt'), :ST);
+insert into bp select 's2', format('mingde/%s/%s/s2.mp4', (select v from ids where k = 'bt'), :ST);
+insert into bp select 'm1', format('mingde/%s/%s/m1.mp4', (select v from ids where k = 'bt'), :MG);
+insert into bp select 'a1', format('mingde/%s/%s/ba1.mp4', (select v from ids where k = 'bt'), :A);
+insert into bp select 'o1', format('mingde/%s/%s/o1.mp4', (select v from ids where k = 'bt'), :ST2);
+set role authenticated; select tests.login(:ST);
+select tests.lives('官方 beta：定線員上傳影片檔', format($q$insert into storage.objects (bucket_id, name, metadata) values ('route-videos', %L, '{"size":1000}')$q$, (select v from bp where k = 's1')));
+select tests.lives('官方 beta：定線員放官方 beta', format($q$insert into public.route_videos (route_id, path, status, climbed_on, duration_s, size_bytes, is_beta) values (%L, %L, 'flash', '2020-01-01', 20, 1000, true)$q$, (select v from ids where k = 'bt'), (select v from bp where k = 's1')));
+select tests.ok('官方 beta：不帶分享者的 Flash／完攀和攀爬日', (select status is null and climbed_on is null and is_beta from public.route_videos where path = (select v from bp where k = 's1')));
+reset role;
+set role authenticated; select tests.login(:A);
+select tests.lives('官方 beta：顧客上傳自己的影片檔', format($q$insert into storage.objects (bucket_id, name, metadata) values ('route-videos', %L, '{"size":1000}')$q$, (select v from bp where k = 'a1')));
+select tests.throws('官方 beta：顧客不能放官方 beta', format($q$insert into public.route_videos (route_id, path, is_beta) values (%L, %L, true)$q$, (select v from ids where k = 'bt'), (select v from bp where k = 'a1')), 'row-level security');
+select tests.throws('官方 beta：顧客不能把影片改成官方 beta', $q$update public.route_videos set is_beta = true$q$);
+select tests.ok('官方 beta：大家看得到是官方 beta', (select count(*) = 1 from public.route_videos where route_id = (select v from ids where k = 'bt') and is_beta));
+reset role;
+set role authenticated; select tests.login(:ST2);
+select tests.lives('官方 beta：別館定線員在明德只是顧客，可以上傳自己的影片檔', format($q$insert into storage.objects (bucket_id, name, metadata) values ('route-videos', %L, '{"size":1000}')$q$, (select v from bp where k = 'o1')));
+select tests.throws('官方 beta：別館定線員不能放明德的官方 beta', format($q$insert into public.route_videos (route_id, path, is_beta) values (%L, %L, true)$q$, (select v from ids where k = 'bt'), (select v from bp where k = 'o1')), 'row-level security');
+reset role;
+-- 店長再放一支：換掉定線員那支（舊的資料刪掉、寫操作紀錄）；路線留言關掉照樣能放
+update public.routes set comments_enabled = false where id = (select v from ids where k = 'bt');
+set role authenticated; select tests.login(:MG);
+select tests.lives('官方 beta：留言關掉時員工照樣能上傳', format($q$insert into storage.objects (bucket_id, name, metadata) values ('route-videos', %L, '{"size":1000}')$q$, (select v from bp where k = 'm1')));
+select tests.lives('官方 beta：店長再放一支', format($q$insert into public.route_videos (route_id, path, is_beta) values (%L, %L, true)$q$, (select v from ids where k = 'bt'), (select v from bp where k = 'm1')));
+select tests.throws('官方 beta：留言關掉時一般影片不能分享', format($q$insert into public.route_videos (route_id, path) values (%L, %L)$q$, (select v from ids where k = 'bt'), (select v from bp where k = 'm1')));
+reset role;
+select tests.ok('官方 beta：一條路線只有一支，舊的被換掉',
+  (select count(*) = 1 and bool_and(path = (select v from bp where k = 'm1')) from public.route_videos where route_id = (select v from ids where k = 'bt') and is_beta)
+  and not exists (select 1 from public.route_videos where path = (select v from bp where k = 's1')));
+select tests.ok('官方 beta：寫操作紀錄（第二次寫換掉了誰的）',
+  (select count(*) = 2 from public.audit_log where action = 'video.beta')
+  and exists (select 1 from public.audit_log where action = 'video.beta' and (detail ->> 'replaced')::boolean and detail ->> 'old_author_nickname' = (select nickname from public.profiles where id = :ST) and detail ->> 'code' = 'A1-BT'));
+select tests.throws('官方 beta：資料庫也擋一條路線兩支', format($q$insert into public.route_videos (route_id, user_id, path, is_beta) values (%L, %L, 'x/y/z.mp4', true)$q$, (select v from ids where k = 'bt'), :MG));
+select tests.login(null);
+update public.routes set comments_enabled = true where id = (select v from ids where k = 'bt');
+-- 不算 24 小時 15 支：定線員已經分享 15 支一般影片，一般的擋下、官方 beta 照樣能放
+insert into public.route_videos (route_id, user_id, path, created_at)
+  select (select v from ids where k = 'v70'), :ST, format('mingde/x/%s/n%s.mp4', :ST, g), now() from generate_series(1, 15) g;
+set role authenticated; select tests.login(:ST);
+select tests.lives('官方 beta：分享滿 15 支時照樣能上傳', format($q$insert into storage.objects (bucket_id, name, metadata) values ('route-videos', %L, '{"size":1000}')$q$, (select v from bp where k = 's2')));
+select tests.throws('官方 beta：一般影片滿 15 支擋下', format($q$insert into public.route_videos (route_id, path) values (%L, %L)$q$, (select v from ids where k = 'bt'), (select v from bp where k = 's2')), '15 支');
+select tests.lives('官方 beta：滿 15 支照樣能放官方 beta', format($q$insert into public.route_videos (route_id, path, is_beta) values (%L, %L, true)$q$, (select v from ids where k = 'bt'), (select v from bp where k = 's2')));
+reset role; select tests.login(null);
+delete from public.route_videos where user_id = :ST and path like 'mingde/x/%';
+-- 下架時一起刪
+update public.routes set archived_at = now() where id = (select v from ids where k = 'bt');
+select tests.ok('官方 beta：路線下架時一起刪', not exists (select 1 from public.route_videos where route_id = (select v from ids where k = 'bt')));
+set role authenticated; select tests.login(:ST);
+select tests.ok('官方 beta：下架的路線不能再放', not public.can_share_beta((select v from ids where k = 'bt')));
+reset role;
+
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));
 

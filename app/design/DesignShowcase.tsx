@@ -35,7 +35,7 @@ import { SlamTicket } from "@/components/ui/Slam";
 import { AccountSummary, ResetCodeBox, SuspendedLine, SuspendNotice, ToggleButton } from "@/components/ui/Account";
 import { CalendarHeat, DailyBars, DaySummary, Delta, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
-import { PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
+import { BetaBadge, BetaBar, PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
 import { fakeWall } from "@/lib/demo";
 import {
@@ -899,28 +899,27 @@ export default function DesignShowcase() {
         <SortList items={order.map((n) => ({ id: n, label: n }))} onChange={setOrder} />
       </Block>
 
-      <Block title="New~（大家最新的影片、留言）">
-        <p className="mt-0 mb-1.5 text-meta text-muted">影片一列多一行「哪條路線」（VideoCard place＋RouteTag）；留言下面多一行路線和「看路線 ›」（CommentItem place、onOpen），長留言最多 3 行（clamp）</p>
+      <Block title="New~（大家最新的影片）">
+        <p className="mt-0 mb-1.5 text-meta text-muted">影片一列多一行「哪條路線」（VideoCard place＋RouteTag）；10/21 拿掉留言分頁，只放影片</p>
         <VideoList>
           <VideoRow
             v={{ ...DEMO_VIDEOS[0], place: <RouteTag grade={4}>中和館・抱石 A 區・A-03</RouteTag> }}
             onClick={() => toast("播放")}
           />
         </VideoList>
-        <div className="mt-2">
-          <CommentList>
-            <CommentItem
-              name="小安"
-              ago="今天"
-              body="第三手好遠，矮個子可以先踩右邊那顆小點再換手；最後一手要相信自己直接丟上去，不要猶豫，腳一定要踩穩才不會滑掉，這條真的很好玩"
-              likes={5}
-              onLike={() => toast("👍")}
-              clamp
-              place={<RouteTag grade={6}>明德館・B 區・B-07</RouteTag>}
-              onOpen={() => toast("打開路線卡片（留言分頁）")}
-            />
-          </CommentList>
+      </Block>
+
+      <Block title="官方 beta（BetaBar、BetaBadge、VideoCard beta）">
+        <p className="mt-0 mb-1.5 text-meta text-muted">路線卡片評語下面一條「看官方 beta」（不下載縮圖和影片，點了全螢幕播放）；影片分頁排最上面：酒紅框、「官方 beta」標籤、縮圖蓋住寫「會暴雷」</p>
+        <BetaBar name="阿凱" duration={24} onClick={() => toast("播放官方 beta")} />
+        <div className="mt-3">
+          <VideoList>
+            <VideoRow v={{ key: "beta", name: "阿凱", ago: "今天分享", duration: 24, beta: true, likes: 3, onLike: () => toast("👍") }} onClick={() => toast("播放")} />
+          </VideoList>
         </div>
+        <p className="mt-2 mb-0 text-meta">
+          <BetaBadge /> 小標籤（全螢幕播放的名字前面也有）
+        </p>
       </Block>
 
       <Block title="顧客影片">
