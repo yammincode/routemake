@@ -52,7 +52,7 @@ export function ClimbDay({ value, min, max, disabled = false, onChange }: { valu
               {["今天", "昨天", "前天"][n]}
             </Chip>
           ))}
-          <Chip pressed={custom || !quick.some((q) => q.d === value)} onClick={() => setCustom(!custom)}>
+          <Chip pressed={custom || !quick.some((q) => q.d === value)} onClick={() => (setCustom(!custom), setOutside(false))}>
             📅 選日期
           </Chip>
         </div>
@@ -69,6 +69,7 @@ export function ClimbDay({ value, min, max, disabled = false, onChange }: { valu
           onChange={(e) => {
             const d = e.target.value;
             setDraft(d);
+            setOutside(false);
             clearTimeout(typing.current);
             if (d) typing.current = setTimeout(() => pick(d), 800);
           }}

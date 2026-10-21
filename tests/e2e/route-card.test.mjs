@@ -101,8 +101,8 @@ test("攀爬日膠囊：預設今天；先選昨天再按完攀就記昨天；�
   assert.match(await day.locator("[role=alert]").textContent(), new RegExp(`只能選 ${md(taipeiDay(-7))}～${md(taipeiDay(0))}`), "選太早寫可以選的範圍");
   assert.ok((await pill.textContent()).includes("今天"), "選太早不改");
   await day.locator("input[type=date]").fill(taipeiDay(-7));
+  assert.equal(await day.locator("[role=alert]").count(), 0, "改日期時紅字先拿掉");
   await page.waitForTimeout(1200);
-  assert.equal(await day.locator("[role=alert]").count(), 0, "選對了說明就拿掉");
   assert.ok((await pill.textContent()).includes(md(taipeiDay(-7))));
   await dlg.locator('button:has-text("完攀")').first().click();
   await page.waitForTimeout(600);
