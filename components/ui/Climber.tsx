@@ -25,16 +25,36 @@ import {
 import { climberBgSvg, climberHeadSvg, climberSvg } from "@/lib/climber-art";
 import { mascotInfo, type MascotMode, type MascotPick } from "@/lib/mascots";
 
-// 攀岩角色全身（B 貼紙線稿）；填滿外面的框（寬:高＝120:200）
+// 角色的圖畫成 <img src="data:…">：每張圖的 filter、pattern id 各自獨立（同一頁很多頭像也不會互相找錯），
+// 白邊濾鏡只在第一次畫時算，捲動長長的留言列表不會一直重算；同樣的角色（同一個人）整個 App 共用一份
+const urls = new Map<string, string>();
+const svgUrl = (key: string, make: () => string) => {
+  let u = urls.get(key);
+  if (!u) {
+    u = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(make())}`;
+    if (urls.size > 300) urls.clear();
+    urls.set(key, u);
+  }
+  return u;
+};
+const keyOf = (kind: string, c: Climber) => `${kind}:${JSON.stringify(c)}`;
+
+// 攀岩角色全身（B 貼紙線稿）；填滿外面的框（寬:高＝144:224，四周有留白給岩點和白邊）
 export function ClimberArt({ climber, className = "" }: { climber: Climber; className?: string }) {
-  const svg = useMemo(() => climberSvg(climber), [climber]);
-  return <span data-climber={climber.pose} className={`block overflow-visible [&>svg]:block [&>svg]:size-full ${className}`} dangerouslySetInnerHTML={{ __html: svg }} />;
+  const src = useMemo(() => svgUrl(keyOf("body", climber), () => climberSvg(climber)), [climber]);
+  return (
+    <span data-climber={climber.pose} className={`block ${className}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- 程式畫的 SVG（data URI），不用 next/image */}
+      <img src={src} alt="" draggable={false} className="block size-full select-none" />
+    </span>
+  );
 }
 
 // 背景（人物卡上半段、解鎖卡）
 function ClimberBg({ climber }: { climber: Climber }) {
-  const svg = useMemo(() => climberBgSvg(climber), [climber]);
-  return <span aria-hidden className="absolute inset-0 [&>svg]:block [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: svg }} />;
+  const src = useMemo(() => svgUrl(`bg:${climber.bg}:${climber.bg === "plain" ? climber.topC : ""}`, () => climberBgSvg(climber)), [climber]);
+  // eslint-disable-next-line @next/next/no-img-element -- 程式畫的 SVG（data URI）
+  return <img src={src} alt="" aria-hidden draggable={false} className="absolute inset-0 block size-full object-cover select-none" />;
 }
 
 // 小頭像底色：跟背景同色系的淡色
@@ -42,7 +62,7 @@ const HEAD_BG: Record<string, string> = { longdong: "#cfeaf7", wall: "#efe4d2", 
 
 // 圓形小頭像（留言、影片旁）：只畫頭
 export function ClimberHead({ climber, size = 22, label }: { climber: Climber; size?: number; label?: string }) {
-  const svg = useMemo(() => climberHeadSvg(climber), [climber]);
+  const src = useMemo(() => svgUrl(keyOf("head", climber), () => climberHeadSvg(climber)), [climber]);
   const bg = HEAD_BG[climber.bg] ?? `${climberColor("topC", climber.topC)}33`;
   return (
     <span
@@ -51,9 +71,11 @@ export function ClimberHead({ climber, size = 22, label }: { climber: Climber; s
       aria-hidden={label ? undefined : true}
       data-climber-head
       style={{ width: size, height: size, background: bg }}
-      className="grid flex-none place-items-center overflow-hidden rounded-full [&>svg]:block [&>svg]:size-full"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
+      className="grid flex-none place-items-center overflow-hidden rounded-full"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- 程式畫的 SVG（data URI） */}
+      <img src={src} alt="" draggable={false} className="block size-full select-none" />
+    </span>
   );
 }
 
@@ -78,7 +100,7 @@ export function ClimberScene({
       <span className={`absolute bottom-[5%] left-[5%] ${small ? "size-[70px]" : "size-[104px]"}`}>
         <MascotArt pick={pick} mode={mode} className="size-full" />
       </span>
-      <ClimberArt climber={climber} className="absolute right-[12%] bottom-[2%] aspect-[120/200] h-[86%]" />
+      <ClimberArt climber={climber} className="absolute right-[9%] bottom-0 aspect-[144/224] h-[97%]" />
       {children}
     </div>
   );
@@ -106,7 +128,7 @@ export function UnlockCard({
           <div className="relative h-[170px] overflow-hidden rounded-card">
             <ClimberBg climber={tryOn} />
             <span className="absolute top-2 left-2 rounded-full bg-ink/80 px-2 text-tiny font-bold text-white">試穿</span>
-            {item.key !== "bg" && <ClimberArt climber={tryOn} className="absolute bottom-[2%] left-1/2 aspect-[120/200] h-[90%] -translate-x-1/2" />}
+            {item.key !== "bg" && <ClimberArt climber={tryOn} className="absolute bottom-0 left-1/2 aspect-[144/224] h-full -translate-x-1/2" />}
           </div>
           <h3 className="m-0 text-section font-bold">🔒 {climberItemName(item.key, item.v)}</h3>
           <p className="m-0 font-bold text-accent">{"sp" in r ? r.sp : `${lockCond(r)}解鎖`}</p>

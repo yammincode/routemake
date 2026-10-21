@@ -40,6 +40,8 @@ export async function checkUnlocks(uid: string) {
   }
   if (!next) return;
   const prev = read(uid);
+  // 記下來的只往上加：刪了紀錄又爬回來、兩次記錄的回覆順序顛倒，都不會再說一次已經說過的
+  if (prev) next = { days: Math.max(prev.days, next.days), rope: Math.max(prev.rope, next.rope), flash: Math.max(prev.flash, next.flash), v5: Math.max(prev.v5, next.v5) };
   write(uid, next);
   if (!prev) return;
   const names = newlyUnlocked(prev, next);

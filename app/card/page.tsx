@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import MyCardEditor from "@/components/MyCardEditor";
 import { PageTitle } from "@/components/ui/Card";
 import CardHeader from "./CardHeader";
@@ -11,7 +12,10 @@ export default function CardPage() {
     <>
       <CardHeader />
       <PageTitle sub="讓留言、影片旁的名字多一點介紹；不是交友功能，沒有私訊">人物卡</PageTitle>
-      <MyCardEditor />
+      {/* 編輯人物卡讀網址（?edit=climber）：要包 Suspense，頁面才能先靜態產生 */}
+      <Suspense>
+        <MyCardEditor />
+      </Suspense>
     </>
   );
 }

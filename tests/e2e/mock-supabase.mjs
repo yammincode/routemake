@@ -680,7 +680,9 @@ export function createMock() {
       const ok = v == null || (typeof v === "object" && !Array.isArray(v) && Object.entries(v).every(([k, x]) => CLIMBER_VALUES[k]?.includes(x)));
       if (!ok) return J(route, 400, { code: "22023", message: "角色的款式不對，請重新選一次" });
       const st = climbStats(uid);
-      const locked = v && Object.entries(v).some(([k, x]) => {
+      // 跟 0054 一樣只檢查這次換掉的款式（已經穿著的照樣留著）
+      const old = prof(uid).climber ?? {};
+      const locked = v && Object.entries(v).filter(([k, x]) => old[k] !== x).some(([k, x]) => {
         const r = CLIMBER_RULES[`${k}:${x}`];
         return r && (r.sp || st[r.t] < r.n);
       });

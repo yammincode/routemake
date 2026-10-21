@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { cardMeta, mascotIntro, topGrades } from "@/components/ProfileSheet";
 import { Button } from "@/components/ui/Button";
@@ -55,13 +55,16 @@ export default function MyCardEditor() {
   const [climberDraft, setClimberDraft] = useState<Climber | null | undefined>(undefined);
   const [stats, setStats] = useState<ClimbStats | null>(null);
 
-  // 從「解鎖新款式」點過來（/card?edit=climber）：直接打開編輯
-  // （網址要等到瀏覽器上才讀得到；放進 setTimeout：伺服器和第一次畫的一樣，不會對不上）
+  // 從「解鎖新款式」點過來（/card?edit=climber，已經在人物卡也一樣）：打開編輯，網址換回 /card（重新整理、返回不會又打開）
+  const editParam = useSearchParams().get("edit");
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("edit") !== "climber") return;
-    const t = setTimeout(() => setEditing(true), 0);
+    if (editParam !== "climber") return;
+    const t = setTimeout(() => {
+      setEditing(true);
+      router.replace("/card");
+    }, 0);
     return () => clearTimeout(t);
-  }, []);
+  }, [editParam, router]);
   // 打開編輯才讀攀岩數字（每次打開讀一次：剛記的完攀也算進去）
   useEffect(() => {
     if (!editing || !uid) return;
@@ -108,29 +111,30 @@ export default function MyCardEditor() {
       const kept = await saveMyCard({ public: pub, bio, years, home_gyms: homes, self_stats: selfDone });
       setHomes(kept);
       setCard({ ...card, public: pub, bio: bio.trim() || null, years, home_gym: kept[0] ?? null, ...(multi ? { home_gyms: kept } : {}), self_stats: selfDone });
-      // 攀岩角色有改才存（還沒解鎖的資料庫會擋）
+      // 攀岩角色、夥伴有改才存；一個存不進去另一個照樣存（還沒解鎖的款式資料庫會擋；還沒套用 step41／48 只說那一個存不了）
+      const failed: string[] = [];
       if (climberDraft !== undefined && JSON.stringify(climberDraft) !== JSON.stringify(myClimber ?? null)) {
         try {
           await saveMyClimber(climberDraft);
           rememberClimber(uid, climberDraft);
           setClimberDraft(undefined);
         } catch (e) {
-          toast(`人物卡已儲存，但攀岩角色沒存到：${(e as Error).message}`);
-          setBusy(false);
-          return;
+          failed.push(`攀岩角色沒存到：${(e as Error).message}`);
         }
       }
-      // 夥伴有改才存（資料庫還沒套用 step41 時人物卡照樣存好，只說夥伴存不了）
       if (draft && JSON.stringify(pickPayload(draft)) !== JSON.stringify(pickPayload(mine ?? DEFAULT_MASCOT))) {
         try {
           await saveMyMascot(pickPayload(draft));
           rememberMascot(uid, draft);
           setDraft(null);
         } catch (e) {
-          toast(`人物卡已儲存，但夥伴沒存到：${(e as Error).message}`);
-          setBusy(false);
-          return;
+          failed.push(`夥伴沒存到：${(e as Error).message}`);
         }
+      }
+      if (failed.length) {
+        toast(`人物卡已儲存，但${failed.join("；")}`);
+        setBusy(false);
+        return;
       }
       toast(pub ? "已儲存，人物卡已公開" : "已儲存，人物卡只有你看得到");
       setEditing(false);

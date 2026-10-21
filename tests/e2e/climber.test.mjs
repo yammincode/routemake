@@ -118,8 +118,8 @@ test("記完攀剛好解鎖：夥伴跳出來說解鎖了什麼，點了到人�
   await page.waitForFunction(() => document.querySelector("[data-testid=mascot-toast]")?.textContent.includes("解鎖新款式"), null, { timeout: 8000 });
   assert.ok((await toast.textContent()).includes("腳跟勾"), await toast.textContent());
   await toast.click();
-  await page.waitForURL(/\/card\?edit=climber/);
   await page.waitForSelector('main button:text-is("做我的攀岩角色")');
+  await page.waitForURL((u) => u.pathname === "/card" && !u.search, { timeout: 5000 });
   assert.deepEqual(errors, []);
 });
 

@@ -1,5 +1,5 @@
 // 攀岩角色的圖（B 貼紙線稿：白邊＋深色細線，使用者 10/21 選的）：回傳 SVG 字串，元件用 dangerouslySetInnerHTML 畫
-// 人：viewBox 0 0 120 200（腳底 y190）；頭：中心 x60、頭頂 y22、左右 x36–84、下巴 y80
+// 人：座標 0 0 120 200（腳底 y190；畫出來四周多留 12，viewBox -12 -12 144 224）；頭：中心 x60、頭頂 y22、左右 x36–84、下巴 y80
 // 頭髮分兩層：back 畫在頭後面、front（頭頂和瀏海）蓋在臉上；頭頂比頭大一圈、髮際線在眉毛上面；帽子最後畫，壓在頭髮上
 // 背景：viewBox 0 0 400 250
 import { climberColor, type Climber } from "./climber";
@@ -22,7 +22,7 @@ const light = (hex: string) => {
   return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 165;
 };
 
-// 貼紙外框：白邊 3.6＋深色線 1.5（每張圖都帶一份，同名同內容，哪張先載都一樣）
+// 貼紙外框：白邊 3.6＋深色線 1.5（每張圖自己帶一份；畫成 <img>，id 不會跟別張打架）
 const FILTER = `<defs><filter id="clOl" x="-15%" y="-15%" width="130%" height="130%"><feMorphology in="SourceAlpha" operator="dilate" radius="3.6" result="w"/><feFlood flood-color="#ffffff"/><feComposite in2="w" operator="in" result="wo"/><feMorphology in="SourceAlpha" operator="dilate" radius="1.5" result="d"/><feFlood flood-color="#2a1d1a"/><feComposite in2="d" operator="in" result="do"/><feMerge><feMergeNode in="wo"/><feMergeNode in="do"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
 
 // ---------- 頭髮 ----------
@@ -258,7 +258,7 @@ function headParts(o: Climber) {
 // 小頭像：只畫頭（留言、影片旁）
 export function climberHeadSvg(o: Climber) {
   const { back, parts } = headParts(o);
-  return `<svg viewBox="24 4 72 72" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${FILTER}<g filter="url(#clOl)">${back}${parts}</g></svg>`;
+  return `<svg viewBox="24 4 72 72" xmlns="http://www.w3.org/2000/svg">${FILTER}<g filter="url(#clOl)">${back}${parts}</g></svg>`;
 }
 
 // 全身
@@ -412,7 +412,8 @@ export function climberSvg(o: Climber) {
   const body = `${backItem}${hoodBack}${neck}${legs}${shoes}${torso}${straps}${harness}${gear}${rope}${arms}${bag}`;
   const lift = PO.lift ? ` transform="translate(0 ${PO.lift})"` : "";
   const motion = PO.lift ? `<path d="M30 182 h-12 M92 184 h12 M60 190 v10 M42 192 l-5 7 M78 192 l5 7" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".9"/>` : "";
-  return `<svg viewBox="0 0 120 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="overflow:visible">${FILTER}${motion}<g${lift}><g filter="url(#clOl)">${holds}</g><g filter="url(#clOl)">${back}${body}${parts}</g></g></svg>`;
+  // 畫成 <img>：框外的不會畫，所以四周多留 12（岩點、白邊、Dyno 的線）；外面的框要用 144:224
+  return `<svg viewBox="-12 -12 144 224" xmlns="http://www.w3.org/2000/svg">${FILTER}${motion}<g${lift}><g filter="url(#clOl)">${holds}</g><g filter="url(#clOl)">${back}${body}${parts}</g></g></svg>`;
 }
 
 // ---------- 背景（人物卡上半段）----------
@@ -470,5 +471,5 @@ export function climberBgSvg(o: Climber) {
     wanhua: () =>
       `<rect width="400" height="250" fill="#a9d8ef"/><rect x="20" y="20" width="360" height="200" fill="#ece6dc"/><rect x="20" y="20" width="360" height="12" fill="#d8d0c2"/><rect x="40" y="44" width="320" height="38" rx="6" fill="#6959B2"/><text x="200" y="71" text-anchor="middle" font-family="Noto Sans TC,sans-serif" font-weight="900" font-size="22" fill="#fff">原岩攀岩館 萬華</text><rect x="40" y="96" width="120" height="110" rx="4" fill="#9fc3d6"/><rect x="240" y="96" width="120" height="110" rx="4" fill="#9fc3d6"/><rect x="170" y="100" width="60" height="106" fill="#5b4a3c"/><circle cx="220" cy="156" r="3" fill="#F5B700"/><rect y="206" width="400" height="44" fill="#9b9b94"/>`,
   };
-  return `<svg viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${(BG[o.bg] ?? BG.longdong)()}</svg>`;
+  return `<svg viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">${(BG[o.bg] ?? BG.longdong)()}</svg>`;
 }

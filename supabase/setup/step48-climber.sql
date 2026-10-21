@@ -89,8 +89,12 @@ language sql immutable set search_path = '' as $$
 $$;
 
 -- 存自己的角色（null＝不用角色，只用夥伴）
+-- 只檢查這次換掉的款式：已經穿著的照樣留著（刪了紀錄、天數變少，也不會連換髮型都存不進去）
 create or replace function public.save_my_climber(p_climber jsonb) returns void
 language plpgsql security definer set search_path = '' as $$
+declare
+  v_old jsonb := (select p.climber from public.profiles p where p.id = auth.uid());
+  v_new jsonb;
 begin
   if auth.uid() is null then
     raise exception '請先登入' using errcode = '42501';
@@ -98,8 +102,12 @@ begin
   if not public.climber_ok(p_climber) then
     raise exception '角色的款式不對，請重新選一次' using errcode = '22023';
   end if;
-  if p_climber is not null and public.climber_locked(p_climber, public.climb_stats(auth.uid())) is not null then
-    raise exception '有款式還沒解鎖，請重新選一次' using errcode = '22023';
+  if p_climber is not null then
+    v_new := coalesce((select jsonb_object_agg(e.key, e.value) from jsonb_each(p_climber) e
+                        where (v_old -> e.key) is distinct from e.value), '{}'::jsonb);
+    if public.climber_locked(v_new, public.climb_stats(auth.uid())) is not null then
+      raise exception '有款式還沒解鎖，請重新選一次' using errcode = '22023';
+    end if;
   end if;
   update public.profiles set climber = p_climber where id = auth.uid();
 end $$;

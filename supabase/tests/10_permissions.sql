@@ -2412,6 +2412,14 @@ select tests.throws('角色：確保要上攀完攀 1 條', $q$select public.sav
 select tests.lives('角色：完攀一條上攀', format('insert into public.ascents (route_id, status) values (%L, ''send'')', (select v from ids where k = 'clYds')));
 select tests.ok('角色：5.x 算上攀、不算 V5 以上', public.my_climb_stats() ->> 'rope' = '1' and public.my_climb_stats() ->> 'v5' = '1');
 select tests.lives('角色：上攀 1 條就能確保、黑色吊帶', $q$select public.save_my_climber('{"pose":"belay","harness":"black"}')$q$);
+reset role;
+delete from public.ascents where user_id = :CL and route_id = (select v from ids where k = 'clYds');
+set role authenticated; select tests.login(:CL);
+select tests.lives('角色：刪了紀錄（上攀變 0），已經穿著的確保照樣留著、可以換別的', $q$select public.save_my_climber('{"pose":"belay","harness":"black","hair":"bun"}')$q$);
+select tests.throws('角色：可是不能再換成別的還沒解鎖的', $q$select public.save_my_climber('{"pose":"belay","harness":"black","hair":"bun","bg":"night"}')$q$, '還沒解鎖');
+reset role;
+insert into public.ascents (user_id, route_id, status) values (:CL, (select v from ids where k = 'clYds'), 'send');
+set role authenticated; select tests.login(:CL);
 select tests.throws('角色：快扣要上攀 10 條', $q$select public.save_my_climber('{"gear":"qd"}')$q$, '還沒解鎖');
 select tests.throws('角色：特殊獎品（金色）現在存不進去', $q$select public.save_my_climber('{"topC":"gold"}')$q$, '還沒解鎖');
 select tests.throws('角色：特殊獎品（萬華門口）現在存不進去', $q$select public.save_my_climber('{"bg":"wanhua"}')$q$, '還沒解鎖');

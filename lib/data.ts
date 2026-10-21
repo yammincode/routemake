@@ -1139,7 +1139,21 @@ let mascotDb = true;
 export const mascotSupported = () => mascotDb;
 // 一次讀好幾個人的夥伴和攀岩角色（沒選的人回 null）
 // 資料庫還沒套用 step48（沒有 climber 欄位）：只讀夥伴，大家都還沒有角色
-let climberDb = true;
+// （這次打開 App 試過沒有就記在 sessionStorage，換頁、重新整理不用再試一次）
+const NO_CLIMBER_KEY = "routemake:no-climber";
+let climberDb = (() => {
+  try {
+    return sessionStorage.getItem(NO_CLIMBER_KEY) !== "1";
+  } catch {
+    return true;
+  }
+})();
+const noClimberDb = () => {
+  climberDb = false;
+  try {
+    sessionStorage.setItem(NO_CLIMBER_KEY, "1");
+  } catch {}
+};
 export const climberSupported = () => climberDb;
 export async function getMascots(userIds: string[]): Promise<Record<string, { mascot: unknown; climber: unknown }>> {
   if (!mascotDb || !userIds.length) return {};
@@ -1147,7 +1161,7 @@ export async function getMascots(userIds: string[]): Promise<Record<string, { ma
   let r = await read(climberDb ? "id,mascot,climber" : "id,mascot");
   // （不看 climberDb：同一時間 my_climb_stats 可能已經先把它改成 false，這裡照樣要重讀，不然會當成連夥伴都沒有）
   if (NO_COLUMN.has(r.error?.code ?? "") && /climber/.test(r.error?.message ?? "")) {
-    climberDb = false;
+    noClimberDb();
     r = await read("id,mascot");
   }
   if (NO_COLUMN.has(r.error?.code ?? "")) {
@@ -1226,7 +1240,7 @@ export const NO_CLIMBER = "資料庫還沒套用攀岩角色（step48），請�
 export async function getClimbStats(): Promise<ClimbStats | null> {
   const r = await supabase().rpc("my_climb_stats");
   if (r.error?.code === "PGRST202") {
-    climberDb = false;
+    noClimberDb();
     return null;
   }
   return must(r) as ClimbStats | null;
