@@ -860,15 +860,12 @@ test("省流量：影片列表只放縮圖（沒有縮圖是灰色方塊）、�
   await c.keyboard.press("Escape");
   await c.waitForTimeout(200);
 
-  // New~：影片、留言分頁都沒有 <video>
+  // New~：影片列表沒有 <video>
   const before = videoReqs.length;
   await c.goto(BASE + "/new", { waitUntil: "networkidle" });
   await c.waitForTimeout(600);
-  assert.equal(await c.locator('main [role=tabpanel] li button[aria-label^="播放"]').count(), 2);
+  assert.equal(await c.locator('main li button[aria-label^="播放"]').count(), 2);
   assert.equal(await c.locator("main video").count(), 0, "New~ 的影片列表沒有 <video>");
-  await c.click('[role=tab]:has-text("留言")');
-  await c.waitForTimeout(300);
-  assert.equal(await c.locator("video").count(), 0);
   assert.equal(videoReqs.length, before, "New~ 沒有下載影片");
 
   // 後台的影片區也一樣

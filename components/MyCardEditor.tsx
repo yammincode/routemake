@@ -9,12 +9,12 @@ import { Button } from "@/components/ui/Button";
 import { SectionTitle } from "@/components/ui/Card";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { Label, Rating, Segmented, TextArea, Toggle } from "@/components/ui/Form";
-import { ClimberEditor } from "@/components/ui/Climber";
-import { CharacterTop, MascotColors, MascotPicker } from "@/components/ui/Mascot";
+import { ClimberRoom } from "@/components/ui/Climber";
+import { CharacterTop } from "@/components/ui/Mascot";
 import { HexChart, ProfileCardView } from "@/components/ui/Profile";
 import { SetBox } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
-import { DEFAULT_CLIMBER, randomClimber, type ClimbStats, type Climber } from "@/lib/climber";
+import type { ClimbStats, Climber } from "@/lib/climber";
 import {
   cardGyms,
   climberSupported,
@@ -31,7 +31,8 @@ import { GYMS } from "@/lib/gyms";
 import { rememberClimber, rememberMascot, useClimber, useMascot, useMascotMode, useTalk } from "@/lib/mascot-store";
 import { DEFAULT_MASCOT, MASCOT_MODES, mascotInfo, type MascotPick } from "@/lib/mascots";
 
-// 人物卡頁：上面是自己的人物卡（別人看到的樣子），按「編輯人物卡」修改；預設不公開；能力值依完攀自動計算，另外可以自評 1–5
+// 人物卡頁：上面是自己的人物卡（別人看到的樣子）；「👕 換裝」打開換裝室換攀岩角色和夥伴（使用者 10/21 選的 A 案）；
+// 「編輯人物卡」改自我介紹、年資、常去的館、自評；預設不公開；能力值依完攀自動計算，另外可以自評 1–5
 export default function MyCardEditor() {
   const { session, access } = useAuth();
   const toast = useToast();
@@ -45,33 +46,32 @@ export default function MyCardEditor() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const uid = session?.user.id;
-  // 原岩夥伴：draft 是編輯中還沒存的（null＝照資料庫的）
+  // 原岩夥伴、攀岩角色（step48）：在換裝室改，按「完成」才存；stats＝自己的攀岩數字（解鎖用）
   const mine = useMascot(uid, true);
-  const [draft, setDraft] = useState<MascotPick | null>(null);
+  const myClimber = useClimber(uid);
   const [mode, setMode] = useMascotMode();
   const talk = useTalk();
-  // 攀岩角色（step48）：climberDraft 是編輯中還沒存的（undefined＝照資料庫的；null＝不用角色）；stats＝自己的攀岩數字（解鎖用）
-  const myClimber = useClimber(uid);
-  const [climberDraft, setClimberDraft] = useState<Climber | null | undefined>(undefined);
+  const [room, setRoom] = useState(false);
+  const [roomBusy, setRoomBusy] = useState(false);
   const [stats, setStats] = useState<ClimbStats | null>(null);
 
-  // 從「解鎖新款式」點過來（/card?edit=climber，已經在人物卡也一樣）：打開編輯，網址換回 /card（重新整理、返回不會又打開）
+  // 從「解鎖新款式」點過來（/card?edit=climber，已經在人物卡也一樣）：打開換裝室，網址換回 /card（重新整理、返回不會又打開）
   const editParam = useSearchParams().get("edit");
   useEffect(() => {
     if (editParam !== "climber") return;
     const t = setTimeout(() => {
-      setEditing(true);
       router.replace("/card");
+      setRoom(true);
     }, 0);
     return () => clearTimeout(t);
   }, [editParam, router]);
-  // 打開編輯才讀攀岩數字（每次打開讀一次：剛記的完攀也算進去）
+  // 打開換裝室才讀攀岩數字（每次打開讀一次：剛記的完攀也算進去）
   useEffect(() => {
-    if (!editing || !uid) return;
+    if (!room || !uid) return;
     getClimbStats()
       .then(setStats)
       .catch(() => setStats(null));
-  }, [editing, uid]);
+  }, [room, uid]);
 
   useEffect(() => {
     if (!uid) return;
@@ -99,8 +99,8 @@ export default function MyCardEditor() {
   }
   if (!card) return <p className="text-note text-muted">讀取中…</p>;
   const selfDone = self.every((v) => v != null) ? (self as number[]) : null;
-  const pick = draft ?? mine ?? DEFAULT_MASCOT;
-  const climber = climberDraft !== undefined ? climberDraft : (myClimber ?? null);
+  const pick = mine ?? DEFAULT_MASCOT;
+  const climber = myClimber ?? null;
   const pickPayload = (p: MascotPick) => ({ id: p.id, colors: mascotInfo(p.id).parts.map((_, i) => p.colors?.[i] ?? null), bg: p.bg ?? null });
   const multi = card.home_gyms != null;
 
@@ -111,37 +111,38 @@ export default function MyCardEditor() {
       const kept = await saveMyCard({ public: pub, bio, years, home_gyms: homes, self_stats: selfDone });
       setHomes(kept);
       setCard({ ...card, public: pub, bio: bio.trim() || null, years, home_gym: kept[0] ?? null, ...(multi ? { home_gyms: kept } : {}), self_stats: selfDone });
-      // 攀岩角色、夥伴有改才存；一個存不進去另一個照樣存（還沒解鎖的款式資料庫會擋；還沒套用 step41／48 只說那一個存不了）
-      const failed: string[] = [];
-      if (climberDraft !== undefined && JSON.stringify(climberDraft) !== JSON.stringify(myClimber ?? null)) {
-        try {
-          await saveMyClimber(climberDraft);
-          rememberClimber(uid, climberDraft);
-          setClimberDraft(undefined);
-        } catch (e) {
-          failed.push(`攀岩角色沒存到：${(e as Error).message}`);
-        }
-      }
-      if (draft && JSON.stringify(pickPayload(draft)) !== JSON.stringify(pickPayload(mine ?? DEFAULT_MASCOT))) {
-        try {
-          await saveMyMascot(pickPayload(draft));
-          rememberMascot(uid, draft);
-          setDraft(null);
-        } catch (e) {
-          failed.push(`夥伴沒存到：${(e as Error).message}`);
-        }
-      }
-      if (failed.length) {
-        toast(`人物卡已儲存，但${failed.join("；")}`);
-        setBusy(false);
-        return;
-      }
       toast(pub ? "已儲存，人物卡已公開" : "已儲存，人物卡只有你看得到");
       setEditing(false);
     } catch (e) {
       toast((e as Error).message);
     }
     setBusy(false);
+  };
+
+  // 換裝室按「完成」：角色、夥伴有改才存；一個存不進去另一個照樣存（還沒解鎖的款式資料庫會擋；還沒套用 step41／48 只說那一個存不了）
+  const saveRoom = async (c: Climber | null, p: MascotPick) => {
+    setRoomBusy(true);
+    const failed: string[] = [];
+    if (climberSupported() && myClimber !== undefined && JSON.stringify(c) !== JSON.stringify(myClimber)) {
+      try {
+        await saveMyClimber(c);
+        rememberClimber(uid, c);
+      } catch (e) {
+        failed.push(`攀岩角色沒存到：${(e as Error).message}`);
+      }
+    }
+    if (mine && JSON.stringify(pickPayload(p)) !== JSON.stringify(pickPayload(mine))) {
+      try {
+        await saveMyMascot(pickPayload(p));
+        rememberMascot(uid, p);
+      } catch (e) {
+        failed.push(`夥伴沒存到：${(e as Error).message}`);
+      }
+    }
+    setRoomBusy(false);
+    if (failed.length) return toast(failed.join("；"));
+    toast("已換好");
+    setRoom(false);
   };
 
   const preview: ProfileCard = { ...card, years, home_gym: homes[0] ?? null, home_gyms: homes, bio: bio.trim() || null, self_stats: selfDone };
@@ -177,6 +178,27 @@ export default function MyCardEditor() {
         {card.public ? "🌐 公開中：別人在留言、影片點你的名字會看到這張卡" : "🔒 目前只有你看得到，打開「公開人物卡」別人才看得到"}
       </p>
       {cardView}
+      <Button variant="primary" className="mb-3" onClick={() => setRoom(true)}>
+        👕 換裝（攀岩角色、夥伴）
+      </Button>
+      <ClimberRoom
+        open={room}
+        climber={climber}
+        pick={pick}
+        mode={mode}
+        stats={stats}
+        climberNote={
+          !climberSupported()
+            ? "資料庫還沒更新，暫時不能做攀岩角色（請老闆在 Supabase 執行 step48）。"
+            : myClimber === undefined
+              ? "讀取你的角色中…（要連上網路才能換角色）"
+              : null
+        }
+        mascotOk={mascotSupported() && !!mine}
+        busy={roomBusy}
+        onClose={() => setRoom(false)}
+        onSave={(c, p) => void saveRoom(c, p)}
+      />
       <SetBox>
         <Toggle
           checked={talk.state !== "quiet"}
@@ -206,43 +228,6 @@ export default function MyCardEditor() {
       ) : (
         <>
           <SectionTitle>編輯人物卡</SectionTitle>
-          <SetBox>
-            <Label>攀岩角色</Label>
-            {!climberSupported() ? (
-              <p className="m-0 text-note text-muted">資料庫還沒更新，暫時不能做攀岩角色（請老闆在 Supabase 執行 step48）。</p>
-            ) : myClimber === undefined ? (
-              <p className="m-0 text-note text-muted">讀取你的角色中…（要連上網路才能換角色）</p>
-            ) : !climber ? (
-              <>
-                <p className="mt-0 mb-2 text-note text-muted">做一個自己的攀岩角色：換髮型、衣服、褲子、攀岩動作和背景，夥伴會站在旁邊。爬越多天、記越多紀錄，開放越多款式。</p>
-                <Button variant="primary" onClick={() => setClimberDraft(DEFAULT_CLIMBER)}>
-                  做我的攀岩角色
-                </Button>
-              </>
-            ) : (
-              <>
-                <ClimberEditor value={climber} onChange={setClimberDraft} stats={stats} onRandom={() => setClimberDraft(randomClimber(stats))} />
-                <p className="mt-1.5 mb-0 text-tiny text-muted">角色會出現在人物卡、留言和影片旁邊，大家都看得到（人物卡不公開也一樣）。🔒 的款式點了看怎麼解鎖。</p>
-                <button type="button" onClick={() => setClimberDraft(null)} className="mt-2 text-note font-bold text-accent">
-                  不用攀岩角色（人物卡只放夥伴）
-                </button>
-              </>
-            )}
-          </SetBox>
-          <SetBox>
-            <Label>選夥伴</Label>
-            {!mascotSupported() ? (
-              <p className="m-0 text-note text-muted">資料庫還沒更新，暫時不能選夥伴（請老闆在 Supabase 執行 step41）。</p>
-            ) : !mine ? (
-              <p className="m-0 text-note text-muted">讀取你的夥伴中…（要連上網路才能換夥伴）</p>
-            ) : (
-              <>
-                <MascotPicker value={pick.id} onChange={(id) => setDraft(id === pick.id ? pick : { id })} mode={mode} />
-                <p className="mt-1.5 mb-3 text-tiny text-muted">夥伴會出現在人物卡、留言和影片旁邊，大家都看得到（人物卡不公開也一樣）。</p>
-                <MascotColors pick={pick} onChange={setDraft} />
-              </>
-            )}
-          </SetBox>
           <SetBox>
             <Toggle checked={pub} onChange={setPub} label="公開人物卡" hint="關閉時，別人點你的名字只看得到暱稱" />
             <Label htmlFor="cbio">自我介紹（最多 60 字）</Label>
