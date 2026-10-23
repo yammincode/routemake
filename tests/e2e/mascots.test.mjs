@@ -227,7 +227,7 @@ test("夥伴說話：區域頁講這一區、記錄 Flash 破紀錄撒彩帶、�
   // 我的紀錄：講這個月
   await p.goto(`${BASE}/me`, { waitUntil: "networkidle" });
   await bubble.waitFor();
-  assert.ok((await bubble.textContent()).includes("這個月"), `我的紀錄講這個月：${await bubble.textContent()}`);
+  assert.match(await bubble.textContent(), /這個月|這週/, `我的紀錄講這個月或這週（訓練日誌）：${await bubble.textContent()}`);
 
   // 右下角小夥伴：New~ 打開時說一句；點牠換一句；🤫 閉嘴 → 今天都不說、小夥伴也不見
   const buddy = p.locator('[data-testid="mascot-buddy"]');

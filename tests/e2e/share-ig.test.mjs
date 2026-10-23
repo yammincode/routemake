@@ -166,7 +166,7 @@ test("本月完攀圖（C1）：顧客在我的紀錄分享這個月成績；背
   const B = await phone(browser, mock);
   await fakeShare(B.ctx);
   const page = B.page;
-  await login(page, "climber88", "password1", "/me");
+  await login(page, "climber88", "password1", "/me?tab=month");
   await page.waitForTimeout(800);
   const m = +taipeiDay(0).slice(5, 7);
   const btn = page.locator(`main button:has-text("分享 ${m} 月成績到 IG")`);

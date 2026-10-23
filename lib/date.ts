@@ -34,3 +34,7 @@ export const videoWhen = (climbedOn: string | null | undefined, sharedAt: string
 
 // 幾天前的日期（0 = 今天，台北時間）
 export const daysAgoYmd = (n: number) => ymd(Date.now() - n * DAY);
+
+// 攀爬日最早可以選到路線放上 App 前 7 天（定線員常常先上牆、過幾天才放上 App；資料庫 step50 也是這樣檢查）
+export const CLIMB_GRACE_DAYS = 7;
+export const climbMinYmd = (createdAt: string) => ymd(new Date(createdAt).getTime() - CLIMB_GRACE_DAYS * DAY);

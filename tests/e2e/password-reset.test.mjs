@@ -2,7 +2,7 @@
 // 打錯、過期的說明；作廢；我的紀錄「改密碼」（要先輸入現在的密碼）；還沒套用 step43 時說明請洽櫃檯
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { BASE, createMock, launch, login, phone } from "./helpers.mjs";
+import { BASE, createMock, launch, login, phone, openAccount } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -106,6 +106,7 @@ test("我的紀錄：改密碼要先輸入現在的密碼", async () => {
   const p = C.page;
   await login(p, "climber88", "oldpass11", "/me");
   await p.waitForTimeout(800);
+  await openAccount(p);
   await p.click('main button:text-is("改密碼")');
   await p.fill("#pw-old", "wrongpass1");
   await p.fill("#pw-new", "newpass99");

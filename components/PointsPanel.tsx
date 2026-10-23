@@ -5,7 +5,9 @@ import { SectionTitle } from "@/components/ui/Card";
 import { DailyBars, StatGrid, StatTile } from "@/components/ui/Stats";
 import type { PointsSummary } from "@/lib/data";
 
-// 我的紀錄 → 積分：今天、本月、最高分的一天、連續攀爬；成長比較；每日積分直條圖
+// 我的紀錄 → 積分：這週、本月、最高分的一天、連續週數；成長比較；每日積分直條圖
+// 訓練日誌（step51）之前是「今天」「連續天數」：攀岩不會天天爬，一打開常常是 0，10/23 使用者決定改成這週、連續週數（每週至少爬 1 天）
+// 資料庫還沒套用 step51（沒有 week）時照舊
 export default function PointsPanel({
   year,
   month,
@@ -25,6 +27,7 @@ export default function PointsPanel({
   const bestDay = s?.best_day ? +s.best_day.day.slice(8, 10) : null;
   const shown = picked ?? (isNow && byDay[todayDay] ? todayDay : bestDay);
 
+  const weekly = s?.week !== undefined;
   const diffToday = s ? Math.round(s.today - s.avg7) : 0;
   const diffMonth = s ? s.month_total - s.prev_total : 0;
   const pct = s && s.prev_total > 0 ? Math.round((diffMonth / s.prev_total) * 100) : null;
@@ -33,14 +36,14 @@ export default function PointsPanel({
     <>
       <SectionTitle>積分</SectionTitle>
       <StatGrid>
-        <StatTile value={isNow ? (s?.today ?? "–") : "–"} label="今天" />
+        {weekly ? <StatTile value={isNow ? (s?.week ?? "–") : "–"} label="這週" /> : <StatTile value={isNow ? (s?.today ?? "–") : "–"} label="今天" />}
         <StatTile value={s?.month_total ?? "–"} label="本月" />
         <StatTile value={s?.best_day?.points ?? "–"} label="單日最高" />
-        <StatTile value={s ? `${s.streak}` : "–"} label="連續天數" />
+        {weekly ? <StatTile value={s ? `${s.week_streak ?? 0}` : "–"} label="連續週數" /> : <StatTile value={s ? `${s.streak}` : "–"} label="連續天數" />}
       </StatGrid>
       {s && (
         <div className="mt-2.5 grid gap-0.5 text-note text-muted">
-          {isNow && (s.today > 0 || s.avg7 > 0) && (
+          {isNow && !weekly && (s.today > 0 || s.avg7 > 0) && (
             <p className="m-0">
               今天比最近 7 天平均（{s.avg7} 分）
               {diffToday > 0 ? (

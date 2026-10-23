@@ -82,6 +82,9 @@ export function createMock() {
     opens: [], // app_opens
     feedback: [],
     reports: [], // route_reports（step47）
+    climbDays: [], // climb_days（step51）：{ user_id, route_id, day, status, tries, highpoint, updated_at }
+    trainingDays: [], // training_days（step51）
+    trainingSettings: [], // training_settings（step51）
     slamClaims: [], // 大滿貫兌換碼（step40）
     resetEvents: [], // 換線公告
     resetEditors: [], // 老闆授權輸入換線日的人（user_id）
@@ -102,7 +105,7 @@ export function createMock() {
       flash_multiplier: 1.2,
     },
   };
-  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, noRoutePhoto: false, noInsights: false, noRouteZone: false, noReports: false, noClimber: false, noBeta: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
+  const state = { offline: false, ascentsFail: null, ascentsReadFail: false, routeLikesReadFail: false, readDelay: {}, refreshFail: false, signupError: null, usageSince: null, dropRouteReply: false, noCors: false, noVideoTags: false, noVideoClimb: false, noVideoFeel: false, noVideoThumb: false, noRopeVideo: false, oldVideoMax: 60, uploadMax: Infinity, tagFallbacks: 0, noResets: false, noOps: false, noHighpoint: false, noHomeGyms: false, noSlam: false, noMascot: false, noAccounts: false, noRoutePhoto: false, noInsights: false, noRouteZone: false, noReports: false, noClimber: false, noBeta: false, noTraining: false, slam: { enabled: false, min_routes: 10, valid_days: 30, prize: null } };
   let auditSeq = 0;
 
   const addUser = (username, password, extra = {}) => {
@@ -117,8 +120,27 @@ export function createMock() {
     db.routes.push(r);
     return r;
   };
-  const addAscent = (userId, route, status, climbedOn, extra = {}) =>
-    db.ascents.push({ id: uuid(), user_id: userId, route_id: route.id, status, climbed_on: climbedOn, feel: null, grade_feel: null, private_note: null, updated_at: now(), ...extra });
+  // 同 0057 ascents_climb_days：每天的紀錄跟著 ascents 寫（嘗試中改記到更晚的一天時之前那天留著，其他改日期是搬過去）
+  const syncClimb = (old, row) => {
+    const same = (c, a, day) => c.user_id === a.user_id && c.route_id === a.route_id && c.day === day;
+    // 嘗試中過了幾天再來（上次存是前幾天）改記到更晚的一天才留著；同一天裡選錯又改回來是搬過去
+    const later = old && old.status === "project" && row && row.climbed_on > old.climbed_on && taipeiDay(0) > new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date(old.updated_at ?? 0));
+    if (old && (!row || (row.climbed_on !== old.climbed_on && !later)))
+      db.climbDays = db.climbDays.filter((c) => !same(c, old, old.climbed_on));
+    if (!row) return;
+    const c = db.climbDays.find((x) => same(x, row, row.climbed_on));
+    const v = { status: row.status, tries: row.tries ?? null, highpoint: row.highpoint ?? null, updated_at: now() };
+    if (c) Object.assign(c, v);
+    else db.climbDays.push({ user_id: row.user_id, route_id: row.route_id, day: row.climbed_on, ...v });
+  };
+  const addAscent = (userId, route, status, climbedOn, extra = {}) => {
+    const a = { id: uuid(), user_id: userId, route_id: route.id, status, climbed_on: climbedOn, feel: null, grade_feel: null, private_note: null, updated_at: now(), ...extra };
+    db.ascents.push(a);
+    syncClimb(null, a);
+    return a.id;
+  };
+  // 每天的紀錄、日誌（step51）：公開的那天（本人打開公開、人物卡公開）別人看得到
+  const dayPublic = (user, day) => !!db.trainingDays.find((t) => t.user_id === user && t.day === day && t.is_public) && !!db.profiles.find((p) => p.id === user)?.card_public;
 
   // extra.thumb = true：一起放一張縮圖（跟影片同名的 .webp）
   const addVideo = (userId, route, { thumb, ...extra } = {}) => {
@@ -313,6 +335,7 @@ export function createMock() {
     if (op === "in") return val.replace(/[()]/g, "").split(",").map((s) => s.replace(/"/g, "")).includes(String(x));
     if (op === "gte") return typeof x === "number" ? x >= Number(val) : String(x) >= val;
     if (op === "lt") return typeof x === "number" ? x < Number(val) : String(x) < val;
+    if (op === "lte") return typeof x === "number" ? x <= Number(val) : String(x) <= val;
     return true;
   };
   const filt = (rows, sp) => {
@@ -522,7 +545,7 @@ export function createMock() {
         z: { ...pick(z, ["id", "gym_id", "code", "name", "photo_path", "photo_width", "photo_height", "next_reset_on", "sort", "grade_system"]), next_reset_on: zoneResetOn(z), kind: z.kind ?? "wall" },
         g: pick(g, ["id", "name", "is_live", "comments_enabled", "sort"]),
         rs: rs.map((r) => ({ kind: "gym", name: null, description: null, holds: null, created_by: null, ...r })),
-        as: Object.fromEntries(db.ascents.filter((x) => x.user_id === uid && ids.has(x.route_id)).map((x) => [x.route_id, pick(x, ["id", "route_id", "status", "climbed_on", "feel", "grade_feel", "private_note", "highpoint"])])),
+        as: Object.fromEntries(db.ascents.filter((x) => x.user_id === uid && ids.has(x.route_id)).map((x) => [x.route_id, pick(x, ["id", "route_id", "status", "climbed_on", "feel", "grade_feel", "private_note", "highpoint", ...(state.noTraining ? [] : ["tries"])])])),
         cs: db.comments.filter((c) => !c.deleted_at && ids.has(c.route_id)).reduce((m, c) => ((m[c.route_id] = (m[c.route_id] ?? 0) + 1), m), {}),
         // 影片數（0044）；state.noVideoThumb 模擬還沒套用 step38（沒有 vs）
         ...(state.noVideoThumb ? {} : { vs: db.videos.filter((v) => ids.has(v.route_id)).reduce((m, v) => ((m[v.route_id] = (m[v.route_id] ?? 0) + 1), m), {}) }),
@@ -557,7 +580,51 @@ export function createMock() {
       while (daily[s] !== undefined) { streak++; s = shift(s, -1); }
       let s7 = 0;
       for (let i = 1; i <= 7; i++) s7 += daily[shift(today, -i)] || 0;
-      return J(route, 200, { by_day, month_total: inMonth.reduce((t, [, p]) => t + p, 0), prev_total: Object.entries(daily).filter(([d]) => d >= prev && d < from).reduce((t, [, p]) => t + p, 0), today: daily[today] || 0, avg7: Math.round((s7 / 7) * 10) / 10, best_day: best ? { day: best[0], points: best[1] } : null, streak, total: mine.reduce((t, x) => t + points(x), 0) });
+      const base = { by_day, month_total: inMonth.reduce((t, [, p]) => t + p, 0), prev_total: Object.entries(daily).filter(([d]) => d >= prev && d < from).reduce((t, [, p]) => t + p, 0), today: daily[today] || 0, avg7: Math.round((s7 / 7) * 10) / 10, best_day: best ? { day: best[0], points: best[1] } : null, streak, total: mine.reduce((t, x) => t + points(x), 0) };
+      if (state.noTraining) return J(route, 200, base);
+      // 同 0057：這週（週一到週日）積分、哪幾天有爬、連續週數（每週至少爬 1 天）
+      const monday = (d) => shift(d, -((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7));
+      const w0 = monday(today);
+      const days = new Set([...mine.map((x) => x.climbed_on), ...db.climbDays.filter((c) => c.user_id === uid).map((c) => c.day)]);
+      const weeks = new Set([...days].map(monday));
+      let w = weeks.has(w0) ? w0 : shift(w0, -7), week_streak = 0;
+      while (weeks.has(w)) { week_streak++; w = shift(w, -7); }
+      const inWeek = [...days].filter((d) => d >= w0 && d < shift(w0, 7)).sort();
+      return J(route, 200, { ...base, week: Object.entries(daily).filter(([d]) => d >= w0 && d < shift(w0, 7)).reduce((t, [, p]) => t + p, 0), week_days: inWeek.map((d) => ((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7) + 1), week_streak });
+    }
+    // 訓練日誌（step51）；state.noTraining 模擬資料庫還沒套用
+    if (["my_projects", "my_milestones", "hide_training_day"].includes(fn)) {
+      if (state.noTraining) return J(route, 404, { code: "PGRST202", message: `Could not find the function public.${fn}` });
+      if (fn === "my_projects") {
+        const ps = db.ascents.filter((x) => x.user_id === uid && x.status === "project").map((x) => {
+          const r = db.routes.find((y) => y.id === x.route_id);
+          const z = zoneOf(r.zone_id);
+          const cs = db.climbDays.filter((c) => c.user_id === uid && c.route_id === r.id);
+          return r.archived_at ? null : { route_id: r.id, last_day: x.climbed_on, highpoint: x.highpoint ?? null, grade: r.grade, hold_color: r.hold_color, code: r.code, name: r.name ?? null, kind: r.kind ?? "gym", holds_n: seqN(r) || null, zone_id: z.id, zone_name: z.name, gym_id: z.gym_id, reset_on: zoneResetOn(z), days: cs.length, tries: cs.some((c) => c.tries) ? cs.reduce((t, c) => t + (c.tries || 0), 0) : null };
+        }).filter(Boolean);
+        return J(route, 200, ps.sort((p1, p2) => (p1.reset_on ?? "9999").localeCompare(p2.reset_on ?? "9999") || p2.last_day.localeCompare(p1.last_day)));
+      }
+      if (fn === "my_milestones") {
+        const best = {}, outM = [];
+        const sends = db.ascents.filter((x) => x.user_id === uid && x.status !== "project").map((x) => ({ day: x.climbed_on, r: db.routes.find((y) => y.id === x.route_id) })).filter((x) => (x.r.kind ?? "gym") === "gym");
+        const byDay = {};
+        for (const x of sends) { const k = `${x.day}|${x.r.grade >= 100}`; byDay[k] = Math.max(byDay[k] ?? -99, x.r.grade); }
+        for (const k of Object.keys(byDay).sort()) {
+          const [day, rope] = k.split("|");
+          const g = byDay[k];
+          if (best[rope] === undefined || g > best[rope]) outM.push({ day, grade: g, first: best[rope] === undefined });
+          best[rope] = Math.max(best[rope] ?? -99, g);
+        }
+        return J(route, 200, outM.sort((x, y) => y.day.localeCompare(x.day) || y.grade - x.grade));
+      }
+      if (fn === "hide_training_day") {
+        if (!isMgr(uid, a.p_gym)) return J(route, 403, { code: "42501", message: "只有店長可以隱藏日誌" });
+        const t = db.trainingDays.find((x) => x.user_id === a.p_user && x.day === a.p_day && x.is_public);
+        if (!t) return J(route, 400, { code: "22023", message: "這篇日誌沒有公開" });
+        t.is_public = false;
+        audit(uid, a.p_gym, "diary.hide", a.p_user, { nickname: prof(a.p_user)?.nickname, day: a.p_day, note: t.note });
+        return J(route, 200, null);
+      }
     }
     if (fn === "archive_zone") {
       const z = zoneOf(a.p_zone);
@@ -1262,6 +1329,9 @@ export function createMock() {
         return J(route, 400, { code: "42703", message: "column ascents.highpoint does not exist" });
       if (state.noHighpoint && m === "POST" && body && "highpoint" in body)
         return J(route, 400, { code: "PGRST204", message: "Could not find the 'highpoint' column of 'ascents' in the schema cache" });
+      // state.noTraining：還沒套用 step51（ascents 沒有 tries 欄位）
+      if (state.noTraining && m === "GET" && /(^|,)tries(,|$)/.test(sel)) return J(route, 400, { code: "42703", message: "column ascents.tries does not exist" });
+      if (state.noTraining && m === "POST" && body && "tries" in body) return J(route, 400, { code: "PGRST204", message: "Could not find the 'tries' column of 'ascents' in the schema cache" });
       if (m === "GET") {
         // state.ascentsReadFail：讀紀錄時伺服器暫時出錯
         if (state.ascentsReadFail) return J(route, 500, { message: "Internal Server Error" }); // 503 套件會自動重試約 7 秒，這裡用 500 直接失敗
@@ -1279,7 +1349,7 @@ export function createMock() {
         const tpe = (iso) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date(iso));
         const bad = (message) => J(route, 400, { code: "22008", message });
         if (rt && body.climbed_on) {
-          if (body.climbed_on < tpe(rt.created_at)) return bad("日期不能早於路線設定日");
+          if (body.climbed_on < tpe(new Date(rt.created_at).getTime() - 7 * 86400000)) return bad("日期不能早於路線放上 App 前 7 天"); // step50：放上 App 前 7 天內可以
           if (body.climbed_on > taipeiDay(0)) return bad("日期不能晚於今天");
           if (rt.archived_at && body.climbed_on > tpe(rt.archived_at)) return bad("日期不能晚於路線下架日");
         }
@@ -1295,11 +1365,54 @@ export function createMock() {
             else return J(route, 400, { code: "22023", message: `爬到最後一點就是完攀，最高點要小於 ${n}` });
           }
         } else row.highpoint = null;
+        if (row.tries != null && (row.tries < 1 || row.tries > 99)) return J(route, 400, { code: "23514", message: "試了幾次要在 1–99" });
+        // 同 0057 ascents_tries_day：嘗試中改記到更晚的一天、沒另外送次數 → 次數清掉
+        if (ex && ex.status === "project" && row.climbed_on > ex.climbed_on && (row.tries ?? null) === (ex.tries ?? null)) row.tries = null;
+        const old = ex ? { ...ex } : null;
         if (ex) Object.assign(ex, row, { updated_at: now() });
         else db.ascents.push({ id: uuid(), updated_at: now(), ...row, user_id: uid });
+        if (!state.noTraining) syncClimb(old, ex ?? db.ascents[db.ascents.length - 1]);
         return empty(route, 201);
       }
-      if (m === "DELETE") { const del = filt(mine, sp); db.ascents = db.ascents.filter((a) => !del.includes(a)); return empty(route); }
+      if (m === "DELETE") { const del = filt(mine, sp); db.ascents = db.ascents.filter((a) => !del.includes(a)); del.forEach((x) => syncClimb(x, null)); return empty(route); }
+    }
+    // 訓練日誌（step51）：每天的紀錄（只能讀）、日誌、訓練設定；state.noTraining 模擬資料庫還沒套用
+    if (["climb_days", "training_days", "training_settings"].includes(t)) {
+      if (state.noTraining) return J(route, 404, { code: "PGRST205", message: `Could not find the table 'public.${t}' in the schema cache` });
+      const desc = (x, y) => y.day.localeCompare(x.day) || (y.updated_at ?? "").localeCompare(x.updated_at ?? "");
+      if (t === "climb_days") {
+        if (m !== "GET") return J(route, 403, { code: "42501", message: "permission denied for table climb_days" });
+        let rows = db.climbDays.filter((c) => c.user_id === uid || dayPublic(c.user_id, c.day)).sort(desc);
+        if (/routes\(/.test(sel)) rows = rows.map((c) => { const r = db.routes.find((y) => y.id === c.route_id); const z = zoneOf(r.zone_id); return { ...c, routes: { ...r, zones: { name: z.name, gym_id: z.gym_id, photo_path: z.photo_path } } }; });
+        return out(filt(rows, sp));
+      }
+      if (t === "training_days") {
+        if (m === "GET") return out(filt(db.trainingDays.filter((x) => x.user_id === uid || dayPublic(x.user_id, x.day)).sort(desc), sp));
+        if (!uid) return J(route, 401, { code: "42501", message: "沒有權限" });
+        if (m === "POST") {
+          const note = (body.note ?? "").trim() || null;
+          if (note && /(https?:|www\.|\.(com|tw|net|org|io|cc|app|co)(?![a-z0-9]))/i.test(note)) return J(route, 400, { code: "22023", message: "日誌不能放網址" });
+          if (body.is_public && note && /(line|instagram|\big\b|@|加我|電話|[0-9]{7,})/i.test(note)) return J(route, 400, { code: "22023", message: "公開的日誌不能放聯絡方式（網址、LINE、IG、電話…）" });
+          if (body.is_public && suspended(uid)) return J(route, 403, { code: "42501", message: "停權中不能公開日誌" });
+          if (body.day > taipeiDay(0)) return J(route, 400, { code: "22008", message: "日期不能晚於今天" });
+          const row = { feel: null, hours: null, kinds: [], is_public: false, ...body, note, user_id: uid, updated_at: now() };
+          const ex = db.trainingDays.find((x) => x.user_id === uid && x.day === body.day);
+          if (ex) Object.assign(ex, row);
+          else db.trainingDays.push(row);
+          return empty(route, 201);
+        }
+      }
+      if (t === "training_settings") {
+        if (!uid) return J(route, 401, { code: "42501", message: "沒有權限" });
+        if (m === "GET") return out(filt(db.trainingSettings.filter((x) => x.user_id === uid), sp).map((x) => ({ user_id: x.user_id, week_goal: x.week_goal ?? 2, home_tab: x.home_tab ?? "week" })));
+        if (m === "POST") {
+          if (body.week_goal < 1 || body.week_goal > 7) return J(route, 400, { code: "23514", message: "check constraint" });
+          const ex = db.trainingSettings.find((x) => x.user_id === uid);
+          if (ex) Object.assign(ex, body, { user_id: uid });
+          else db.trainingSettings.push({ ...body, user_id: uid });
+          return empty(route, 201);
+        }
+      }
     }
     if (t === "reset_events") {
       if (state.noResets) return J(route, 404, { code: "PGRST205", message: "Could not find the table 'public.reset_events' in the schema cache" });

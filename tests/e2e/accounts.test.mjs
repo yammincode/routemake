@@ -2,7 +2,7 @@
 // 老闆解除、永久停權；後台「帳號管理」搜尋、看留言、停權中名單、刪帳號（連影片檔）；顧客自己刪帳號；還沒套用 step43 照常
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { BASE, createMock, launch, login, phone, taipeiDay } from "./helpers.mjs";
+import { BASE, createMock, launch, login, phone, taipeiDay, openAccount } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -223,6 +223,7 @@ test("刪除我的帳號：密碼錯不刪、密碼對刪掉並登出（影片�
   const c = C.page;
   await login(c, "climber88", "password1", "/me");
   await c.waitForTimeout(800);
+  await openAccount(c);
   await c.click('main button:text-is("刪除我的帳號")');
   const box = c.locator("[data-delete-me]");
   assert.ok((await box.textContent()).includes("不能復原"));
@@ -243,6 +244,7 @@ test("刪除我的帳號：密碼錯不刪、密碼對刪掉並登出（影片�
   const M = await phone(browser, mock);
   await login(M.page, "manager1", "password1", "/me");
   await M.page.waitForTimeout(800);
+  await openAccount(M.page);
   assert.equal(await M.page.locator('main button:text-is("刪除我的帳號")').count(), 0);
   assert.deepEqual([...C.errors, ...M.errors], []);
   await Promise.all([C.ctx.close(), M.ctx.close()]);

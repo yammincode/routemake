@@ -27,12 +27,16 @@ test("我的紀錄：統計、積分、成長比較、改計分規則後重算",
   const rows = (await page.locator("main ul li").allTextContents()).map((t) => t.replace(/\s+/g, ""));
   assert.ok(rows.some((t) => t.includes("A1-0150分")) && rows.some((t) => t.includes("A1-0332分")) && rows.some((t) => t.includes("A1-0491分")), "路線分數（含風格加成上限）");
 
-  await page.goto(page.url().replace(/\/zone.*/, "/me"), { waitUntil: "networkidle" });
+  await page.goto(page.url().replace(/\/zone.*/, "/me?tab=month"), { waitUntil: "networkidle" });
   await page.waitForTimeout(1200);
-  const tiles = async () => (await page.locator("main .grid-cols-4").nth(1).locator("> div").allTextContents()).join("｜");
-  assert.ok((await tiles()).startsWith("60今天"), "今天 60 分：" + (await tiles()));
-  assert.ok((await tiles()).includes("2連續天數"), "連續 2 天");
-  assert.ok((await page.textContent("main")).includes("今天比最近 7 天平均"), "成長比較");
+  // 第一個 grid-cols-4 是我的紀錄四個分頁、第二個是月統計，第三個是積分
+  const tiles = async () => (await page.locator("main .grid-cols-4").nth(2).locator("> div").allTextContents()).join("｜");
+  // 訓練日誌（step51）：今天、連續天數換成這週、連續週數（今天爬的算在這週；昨天的 20 分今天是週一時算上週）
+  const monday = new Date(`${taipeiDay(0)}T00:00:00Z`).getUTCDay() === 1;
+  const yest = monday ? 0 : 20;
+  assert.ok((await tiles()).startsWith(`${60 + yest}這週`), "這週積分：" + (await tiles()));
+  assert.match(await tiles(), /[12]連續週數/, "連續週數");
+  assert.ok((await page.textContent("main")).includes("本月比上個月"), "成長比較");
   assert.ok((await page.locator('main [role=group] button[aria-label$=" 60 分"]').count()) === 1, "每日積分長條圖有今天");
   await monthGrade(page, "V4");
   assert.ok((await page.locator("main ul li").allTextContents()).some((t) => t.includes("+60分") && t.includes("今天 Flash")), "本月完攀列表含得分與心得");
@@ -56,7 +60,7 @@ test("我的紀錄：統計、積分、成長比較、改計分規則後重算",
 
   await page.goto(page.url(), { waitUntil: "networkidle" });
   await page.waitForTimeout(1200);
-  assert.ok((await tiles()).startsWith("94今天"), "改規則後重算：" + (await tiles()));
+  assert.ok((await tiles()).startsWith(`${94 + yest}這週`), "改規則後重算：" + (await tiles()));
   assert.deepEqual([...errors, ...B.errors], []);
 });
 
@@ -127,7 +131,7 @@ test("已下架的路線：在我的紀錄按錯「嘗試中」再改回「完�
   const day = taipeiDay(-2);
   mock.addAscent(me, rA, "send", day);
   const { page, errors } = await phone(browser, mock);
-  await login(page, "climber88", "password1", "/me");
+  await login(page, "climber88", "password1", "/me?tab=month");
   await page.waitForTimeout(1000);
   if (day.slice(0, 7) !== taipeiDay(0).slice(0, 7)) {
     await page.click('main button[aria-label="上個月"]');

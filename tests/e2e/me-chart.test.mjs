@@ -35,7 +35,7 @@ test("我的紀錄：本月完攀改成直條圖（抱石、上攀分開，Flash
   mock.addAscent(me, route("mingde", "B1", 6, "黑"), "send", lastDay);
 
   const { page, errors } = await phone(browser, mock);
-  await login(page, "climber88", "password1", "/me");
+  await login(page, "climber88", "password1", "/me?tab=month");
   await page.waitForTimeout(1200);
   const main = () => page.textContent("main");
   const col = (label) => page.locator(`main button[aria-label^="${label}，"]`);

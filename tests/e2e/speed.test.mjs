@@ -26,8 +26,8 @@ test("區域頁：一次拿齊資料，第二次進來先顯示上次的資料",
   await page.waitForTimeout(600);
   assert.ok(await page.isVisible("main ul li >> text=A1-01"), "路線列表出現");
   assert.ok((await page.locator("main ul li", { hasText: "A1-01" }).textContent()).includes("1"), "顯示留言數");
-  // route_reports：回報功能有沒有套用（step47），一次登入只問一次、不擋畫面，跟計分規則一樣不算區域頁的資料
-  const zoneAsks = asked.filter((p) => !["rpc/my_access", "rpc/record_open", "scoring_rules", "route_reports"].includes(p));
+  // route_reports、training_settings：回報功能、訓練日誌（試了幾次）有沒有套用（step47、step51），一次登入只問一次、不擋畫面，跟計分規則一樣不算區域頁的資料
+  const zoneAsks = asked.filter((p) => !["rpc/my_access", "rpc/record_open", "scoring_rules", "route_reports", "training_settings"].includes(p));
   // 畫面要的資料只問一次（zone_view）；之後背景問一次這間館的區域順序（上一區／下一區用，每次打開區域頁一次，左右滑換區不再問）
   assert.equal(zoneAsks[0], "rpc/zone_view", `第一個問的是 zone_view（實際：${asked.join(", ")}）`);
   assert.deepEqual(zoneAsks.slice(1), ["zones"], `之後只多問一次區域順序（實際：${asked.join(", ")}）`);

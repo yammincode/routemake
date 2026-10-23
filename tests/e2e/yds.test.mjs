@@ -36,7 +36,7 @@ test("YDS：上攀區顯示 5.11a、記錄後我的紀錄顯示最高難度；�
   assert.ok((await c.locator("[role=status]").last().textContent()).includes("+19 分"), "YDS 分數（5.11a 17 分＋耐力 10%）");
   await c.keyboard.press("Escape");
   await c.waitForTimeout(300); // 關掉全螢幕卡片會退掉多記的那一筆瀏覽紀錄，等退完再換頁
-  await c.goto(BASE + "/me", { waitUntil: "networkidle" });
+  await c.goto(BASE + "/me?tab=month", { waitUntil: "networkidle" });
   await c.waitForTimeout(800);
   assert.ok((await c.textContent("main")).includes("5.11a"), "我的紀錄顯示 5.11a");
 

@@ -66,7 +66,7 @@ function assertOrder(text, words) {
 test("路線進度：牆上進度開放的館一起算（Spray Wall、沒開放的館、下架的不算），抱石／上攀分開、依館上色，全部完成是 ★ 大滿貫，點一行看各館", async () => {
   const { mock } = setup();
   const { page, errors } = await phone(browser, mock);
-  await login(page, "climber88", "password1", "/me");
+  await login(page, "climber88", "password1", "/me?tab=all");
   await page.waitForTimeout(1500);
   const main = await page.textContent("main");
   assert.ok(!main.includes("目前牆上進度"), "舊的「目前牆上進度」換成「路線進度」");
@@ -83,7 +83,9 @@ test("路線進度：牆上進度開放的館一起算（Spray Wall、沒開放�
   assert.equal(flat(await row(page, "抱石", "VB").textContent()), "VB★大滿貫", "VB 全部完成寫 ★ 大滿貫");
   assert.equal(flat(await row(page, "抱石", "V3").textContent()), "V31/4");
   assert.equal(await row(page, "抱石", "V2").count(), 0, "岩友路線（Spray Wall）的 V2 不出現");
-  // 上攀分開：5.8 兩條都完成 → 大滿貫；5.10a 0/1
+  // 上攀分開：5.8 兩條都完成 → 大滿貫；5.10a 0/1（沒完成的難度先收起來，點「還有 1 個難度還沒完成」打開）
+  assert.equal(await row(page, "上攀", "5.10a").count(), 0, "沒完成的難度先收起來");
+  await card(page, "上攀").getByRole("button", { name: "還有 1 個難度還沒完成 ⌄" }).click();
   const y = flat(await card(page, "上攀").textContent());
   assert.ok(y.includes("你完成2/3條") && y.includes("★大滿貫1個難度"), `上攀（${y}）`);
   assert.equal(flat(await row(page, "上攀", "5.8").textContent()), "5.8★大滿貫");
@@ -107,7 +109,7 @@ test("路線進度：牆上進度開放的館一起算（Spray Wall、沒開放�
 test("路線進度：我的進度是累積完攀（下架的、Spray Wall 員工出的也算，岩友路線不算），加起來等於累計完攀；選的分頁記在手機", async () => {
   const { mock } = setup();
   const { page, errors } = await phone(browser, mock);
-  await login(page, "climber88", "password1", "/me");
+  await login(page, "climber88", "password1", "/me?tab=all");
   await page.waitForTimeout(1500);
   await page.click('main [role=tab]:has-text("我的進度")');
   await page.waitForTimeout(300);
@@ -148,12 +150,12 @@ test("路線進度：手機裡還沒送出的紀錄，牆上進度先算進去�
   // 送不出去（伺服器暫時出錯）：紀錄留在手機排隊
   mock.state.ascentsFail = { status: 503, type: "text/html", body: "<html>503</html>" };
   const { page, errors } = await phone(browser, mock);
-  await login(page, "climber88", "password1", "/me");
+  await login(page, "climber88", "password1", "/me?tab=all");
   await page.evaluate(
     ([uid, routeId, day]) => localStorage.setItem("routemake-pending", JSON.stringify([{ userId: uid, routeId, at: 1, ascent: { status: "send", climbed_on: day, feel: null, grade_feel: null, private_note: null } }])),
     [me, r.v3[2].id, taipeiDay(0)]
   );
-  await page.goto(`${BASE}/me`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/me?tab=all`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1500);
   assert.equal(flat(await row(page, "抱石", "V3").textContent()), "V32/4", "排隊中的新店 V3 先算完成");
   await page.click('main [role=tab]:has-text("我的進度")');
@@ -178,7 +180,7 @@ test("路線進度：牆上路線超過 1000 條時一頁一頁讀完，不會�
     if (u.pathname === "/rest/v1/routes" && (u.searchParams.get("select") ?? "").includes("gyms!inner(is_live)")) pages.push(u.searchParams.get("offset"));
     if (u.pathname === "/rest/v1/ascents" && u.searchParams.get("route_id")?.startsWith("in.")) idUrls.push(u.href.length);
   });
-  await login(page, "climber88", "password1", "/me");
+  await login(page, "climber88", "password1", "/me?tab=all");
   await page.waitForTimeout(1500);
   assert.deepEqual(pages, ["0", "1000"], `分兩頁讀（${pages.join("、")}）`);
   assert.equal(flat(await row(page, "抱石", "V3").textContent()), "V32/1005", "第 5 條和第 1004 條的紀錄都算到");
@@ -195,7 +197,7 @@ test("路線進度：讀不到時這一段顯示錯誤和「重新整理」（�
     if (fail && route.request().url().includes("is_live")) return route.abort("internetdisconnected");
     return route.fallback();
   });
-  await login(page, "climber88", "password1", "/me");
+  await login(page, "climber88", "password1", "/me?tab=all");
   // 連線套件斷線時會自己重試幾秒，放棄後才顯示錯誤
   const retry = page.locator('main button:has-text("重新整理")');
   await retry.waitFor({ timeout: 20000 });

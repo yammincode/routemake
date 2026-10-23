@@ -33,13 +33,13 @@ const ticket = (page, grade) => page.locator(`main section[aria-label="${grade} 
 test("活動關著：顧客看不到兌換、老闆看得到（可以先試）；牆上少於最少條數的難度沒有兌換；資料庫還沒套用 step40 時照舊", async () => {
   const { mock } = setup();
   const { page, errors } = await phone(browser, mock);
-  await login(page, "climber88", "password1", "/me");
+  await login(page, "climber88", "password1", "/me?tab=all");
   await page.waitForTimeout(1500);
   assert.ok((await page.textContent("main")).includes("大滿貫"), "牆上進度照樣寫 ★ 大滿貫");
   assert.equal(await slamBtn(page, "V5").count(), 0, "活動關著，顧客看不到兌換");
 
   const boss = await phone(browser, mock);
-  await login(boss.page, "boss", "password1", "/me");
+  await login(boss.page, "boss", "password1", "/me?tab=all");
   await boss.page.waitForTimeout(1500);
   assert.equal(await slamBtn(boss.page, "V5").count(), 1, "老闆看得到 V5 兌換");
   assert.equal(await slamBtn(boss.page, "V3").count(), 0, "V3 只有 2 條（最少 3 條），沒有兌換");
@@ -60,7 +60,7 @@ test("兌換卡：膠帶顏色、QR code、兌換碼、條紋在動、時間在�
   const { mock } = setup();
   mock.state.slam.enabled = true;
   const { page, errors } = await phone(browser, mock);
-  await login(page, "climber88", "password1", "/me");
+  await login(page, "climber88", "password1", "/me?tab=all");
   await page.waitForTimeout(1500);
   await slamBtn(page, "V5").click();
   await page.waitForURL(/\/slam\?g=5/);
@@ -114,7 +114,7 @@ test("兌換卡：膠帶顏色、QR code、兌換碼、條紋在動、時間在�
   assert.equal(await page.locator("main [data-live-stripe]").getAttribute("data-live-stripe"), "stopped");
 
   // 我的紀錄：V5 寫已兌換，點了還看得到兌換卡
-  await page.goto(`${BASE}/me`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/me?tab=all`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1500);
   await slamBtn(page, "V5", true).click();
   await page.waitForURL(/\/slam\?g=5/);
@@ -123,7 +123,7 @@ test("兌換卡：膠帶顏色、QR code、兌換碼、條紋在動、時間在�
 
   // 換線後 V5 多一條新路線：那一行照一般寫「3/4」（不是已兌換）
   mock.addRoute(mock.db.zones.find((z) => z.gym_id === "g4" && z.code === "A1"), 5, "紅");
-  await page.goto(`${BASE}/me`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/me?tab=all`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1500);
   assert.equal(await slamBtn(page, "V5", true).count(), 0, "沒有全部完成就不寫已兌換");
   assert.ok((await page.locator('main section[aria-label="抱石"]').textContent()).includes("3/4"));

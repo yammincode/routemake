@@ -9,7 +9,7 @@ export const AUDIT_FILTERS = [
   { key: "route", label: "路線", actions: ["route.archive", "route.unarchive", "zone.archive_all", "zone.reorder", "report.handle"] },
   { key: "comment", label: "留言", actions: ["comment.delete"] },
   { key: "video", label: "影片", actions: ["video.delete"] },
-  { key: "card", label: "人物卡", actions: ["card.clear"] },
+  { key: "card", label: "人物卡", actions: ["card.clear", "diary.hide"] },
   { key: "staff", label: "員工", actions: ["staff.assign", "staff.remove"] },
   { key: "account", label: "帳號", actions: ["user.suspend", "user.unsuspend", "user.delete", "user.reset_code", "user.password_reset"] },
   { key: "scoring", label: "計分／統計", actions: ["scoring.update", "usage.reset"] },
@@ -48,6 +48,8 @@ export function describeAudit(a: AuditEntry): string {
     }
     case "card.clear":
       return `清除 ${person} 的人物卡自我介紹「${str(d.bio).length > 24 ? str(d.bio).slice(0, 24) + "…" : str(d.bio)}」`;
+    case "diary.hide":
+      return `隱藏 ${person} ${str(d.day).slice(5).replace("-", "/")} 公開的日誌${str(d.note) ? `「${str(d.note).length > 24 ? str(d.note).slice(0, 24) + "…" : str(d.note)}」` : ""}`;
     case "staff.assign":
       return `指派 ${person} 為${ROLE_NAME[(str(d.role) || "setter") as Role]}`;
     case "staff.remove":
