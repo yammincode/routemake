@@ -93,3 +93,11 @@ export async function swipe(page, from, to, { steps = 8, ms = 16, hold = 0 } = {
   await f.up();
   await f.done();
 }
+
+// 我的紀錄最下面的帳號卡片（10/23 收成一行）：按「帳號設定」打開改密碼、改暱稱、登出、刪除帳號
+export async function openAccount(page) {
+  const b = page.locator('main button[aria-expanded]:has-text("帳號設定")');
+  await b.waitFor();
+  if ((await b.getAttribute("aria-expanded")) !== "true") await b.click();
+  await page.waitForTimeout(150);
+}

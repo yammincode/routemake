@@ -63,6 +63,7 @@ export type Ascent = {
   grade_feel: number | null;
   private_note: string | null;
   highpoint?: number | null; // 長耐力：最高爬到第幾點（Flash、完攀＝最後一點；其他路線沒有）
+  tries?: number | null; // 訓練日誌（step51）：climbed_on 那天試了幾次（沒按是 null）
 };
 // 長耐力路線：照順序標的點（holds 2–50 個，第 1 點是起步點）；Spray Wall 的路線不算
 export const seqTotal = (r: Pick<Route, "holds" | "name">): number => (!r.name && r.holds && r.holds.length >= 2 ? r.holds.length : 0);
@@ -71,6 +72,9 @@ export const seqTotal = (r: Pick<Route, "holds" | "name">): number => (!r.name &
 const NO_COLUMN = new Set(["42703", "PGRST204"]);
 let noHighpointAt = 0;
 const hasHighpoint = () => Date.now() - noHighpointAt > 60_000;
+// 試了幾次（step51）：資料庫還沒套用時一樣先記住一分鐘，存紀錄時不送這個欄位
+let noTriesAt = 0;
+const hasTries = () => Date.now() - noTriesAt > 60_000;
 export type Comment = {
   id: string;
   route_id: string;
@@ -293,7 +297,13 @@ export async function getMyAscents(routeIds: string[]): Promise<Record<string, A
 async function myAscentsIn(routeIds: string[]): Promise<Ascent[]> {
   const cols: string = "id,route_id,status,climbed_on,feel,grade_feel,private_note";
   const high = hasHighpoint();
-  let r = await supabase().from("ascents").select(high ? `${cols},highpoint` : cols).in("route_id", routeIds);
+  const tries = high && hasTries();
+  let r = await supabase().from("ascents").select(tries ? `${cols},highpoint,tries` : high ? `${cols},highpoint` : cols).in("route_id", routeIds);
+  if (tries && NO_COLUMN.has(r.error?.code ?? "")) {
+    noTriesAt = Date.now();
+    const withHigh: string = `${cols},highpoint`;
+    r = await supabase().from("ascents").select(withHigh).in("route_id", routeIds);
+  }
   if (high && NO_COLUMN.has(r.error?.code ?? "")) {
     noHighpointAt = Date.now();
     r = await supabase().from("ascents").select(cols).in("route_id", routeIds);
@@ -327,13 +337,20 @@ export async function getCommentCounts(routeIds: string[]): Promise<Record<strin
 export async function saveAscent(userId: string, routeId: string, a: Omit<Ascent, "id" | "route_id">) {
   // 只有長耐力路線才送最高點（資料庫還沒套用 step30 時，送了不存在的欄位會整筆存不進去）
   // 長耐力的嘗試中沒選最高點也要送 null：不然從完攀改回嘗試中時，資料庫會留著原本的最後一點
-  const { highpoint, ...rest } = a;
+  // 試了幾次（step51）：資料庫還沒套用時不送（送了不存在的欄位整筆存不進去）
+  const { highpoint, tries, ...rest } = a;
   const row = highpoint !== undefined ? { ...rest, highpoint } : rest;
-  must(
-    await supabase()
+  const send = (withTries: boolean) =>
+    supabase()
       .from("ascents")
-      .upsert({ user_id: userId, route_id: routeId, ...row }, { onConflict: "user_id,route_id" })
-  );
+      .upsert({ user_id: userId, route_id: routeId, ...row, ...(withTries ? { tries: tries ?? null } : {}) }, { onConflict: "user_id,route_id" });
+  const withTries = tries !== undefined && hasTries();
+  let res = await send(withTries);
+  if (withTries && NO_COLUMN.has(res.error?.code ?? "")) {
+    noTriesAt = Date.now();
+    res = await send(false);
+  }
+  must(res);
 }
 // 手機現在登入的是不是這個人、而且登入有效（過期會先試著換新；換新失敗時 Supabase 不會給登入）
 // 離線排隊的紀錄送出前用：登入過期時 Supabase 會改用未登入的身分送，資料庫會回「沒有權限」，紀錄就被丟掉
@@ -612,17 +629,22 @@ export async function getMonthAscents(year: number, month: number): Promise<Mont
   const from = `${year}-${String(month).padStart(2, "0")}-01`;
   const next = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
   // 完攀、Flash，加上長耐力沒爬完但有最高點的（照比例有分數）
-  const query = (withHigh: boolean) =>
+  const query = (withHigh: boolean, withTries = false) =>
     supabase()
       .from("ascents")
-      .select(`id,route_id,status,climbed_on,feel,grade_feel,private_note,${withHigh ? "highpoint," : ""}updated_at,routes(${ROUTE_COLS},zones(name,gym_id,photo_path))`)
+      .select(`id,route_id,status,climbed_on,feel,grade_feel,private_note,${withHigh ? "highpoint," : ""}${withTries ? "tries," : ""}updated_at,routes(${ROUTE_COLS},zones(name,gym_id,photo_path))`)
       .or(withHigh ? "status.in.(flash,send),highpoint.not.is.null" : "status.in.(flash,send)")
       .gte("climbed_on", from)
       .lt("climbed_on", next)
       .order("climbed_on", { ascending: false })
       .order("updated_at", { ascending: false });
   const high = hasHighpoint();
-  let res = await query(high);
+  const tries = high && hasTries();
+  let res = await query(high, tries);
+  if (tries && NO_COLUMN.has(res.error?.code ?? "")) {
+    noTriesAt = Date.now();
+    res = await query(high);
+  }
   if (high && NO_COLUMN.has(res.error?.code ?? "")) {
     noHighpointAt = Date.now();
     res = await query(false);
@@ -685,6 +707,10 @@ export type PointsSummary = {
   best_day: { day: string; points: number } | null;
   streak: number;
   total: number;
+  // 訓練日誌（step51）：這週（週一到週日）積分、哪幾天有爬（1＝週一…7＝週日）、連續週數；還沒套用時沒有
+  week?: number;
+  week_days?: number[];
+  week_streak?: number;
 };
 export async function getScoringRules(): Promise<ScoringRules> {
   return must(await supabase().from("scoring_rules").select("*").eq("id", 1).single());
@@ -1533,4 +1559,141 @@ export async function getRouteReports(gym: string): Promise<RouteReport[]> {
 }
 export async function handleRouteReports(ids: string[], status: ReportStatus, routeId: string | null = null): Promise<number> {
   return mustReports(await supabase().rpc("handle_route_reports", { p_ids: ids, p_status: status, p_route: routeId })) as number;
+}
+
+// ---------- 訓練日誌（step51） ----------
+export const NO_TRAINING = "資料庫還沒套用訓練日誌（step51），請老闆在 Supabase 執行 step51";
+export type HomeTab = "week" | "log" | "month" | "all";
+export const HOME_TABS: readonly HomeTab[] = ["week", "log", "month", "all"];
+export type TrainingSettings = { week_goal: number; home_tab: HomeTab };
+export const DEFAULT_TRAINING: TrainingSettings = { week_goal: 2, home_tab: "week" };
+export const TRAINING_KINDS = [
+  { v: "boulder", t: "抱石" },
+  { v: "rope", t: "上攀" },
+  { v: "board", t: "指力板" },
+  { v: "core", t: "核心" },
+  { v: "stretch", t: "伸展" },
+  { v: "play", t: "只是來玩" },
+] as const;
+export type TrainingKind = (typeof TRAINING_KINDS)[number]["v"];
+export const TRAINING_HOURS = [
+  { v: 1, t: "1 小時" },
+  { v: 2, t: "2 小時" },
+  { v: 3, t: "3 小時以上" },
+] as const;
+export type TrainingDay = {
+  day: string;
+  feel: number | null; // 1–5
+  hours: number | null; // 1、2、3（3 以上）
+  kinds: TrainingKind[];
+  note: string | null;
+  is_public: boolean;
+};
+const missingTable = (e: { code?: string } | null) => e?.code === "PGRST205" || e?.code === "42P01";
+// 訓練設定：還沒套用 step51 回 null（畫面寫還沒開放）；沒設定過回預設值
+export async function getTrainingSettings(): Promise<TrainingSettings | null> {
+  const r = await supabase().from("training_settings").select("week_goal,home_tab").maybeSingle();
+  if (missingTable(r.error)) return null;
+  const row = must(r) as TrainingSettings | null;
+  return row ? { week_goal: row.week_goal, home_tab: HOME_TABS.includes(row.home_tab) ? row.home_tab : "week" } : { ...DEFAULT_TRAINING };
+}
+export async function saveTrainingSettings(userId: string, s: TrainingSettings) {
+  must(await supabase().from("training_settings").upsert({ user_id: userId, week_goal: s.week_goal, home_tab: s.home_tab }, { onConflict: "user_id" }));
+}
+const DAY_COLS = "day,feel,hours,kinds,note,is_public";
+// 自己這幾天的日誌（from～to，含頭尾）；一定要帶自己的 id：別人公開的日誌也讀得到（RLS），不篩會混進來
+export async function getTrainingDays(userId: string, from: string, to: string): Promise<Record<string, TrainingDay>> {
+  const rows = must(await supabase().from("training_days").select(DAY_COLS).eq("user_id", userId).gte("day", from).lte("day", to)) as TrainingDay[];
+  return Object.fromEntries(rows.map((d) => [d.day, d]));
+}
+export async function saveTrainingDay(userId: string, d: TrainingDay) {
+  must(
+    await supabase()
+      .from("training_days")
+      .upsert({ user_id: userId, day: d.day, feel: d.feel, hours: d.hours, kinds: d.kinds, note: d.note?.trim() || null, is_public: d.is_public }, { onConflict: "user_id,day" })
+  );
+}
+// 每天的紀錄（哪條路線、那天的狀態、試了幾次）
+export type ClimbDayRow = {
+  day: string;
+  status: Status;
+  tries: number | null;
+  highpoint: number | null;
+  route: Route & { zone_name: string; gym_id: string; zone_photo?: string | null };
+};
+const CLIMB_COLS = `day,status,tries,highpoint,updated_at,routes(${ROUTE_COLS},zones(name,gym_id,photo_path))`;
+type ClimbRaw = Omit<ClimbDayRow, "route"> & { routes: Route & { zones: { name: string; gym_id: string; photo_path: string | null } } };
+const climbRow = ({ routes, ...d }: ClimbRaw): ClimbDayRow => {
+  const { zones, ...r } = routes;
+  return { ...d, route: { ...r, zone_name: zones.name, gym_id: zones.gym_id, zone_photo: zones.photo_path } };
+};
+// 某個人（自己，或公開日誌的那個人）：before 之前（不含）最近的幾筆，日期由新到舊；一次最多 limit 筆（畫面再分成一天一天）
+// 一定要帶 user：別人公開那幾天的紀錄也讀得到（RLS），不篩會混進自己的日誌
+export async function getClimbDays(user: string, opts: { before?: string; from?: string; to?: string; limit?: number } = {}): Promise<ClimbDayRow[]> {
+  let q = supabase().from("climb_days").select(CLIMB_COLS).eq("user_id", user);
+  if (opts.before) q = q.lt("day", opts.before);
+  if (opts.from) q = q.gte("day", opts.from);
+  if (opts.to) q = q.lte("day", opts.to);
+  const rows = must(await q.order("day", { ascending: false }).order("updated_at", { ascending: false }).limit(opts.limit ?? 200)) as unknown as ClimbRaw[];
+  return rows.map(climbRow);
+}
+// 我的專案：嘗試中、還在牆上的路線
+export type Project = {
+  route_id: string;
+  last_day: string;
+  highpoint: number | null;
+  grade: number;
+  hold_color: HoldColor;
+  code: string;
+  name: string | null;
+  kind: "gym" | "community";
+  holds_n: number | null;
+  zone_id: string;
+  zone_name: string;
+  gym_id: string;
+  reset_on: string | null;
+  days: number;
+  tries: number | null;
+};
+export async function getMyProjects(): Promise<Project[]> {
+  return must(await supabase().rpc("my_projects")) as Project[];
+}
+// 里程碑：第一次完攀、新的最高難度（日期由新到舊）
+export type Milestone = { day: string; grade: number; first: boolean };
+export async function getMilestones(): Promise<Milestone[]> {
+  return must(await supabase().rpc("my_milestones")) as Milestone[];
+}
+// 別人公開到人物卡的日誌（最近 5 篇）和那幾天的路線；人物卡沒公開、還沒套用 step51 都是空的
+export async function getPublicLogs(userId: string): Promise<{ days: TrainingDay[]; climbs: ClimbDayRow[] }> {
+  const r = await supabase().from("training_days").select(DAY_COLS).eq("user_id", userId).eq("is_public", true).order("day", { ascending: false }).limit(5);
+  if (missingTable(r.error)) return { days: [], climbs: [] };
+  const days = must(r) as TrainingDay[];
+  if (!days.length) return { days, climbs: [] };
+  const climbs = await getClimbDays(userId, { from: days[days.length - 1].day, to: days[0].day });
+  const keep = new Set(days.map((d) => d.day));
+  return { days, climbs: climbs.filter((c) => keep.has(c.day)) };
+}
+// 資料庫有沒有訓練日誌（一次登入只問一次；路線卡片的「試了幾次」、我的紀錄用）
+let trainingOk: Promise<boolean> | null = null;
+export function trainingReady(): Promise<boolean> {
+  trainingOk ??= (async () => {
+    const r = await supabase().from("training_settings").select("user_id").limit(0);
+    if (!r.error) return true;
+    if (missingTable(r.error)) return false;
+    trainingOk = null;
+    return false;
+  })().catch(() => ((trainingOk = null), false));
+  return trainingOk;
+}
+// 我的紀錄（專案、日誌）點一條路線：路線（含區域名稱、館、照片）和自己現在的紀錄（清掉了是 null）
+export async function getMyRouteCard(routeId: string): Promise<{ route: MonthAscent["route"]; ascent: Ascent | null }> {
+  const [row, mine] = await Promise.all([
+    supabase().from("routes").select(`${ROUTE_COLS},zones(name,gym_id,photo_path)`).eq("id", routeId).single(),
+    getMyAscents([routeId]),
+  ]);
+  const { zones, ...r } = must(row) as unknown as Route & { zones: { name: string; gym_id: string; photo_path: string | null } };
+  return { route: { ...r, zone_name: zones.name, gym_id: zones.gym_id, zone_photo: zones.photo_path }, ascent: mine[routeId] ?? null };
+}
+export async function hideTrainingDay(userId: string, day: string, gym: string) {
+  must(await supabase().rpc("hide_training_day", { p_user: userId, p_day: day, p_gym: gym }));
 }

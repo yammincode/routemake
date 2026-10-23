@@ -55,6 +55,7 @@ const level = (c: number) => (c >= 5 ? 3 : c >= 3 ? 2 : c >= 1 ? 1 : 0);
 
 // 攀爬日月曆熱度（原型 .cal）；counts[日] = 當天完攀數
 // gyms[日] = 那天爬過的館（格子下方畫各店標準色小圓點）；有 onPick 時有紀錄的日期可以點（picked 加黃框），再點一次取消
+// marked = 寫過日誌的日子（右上角 Flash 黃小點；訓練日誌 step51）
 export function CalendarHeat({
   year,
   month,
@@ -62,6 +63,7 @@ export function CalendarHeat({
   today,
   gyms,
   picked,
+  marked,
   onPick,
 }: {
   year: number;
@@ -70,6 +72,7 @@ export function CalendarHeat({
   today?: number;
   gyms?: Record<number, string[]>;
   picked?: number | null;
+  marked?: number[];
   onPick?: (day: number | null) => void;
 }) {
   const first = new Date(year, month - 1, 1).getDay();
@@ -97,7 +100,10 @@ export function CalendarHeat({
               ))}
             </span>
           );
-          const label = c ? `${month}/${d} 完攀 ${c} 條` : gs.length ? `${month}/${d}` : undefined;
+          const log = marked?.includes(d);
+          const dots2 = log && <i aria-hidden data-diary className="absolute top-[3px] right-[3px] block size-[6px] rounded-full bg-flash shadow-[0_0_0_1px_var(--bg)]" />;
+          const label0 = c ? `${month}/${d} 完攀 ${c} 條` : gs.length ? `${month}/${d}` : log ? `${month}/${d}` : undefined;
+          const label = label0 && log ? `${label0}，寫了日誌` : label0;
           const where = gs.length ? `，${gs.map((g) => gymShort(findGym(g)?.name ?? g)).join("、")}` : "";
           if (onPick && gs.length) {
             const on = picked === d;
@@ -105,6 +111,7 @@ export function CalendarHeat({
               <button key={d} aria-pressed={on} aria-label={`${label}${where}`} onClick={() => onPick(on ? null : d)} className={`${cls} ${on ? "outline-2 outline-offset-1 outline-flash" : ""}`}>
                 {d}
                 {dots}
+                {dots2}
               </button>
             );
           }
@@ -112,6 +119,7 @@ export function CalendarHeat({
             <span key={d} aria-label={label ? `${label}${where}` : undefined} className={cls}>
               {d}
               {dots}
+              {dots2}
             </span>
           );
         })}
@@ -138,6 +146,7 @@ export function DaySummary({
   open,
   onOpen,
   onClose,
+  extra,
   children,
 }: {
   title: string;
@@ -148,6 +157,7 @@ export function DaySummary({
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
+  extra?: ReactNode; // 訓練日誌：那天的日誌（一直顯示，在「看路線」上面）
   children?: ReactNode;
 }) {
   return (
@@ -194,6 +204,7 @@ export function DaySummary({
           </div>
         ))}
       </div>
+      {extra}
       {open ? (
         <div className="mt-2.5">{children}</div>
       ) : (

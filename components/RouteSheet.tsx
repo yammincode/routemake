@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Pin, WallPhoto } from "@/components/ui/Wall";
 import { ShareButton, SharePicker, SharePreview } from "@/components/ui/Share";
 import { BetaBar } from "@/components/ui/Video";
+import { TriesStepper } from "@/components/ui/Training";
 import { isStaffOf } from "@/lib/auth";
 import {
   clearAscent,
@@ -33,6 +34,7 @@ import {
   postComment,
   saveAscent,
   reportsReady,
+  trainingReady,
   seqTotal,
   unlikeComment,
   type Ascent,
@@ -177,8 +179,24 @@ function RouteBody({
   // 長耐力：總點數（其他路線 0）、最高爬到第幾點（只有嘗試中才有意義）
   const total = spray ? 0 : seqTotal(r);
   const [hp, setHp] = useState<number | null>(ascent?.status === "project" ? (ascent?.highpoint ?? null) : null);
+  // 訓練日誌（step51）：攀爬日那天試了幾次（不按也可以）；用 ref 讓還沒送出的最高點也帶到最新的次數
+  // known＝這筆紀錄有讀到次數（舊的讀法沒帶這個欄位時不送，免得把資料庫裡的次數洗掉）
+  const [tries, setTriesState] = useState<number | null>(ascent?.tries ?? null);
+  const triesRef = useRef<{ v: number | null; known: boolean }>({ v: ascent?.tries ?? null, known: !ascent || ascent.tries !== undefined });
+  const setTries = (v: number | null) => {
+    triesRef.current = { v, known: true };
+    setTriesState(v);
+  };
+  const [canTries, setCanTries] = useState(false);
+  useEffect(() => {
+    let live = true;
+    if (session) void trainingReady().then((ok) => live && setCanTries(ok));
+    return () => {
+      live = false;
+    };
+  }, [session]);
   // 打開卡片時的紀錄：判斷「上次嘗試中、這次爬完／爬得更高」用（這次打開後按錯又改回來不算）
-  const [opened] = useState(() => ({ status: ascent?.status ?? null, date: ascent?.climbed_on ?? null, hp: ascent?.highpoint ?? null }));
+  const [opened] = useState(() => ({ status: ascent?.status ?? null, date: ascent?.climbed_on ?? null, hp: ascent?.highpoint ?? null, tries: ascent?.tries ?? null }));
   // 這次打開後自己在攀爬日膠囊選過日期：之後嘗試中改完攀、爬得更高都照選的日期（不自動改成今天）
   const dayPicked = useRef(false);
   const [comments, setComments] = useState<Comment[] | null>(null);
@@ -254,10 +272,11 @@ function RouteBody({
     private_note: note.trim() || null,
     // 長耐力才帶最高點：Flash、完攀＝最後一點
     ...(total ? { highpoint: s === "project" ? high : total } : {}),
+    ...(triesRef.current.known ? { tries: triesRef.current.v } : {}),
   });
   // 長耐力：拉桿子選最高點，停 0.7 秒才存（拉的過程不會一直送）；關掉卡片前還沒存的會馬上存
   const hpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hpPending = useRef<(() => void) | null>(null);
+  const hpPending = useRef<(() => Promise<string>) | null>(null); // 回傳改好的攀爬日
   useEffect(
     () => () => {
       if (hpTimer.current) clearTimeout(hpTimer.current);
@@ -281,13 +300,39 @@ function RouteBody({
     const run = () => {
       hpPending.current = null;
       hpTimer.current = null;
+      newDayTries("project", date, day);
       setDate(day);
-      void persist(current("project", day, v), `已記錄：爬到第 ${v} 點 +${pts} 分`);
+      return persist(current("project", day, v), `已記錄：爬到第 ${v} 點 +${pts} 分`).then(() => day);
     };
     hpPending.current = run;
     hpTimer.current = setTimeout(run, 700);
   };
 
+  // 換到更晚的一天（嘗試中又來試、嘗試中改完攀記今天）：試了幾次是新的一天的，先清掉；改回打開卡片時那天，帶回那天的次數
+  // （App 每次都送 tries，資料庫不自己清，離線排隊送出時才不會洗掉）
+  const newDayTries = (s: Status | null, from: string, to: string) => {
+    if (to === from) return;
+    if (opened.date && to === opened.date && triesRef.current.known) setTries(opened.tries);
+    else if (s === "project" && to > from) setTries(null);
+  };
+  const pickTries = async (v: number | null) => {
+    if (!status) return;
+    // 還沒送出的最高點（可能要把日期改成今天）先送出去，次數記在它改好的那天
+    const pending = hpPending.current;
+    let day = date;
+    if (pending) {
+      if (hpTimer.current) clearTimeout(hpTimer.current);
+      hpTimer.current = null;
+      day = await pending();
+    }
+    const before = triesRef.current;
+    setTries(v);
+    const saved = await persist(current(status, day), v ? `已記錄：${md(day || todayYmd())} 試了 ${v} 次` : "已清掉試了幾次");
+    if (saved === "failed") {
+      triesRef.current = before;
+      setTriesState(before.v);
+    }
+  };
   // 點 Flash／完攀／嘗試中：直接記錄；點已選的狀態就打開細節
   const quick = async (s: Status) => {
     if (!session) return toLogin();
@@ -303,6 +348,7 @@ function RouteBody({
     const wasProject = opened.status === "project" && s !== "project";
     const day = wasProject && !dayPicked.current ? (todayYmd() > maxDate ? maxDate : todayYmd()) : date;
     const before = status;
+    newDayTries(before, date, day);
     setStatus(s);
     setDate(day);
     const pts = rules ? ascentPoints(r.grade, r.style_tags, s, rules, s === "project" ? hp : null, total) : 0;
@@ -334,8 +380,9 @@ function RouteBody({
 
   // 攀爬日膠囊：還沒記錄只是先選好（按 Flash／完攀／嘗試中時用）；記過的馬上存，存不進去改回原本的日期
   const pickDay = async (d: string) => {
-    const before = { date, picked: dayPicked.current };
+    const before = { date, picked: dayPicked.current, tries: triesRef.current };
     dayPicked.current = true;
+    newDayTries(status, date, d);
     setDate(d);
     if (!status || !session) return;
     dropHp();
@@ -343,6 +390,8 @@ function RouteBody({
     if (saved === "failed") {
       setDate(before.date);
       dayPicked.current = before.picked;
+      triesRef.current = before.tries;
+      setTriesState(before.tries.v);
     }
   };
 
@@ -603,6 +652,7 @@ function RouteBody({
                 {details ? "收起" : "＋ 加上心得與感受"}
               </button>
             </div>
+            {canTries && <TriesStepper label={`${md(date || todayYmd())} 試了幾次`} value={tries} disabled={busy} onChange={(v) => void pickTries(v)} />}
             {canShareIg(access) && status !== "project" && (
               <ShareButton className="mt-1" disabled={!myMascot} onClick={() => void openCard()}>
                 分享到 IG

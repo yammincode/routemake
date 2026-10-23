@@ -35,6 +35,8 @@ import { SlamTicket } from "@/components/ui/Slam";
 import { AccountSummary, ResetCodeBox, SuspendedLine, SuspendNotice, ToggleButton } from "@/components/ui/Account";
 import { CalendarHeat, DailyBars, DaySummary, Delta, MonthGradeChart, MonthSwitcher, SetBox, StatGrid, StatTile, TotalRow, TrendBars } from "@/components/ui/Stats";
 import { useToast } from "@/components/ui/Toast";
+import { FeelDots, HomePin, LogDayCard, LogRoute, MeTabs, MilestoneRow, ProjectCard, PyramidCard, TriesStepper, WeekCard } from "@/components/ui/Training";
+import { ME_TABS } from "@/lib/training";
 import { BetaBadge, BetaBar, PickedFile, VideoList, VideoPickButton, VideoResult, VideoRow, VideoStrip, VideoTrim, VideoViewer, type VideoCard } from "@/components/ui/Video";
 import { Pin, TempPin, WallPhoto } from "@/components/ui/Wall";
 import { fakeWall } from "@/lib/demo";
@@ -698,6 +700,10 @@ export default function DesignShowcase() {
         />
       </Block>
 
+      <Block title="訓練日誌（我的紀錄四個分頁、這週、專案、日誌、難度金字塔、試了幾次；顏色以館內膠帶為主）">
+        <TrainingDemo />
+      </Block>
+
       <Block title="帳號管理（停權、重設密碼）">
         <p className="mt-0 mb-1.5 text-meta text-muted">被停權的人每一頁最上面的提示條（SuspendNotice，2A 案）；永久停權寫「帳號已停權」</p>
         <SuspendNotice until="2027-01-22T10:00:00+08:00" reason="留言騷擾其他顧客" />
@@ -1150,6 +1156,58 @@ function MascotDemo() {
       <div className="mt-3">
         <MascotColors pick={pick} onChange={setPick} />
       </div>
+    </>
+  );
+}
+
+// 訓練日誌（step51）展示：四個分頁（底線是膠帶色、主頁右上小 ★）、這週卡片（桃紅到紅漸層、螢光黃進度圈）、專案（快換線橘色）、日誌卡片、里程碑、金字塔、試了幾次
+function TrainingDemo() {
+  const [tab, setTab] = useState<(typeof ME_TABS)[number]["key"]>("week");
+  const [home, setHome] = useState<(typeof ME_TABS)[number]["key"]>("week");
+  const [goal, setGoal] = useState(2);
+  const [edit, setEdit] = useState(false);
+  const [tries, setTries] = useState<number | null>(4);
+  return (
+    <>
+      <MeTabs tabs={ME_TABS} value={tab} home={home} onChange={setTab} />
+      <HomePin home={home === tab} onSet={() => setHome(tab)} />
+      <WeekCard goal={goal} days={[2, 4]} today={5} streak={4} sends={11} points={386} editing={edit} onEdit={() => setEdit(!edit)} onGoal={(n) => (setGoal(n), setEdit(false))} />
+      <p className="mt-3 mb-1.5 text-meta text-muted">我的專案：換線前 3 天變橘色（左邊橘線、倒數寫橘色）</p>
+      <ul className="m-0 grid list-none gap-2 p-0">
+        <ProjectCard grade={5} color="黃" where="南港 B 區 黃色" due="2 天後換線" warn detail="來了 3 天・試了 14 次" onClick={() => undefined} />
+        <ProjectCard grade={110} color="藍" where="中和 上攀 C 區 藍色" due="20 天後換線" warn={false} detail="來了 1 天・試了 2 次" onClick={() => undefined} />
+      </ul>
+      <p className="mt-3 mb-1.5 text-meta text-muted">日誌一天一張（LogDayCard＋LogRoute）、里程碑（MilestoneRow）、感覺（FeelDots）</p>
+      <div className="grid gap-3">
+        <MilestoneRow>
+          🏅 <b>新的最高難度 V5！</b>
+          <span className="ml-1 text-meta text-muted">10/14</span>
+        </MilestoneRow>
+        <LogDayCard title="10/14（三）" gyms={["mingde"]} feel={4} footer={<span>完攀 2・Flash 1・嘗試中 1</span>}>
+          <ul className="m-0 mt-1 grid list-none divide-y divide-line p-0">
+            <LogRoute grade={5} color="紫" title="C 區 紫色" note="第 2 天・10/12 6 次 → 10/14 3 次" status="send" />
+            <LogRoute grade={3} color="藍" title="A 區 藍色" note="第一次就上" status="flash" />
+            <LogRoute grade={4} color="黃" title="B 區 黃色" note="試 5 次" status="project" />
+          </ul>
+          <div className="mt-1.5 rounded-cell bg-sunk px-2.5 py-1.5 text-note">
+            <span className="block text-meta text-muted">2 小時・抱石・指力板</span>紫色那條終於過了，右腳換腳是關鍵。
+          </div>
+        </LogDayCard>
+        <p className="m-0 text-meta text-muted">
+          感覺 <FeelDots value={3} />
+        </p>
+      </div>
+      <PyramidCard
+        rows={[
+          { grade: 5, done: 2, goal: 1 },
+          { grade: 4, done: 1, goal: 2 },
+          { grade: 3, done: 3, goal: 4 },
+          { grade: 2, done: 9, goal: 8 },
+        ]}
+        next={4}
+        tip="V4 再完攀 1 條，金字塔就更穩了。每一層是那個難度的膠帶顏色。"
+      />
+      <TriesStepper label="10/14 試了幾次" value={tries} onChange={setTries} />
     </>
   );
 }

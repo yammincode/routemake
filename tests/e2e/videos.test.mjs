@@ -1,7 +1,7 @@
 // 顧客分享影片：上傳、刪除自己的、員工在後台刪除、下架路線時影片一起刪除；身高、動作標籤與篩選
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { BASE, createMock, launch, login, phone, taipeiDay } from "./helpers.mjs";
+import { BASE, createMock, launch, login, phone, taipeiDay, openAccount } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -389,6 +389,7 @@ test("影片標籤：一支一列、用身高、動作或型態篩選；分享�
   // 登出換別人登入：不會帶入上一個人的身高（身高分帳號記，登出時清掉）
   await c.goto(BASE + "/me", { waitUntil: "networkidle" });
   await c.waitForTimeout(500);
+  await openAccount(c);
   await c.click("text=登出");
   await c.waitForTimeout(400);
   assert.ok(!(await c.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith("routemake:video-height")))), "登出時清掉記住的身高");

@@ -1,7 +1,7 @@
 // 註冊、登入、填暱稱、登出、錯誤訊息、登入後跳轉只允許站內
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { BASE, createMock, launch, login, phone } from "./helpers.mjs";
+import { BASE, createMock, launch, login, phone, openAccount } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -67,6 +67,7 @@ test("註冊流程與錯誤提示", async () => {
   await page.waitForTimeout(500);
   assert.ok((await page.textContent("main")).includes("小安"), "重新整理後還是登入");
 
+  await openAccount(page);
   await page.click("text=登出");
   await page.waitForTimeout(400);
   assert.ok(await page.isVisible("text=註冊帳號"), "登出後顯示登入／註冊");
@@ -138,6 +139,7 @@ test("管理後台：未登入、沒權限、員工", async () => {
   assert.ok((await mainText(b.page, "你的身分：定線長")).includes("你的身分：定線長"));
   assert.match(await b.page.textContent("main"), /正在管理\s*明德館/, "後台寫出正在管理哪一館");
   await b.page.goto(BASE + "/me", { waitUntil: "networkidle" });
+  await openAccount(b.page);
   assert.ok((await mainText(b.page, "員工身分：明德館定線長")).includes("員工身分：明德館定線長"));
 
   // 別館的定線員：頁首不再寫「明德館」，看得到自己管的館

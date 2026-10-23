@@ -22,6 +22,8 @@ export default function AccountCard() {
   const pending = usePendingCount(session?.user.id);
   const [confirmOut, setConfirmOut] = useState(false);
   const [panel, setPanel] = useState<"password" | "delete" | null>(null);
+  // 登入後收成一行（10/23 使用者決定）：暱稱、帳號＋「帳號設定」，點了才打開改密碼、改暱稱、登出、刪除帳號
+  const [expand, setExpand] = useState(false);
 
   if (!ready) return null;
   const installLink = (
@@ -65,62 +67,69 @@ export default function AccountCard() {
             )}
           </small>
         </span>
-      </div>
-      {access && gymsWithRole.length > 0 && (
-        <p className="mt-2 mb-0 text-meta text-muted">
-          員工身分：
-          {access.is_owner ? "老闆（所有場館）" : gymsWithRole.map((g) => `${g.name}${roleLabel(access, g.id)}`).join("、")}
-        </p>
-      )}
-      <div className="mt-3 grid grid-cols-2 gap-1.5">
-        <button aria-pressed={panel === "password"} className="rounded-field border border-line py-2.5 text-note aria-pressed:border-accent aria-pressed:bg-blush aria-pressed:font-bold aria-pressed:text-accent" onClick={() => setPanel(panel === "password" ? null : "password")}>
-          改密碼
+        <button aria-expanded={expand} onClick={() => setExpand(!expand)} className="flex-none px-1 py-2 text-note font-bold text-accent">
+          帳號設定 {expand ? "⌃" : "⌄"}
         </button>
-        <Link href="/welcome?next=/me" className="rounded-field border border-line py-2.5 text-center text-note">
-          改暱稱
-        </Link>
       </div>
-      {panel === "password" && (
-        <PasswordBox
-          onSave={async (o, n) => {
-            const err = await changePassword(o, n);
-            if (!err) {
-              toast("已改好密碼，其他手機要用新密碼重新登入");
-              setPanel(null);
-            }
-            return err;
-          }}
-        />
-      )}
-      <LinkButton
-        className={confirmOut && pending > 0 ? "font-bold text-warn" : ""}
-        onClick={async () => {
-          if (pending > 0 && !confirmOut) return setConfirmOut(true);
-          setConfirmOut(false);
-          await signOut();
-          toast("已登出");
-        }}
-      >
-        {confirmOut && pending > 0 ? `還有 ${pending} 筆紀錄沒送出，登出會刪掉，再按一次` : "登出"}
-      </LinkButton>
-      {installLink}
-      {access && !isStaff(access) && (
-        <div className="mt-1 border-t border-line pt-1">
-          {panel === "delete" ? (
-            <DeleteMeBox
-              onCancel={() => setPanel(null)}
-              onDeleted={async () => {
-                await signOut();
-                toast("帳號已刪除");
-                router.replace("/me");
+      {expand && (
+        <>
+          {access && gymsWithRole.length > 0 && (
+            <p className="mt-2 mb-0 text-meta text-muted">
+              員工身分：
+              {access.is_owner ? "老闆（所有場館）" : gymsWithRole.map((g) => `${g.name}${roleLabel(access, g.id)}`).join("、")}
+            </p>
+          )}
+          <div className="mt-3 grid grid-cols-2 gap-1.5">
+            <button aria-pressed={panel === "password"} className="rounded-field border border-line py-2.5 text-note aria-pressed:border-accent aria-pressed:bg-blush aria-pressed:font-bold aria-pressed:text-accent" onClick={() => setPanel(panel === "password" ? null : "password")}>
+              改密碼
+            </button>
+            <Link href="/welcome?next=/me" className="rounded-field border border-line py-2.5 text-center text-note">
+              改暱稱
+            </Link>
+          </div>
+          {panel === "password" && (
+            <PasswordBox
+              onSave={async (o, n) => {
+                const err = await changePassword(o, n);
+                if (!err) {
+                  toast("已改好密碼，其他手機要用新密碼重新登入");
+                  setPanel(null);
+                }
+                return err;
               }}
             />
-          ) : (
-            <LinkButton className="text-warn underline" onClick={() => setPanel("delete")}>
-              刪除我的帳號
-            </LinkButton>
           )}
-        </div>
+          <LinkButton
+            className={confirmOut && pending > 0 ? "font-bold text-warn" : ""}
+            onClick={async () => {
+              if (pending > 0 && !confirmOut) return setConfirmOut(true);
+              setConfirmOut(false);
+              await signOut();
+              toast("已登出");
+            }}
+          >
+            {confirmOut && pending > 0 ? `還有 ${pending} 筆紀錄沒送出，登出會刪掉，再按一次` : "登出"}
+          </LinkButton>
+          {installLink}
+          {access && !isStaff(access) && (
+            <div className="mt-1 border-t border-line pt-1">
+              {panel === "delete" ? (
+                <DeleteMeBox
+                  onCancel={() => setPanel(null)}
+                  onDeleted={async () => {
+                    await signOut();
+                    toast("帳號已刪除");
+                    router.replace("/me");
+                  }}
+                />
+              ) : (
+                <LinkButton className="text-warn underline" onClick={() => setPanel("delete")}>
+                  刪除我的帳號
+                </LinkButton>
+              )}
+            </div>
+          )}
+        </>
       )}
     </SetBox>
   );
@@ -168,7 +177,7 @@ function DeleteMeBox({ onCancel, onDeleted }: { onCancel: () => void; onDeleted:
   return (
     <div data-delete-me className="mt-2 rounded-tile bg-blush p-3">
       <b className="block text-sub text-warn">刪除帳號後不能復原</b>
-      <p className="mt-1 mb-0 text-meta">會一起刪掉：所有完攀紀錄和積分、私人心得、留言、影片、人物卡、按的讚。你出的 Spray Wall 路線會留著，但不顯示是誰出的。</p>
+      <p className="mt-1 mb-0 text-meta">會一起刪掉：所有完攀紀錄和積分、私人心得、訓練日誌、留言、影片、人物卡、按的讚。你出的 Spray Wall 路線會留著，但不顯示是誰出的。</p>
       <Label htmlFor="del-pw">輸入密碼確認</Label>
       <TextField id="del-pw" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} />
       {error && (

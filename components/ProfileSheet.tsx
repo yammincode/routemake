@@ -9,7 +9,9 @@ import Sheet from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/Toast";
 import { isManagerOf } from "@/lib/auth";
 import SuspendBox from "@/components/admin/SuspendBox";
-import { cardGyms, clearCardBio, getAccountInfo, getProfileCard, NO_ACCOUNTS, type AccountInfo, type ProfileCard } from "@/lib/data";
+import LogDayView from "@/components/me/LogDay";
+import { cardGyms, clearCardBio, getAccountInfo, getProfileCard, getPublicLogs, hideTrainingDay, NO_ACCOUNTS, type AccountInfo, type ClimbDayRow, type ProfileCard, type TrainingDay } from "@/lib/data";
+import { groupDays } from "@/lib/training";
 import { md } from "@/lib/date";
 import { ABILITY_AXES, CLIMBING_YEARS, gradeLabel } from "@/lib/design";
 import { GYMS } from "@/lib/gyms";
@@ -105,6 +107,7 @@ function ProfileBody({ userId, gymId }: { userId: string; gymId: string }) {
         </>
       }
     >
+      <PublicLogs userId={userId} gymId={gymId} manager={!card.self && isManagerOf(access, gymId)} />
       {!card.self && card.bio && isManagerOf(access, gymId) && (
         <LinkButton onClick={() => void clear()} className="text-warn">
           {confirm ? "確定清除這段自我介紹？再按一次" : "清除不當的自我介紹（店長）"}
@@ -135,6 +138,50 @@ function StaffBox({ userId, gymId }: { userId: string; gymId: string }) {
         留言 {info.comments} 則（這館 {info.comments_here}）・影片 {info.videos} 支・註冊 {md(new Date(info.created_at).toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" }))}
       </p>
       <SuspendBox key={info.suspension?.at ?? "none"} info={info} gymId={gymId} onDone={load} />
+    </div>
+  );
+}
+
+// 公開到人物卡的日誌（最近 5 篇，訓練日誌 step51）：那天的路線和日誌；店長可以把不當的改回不公開
+function PublicLogs({ userId, gymId, manager }: { userId: string; gymId: string; manager: boolean }) {
+  const toast = useToast();
+  const [data, setData] = useState<{ days: TrainingDay[]; climbs: ClimbDayRow[] } | null>(null);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    getPublicLogs(userId)
+      .then((d) => live && setData(d))
+      .catch(() => live && setData({ days: [], climbs: [] }));
+    return () => {
+      live = false;
+    };
+  }, [userId]);
+  if (!data?.days.length) return null;
+  const days = groupDays(data.climbs, Object.fromEntries(data.days.map((d) => [d.day, d])));
+  const hide = async (day: string) => {
+    if (confirm !== day) return setConfirm(day);
+    try {
+      await hideTrainingDay(userId, day, gymId);
+      setData((d) => d && { days: d.days.filter((x) => x.day !== day), climbs: d.climbs.filter((c) => c.day !== day) });
+      toast("已改成不公開");
+    } catch (e) {
+      toast((e as Error).message);
+    }
+    setConfirm(null);
+  };
+  return (
+    <div className="mt-4 grid gap-2" aria-label="公開的日誌">
+      <b className="text-note">公開的日誌</b>
+      {days.map((d) => (
+        <div key={d.day}>
+          <LogDayView d={d} all={data.climbs} editable={false} cardPublic />
+          {manager && (
+            <LinkButton onClick={() => void hide(d.day)} className="text-warn">
+              {confirm === d.day ? "確定改成不公開？再按一次" : "隱藏不當的日誌（店長）"}
+            </LinkButton>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

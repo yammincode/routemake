@@ -52,6 +52,7 @@ export function GymBar({ gyms, of, track = true }: { gyms: GymCount[]; of: numbe
 // wall（牆上進度）：右上「你完成 幾 / 幾 條」、大滿貫幾個難度；每行「完成/總數」，全部完成寫「★ 大滿貫」
 // mine（我的進度）：右上「累計完攀 幾 條」；每行完攀幾條，長條以最多的那個難度為滿格
 // slam（大滿貫兌換，只有牆上進度）：這一行右邊改成「★ 兌換 ›」或「★ 已兌換」，點了打開兌換卡（onSlam）；點這一行其他地方照舊展開各館
+// 牆上進度預設只列有完成的難度（10/23 使用者決定），其他收成最下面一行「還有 ○ 個難度還沒完成 ⌄」，點了全部打開
 export function ProgressCard({
   title,
   rows,
@@ -66,7 +67,10 @@ export function ProgressCard({
   onSlam?: (grade: number) => void;
 }) {
   const [open, setOpen] = useState<number | null>(null);
+  const [all, setAll] = useState(false);
   const wall = mode === "wall";
+  const hidden = wall && !all ? rows.filter((r) => r.done === 0).length : 0;
+  const list = wall && !all ? rows.filter((r) => r.done > 0) : rows;
   const done = rows.reduce((s, r) => s + r.done, 0);
   const total = rows.reduce((s, r) => s + r.total, 0);
   const most = Math.max(1, ...rows.map((r) => r.done));
@@ -92,7 +96,7 @@ export function ProgressCard({
         </p>
       )}
       <div className={`grid gap-2.5 ${wall ? "" : "mt-3"}`}>
-        {rows.map((r) => {
+        {list.map((r) => {
           const isOpen = open === r.grade;
           const act = wall && onSlam ? (slam?.(r) ?? null) : null;
           const head = (
@@ -174,6 +178,11 @@ export function ProgressCard({
           );
         })}
       </div>
+      {wall && (hidden > 0 || all) && rows.some((r) => r.done === 0) && (
+        <button aria-expanded={all} onClick={() => setAll(!all)} className={`${list.length ? "mt-2.5" : ""} w-full py-1 text-center text-meta font-bold text-accent`}>
+          {all ? "只看有完成的 ⌃" : list.length ? `還有 ${hidden} 個難度還沒完成 ⌄` : `${hidden} 個難度都還沒完成，點了打開 ⌄`}
+        </button>
+      )}
     </section>
   );
 }

@@ -2516,6 +2516,123 @@ set role authenticated; select tests.login(:ST);
 select tests.ok('官方 beta：下架的路線不能再放', not public.can_share_beta((select v from ids where k = 'bt')));
 reset role;
 
+-- ---------------------------------------------------------------------
+-- 訓練日誌（0057）：每天的紀錄、試了幾次、日誌（只有本人、公開到人物卡）、訓練設定、這週和連續週數、專案、里程碑
+-- ---------------------------------------------------------------------
+reset role; select tests.login(null);
+insert into public.routes (zone_id, code, grade, hold_color, pin_x, pin_y)
+values ((select v from ids where k = 'zoneA'), 'A1-TL', 5, '黃', 20, 20), ((select v from ids where k = 'zoneA'), 'A1-TP', 3, '藍', 30, 20);
+insert into ids select 'tl', id from public.routes where code = 'A1-TL';
+insert into ids select 'tp', id from public.routes where code = 'A1-TP';
+update public.profiles set card_public = false, suspended_until = null where id = :A;
+delete from public.ascents where user_id = :A;
+set role authenticated; select tests.login(:A);
+select tests.lives('訓練日誌：嘗試中記 3 天前、試了 4 次', format($q$insert into public.ascents (route_id, status, climbed_on, tries) values (%L, 'project', public.taipei_today() - 3, 4)$q$, (select v from ids where k = 'tl')));
+select tests.ok('訓練日誌：每天的紀錄自動多一筆（帶試了幾次）',
+  (select count(*) = 1 and min(tries) = 4 and min(status) = 'project' from public.climb_days where route_id = (select v from ids where k = 'tl')));
+reset role; select tests.login(null);
+set session_replication_role = replica;
+update public.ascents set updated_at = now() - interval '3 days' where user_id = :A and route_id = (select v from ids where k = 'tl');
+set session_replication_role = origin;
+set role authenticated; select tests.login(:A);
+select tests.lives('訓練日誌：今天完攀（App 換到新的一天送次數 null）', format($q$update public.ascents set status = 'send', climbed_on = public.taipei_today(), tries = null where route_id = %L$q$, (select v from ids where k = 'tl')));
+select tests.ok('訓練日誌：之前嘗試的那天留著、今天多一筆完攀',
+  (select count(*) = 2 from public.climb_days where route_id = (select v from ids where k = 'tl'))
+  and exists (select 1 from public.climb_days where route_id = (select v from ids where k = 'tl') and day = public.taipei_today() - 3 and status = 'project' and tries = 4)
+  and exists (select 1 from public.climb_days where route_id = (select v from ids where k = 'tl') and day = public.taipei_today() and status = 'send'));
+select tests.ok('訓練日誌：新的一天沒有次數、之前那天的次數留著', (select tries is null from public.climb_days where route_id = (select v from ids where k = 'tl') and day = public.taipei_today()));
+select tests.lives('訓練日誌：完攀記試了 2 次', format($q$update public.ascents set tries = 2 where route_id = %L$q$, (select v from ids where k = 'tl')));
+select tests.throws('訓練日誌：試了幾次最多 99', format($q$update public.ascents set tries = 100 where route_id = %L$q$, (select v from ids where k = 'tl')));
+select tests.lives('訓練日誌：記錯日子改成昨天', format($q$update public.ascents set climbed_on = public.taipei_today() - 1 where route_id = %L$q$, (select v from ids where k = 'tl')));
+select tests.ok('訓練日誌：改日期是搬過去（今天那筆拿掉、次數跟著）',
+  not exists (select 1 from public.climb_days where route_id = (select v from ids where k = 'tl') and day = public.taipei_today())
+  and exists (select 1 from public.climb_days where route_id = (select v from ids where k = 'tl') and day = public.taipei_today() - 1 and status = 'send' and tries = 2));
+select tests.throws('訓練日誌：不能自己寫每天的紀錄', format($q$insert into public.climb_days (user_id, route_id, day, status) values (%L, %L, public.taipei_today(), 'send')$q$, :A, (select v from ids where k = 'tl')));
+select tests.lives('訓練日誌：寫今天的日誌', $q$insert into public.training_days (day, feel, hours, kinds, note) values (public.taipei_today() - 1, 4, 2, '{boulder,board}', '  黃色那條第三手終於抓住  ')$q$);
+select tests.ok('訓練日誌：說明去掉前後空白、預設不公開', (select note = '黃色那條第三手終於抓住' and not is_public and user_id = :A from public.training_days where day = public.taipei_today() - 1));
+select tests.throws('訓練日誌：不能放網址', $q$insert into public.training_days (day, note) values (public.taipei_today() - 2, '看 evil.com')$q$, '網址');
+select tests.throws('訓練日誌：不能寫明天', $q$insert into public.training_days (day) values (public.taipei_today() + 1)$q$, '晚於今天');
+select tests.throws('訓練日誌：練什麼只能選固定的', $q$insert into public.training_days (day, kinds) values (public.taipei_today() - 2, '{run}')$q$);
+select tests.throws('訓練日誌：感覺 1–5', $q$insert into public.training_days (day, feel) values (public.taipei_today() - 2, 6)$q$);
+select tests.throws('訓練日誌：公開的不能放聯絡方式', $q$update public.training_days set is_public = true, note = '想一起爬加我 line' where day = public.taipei_today() - 1$q$, '聯絡方式');
+select tests.lives('訓練日誌：打開公開到人物卡', $q$update public.training_days set is_public = true where day = public.taipei_today() - 1$q$);
+select tests.lives('訓練日誌：本週目標 3 天、主頁日誌', $q$insert into public.training_settings (week_goal, home_tab) values (3, 'log')$q$);
+select tests.throws('訓練日誌：本週目標最多 7 天', $q$update public.training_settings set week_goal = 8$q$);
+select tests.throws('訓練日誌：主頁只能選四個分頁', $q$update public.training_settings set home_tab = 'me'$q$);
+select tests.ok('訓練日誌：這週積分、這週哪幾天、連續週數',
+  (select (s ->> 'week_streak')::int >= 1 and jsonb_typeof(s -> 'week_days') = 'array' and (s ? 'week') from (select public.points_summary(extract(year from public.taipei_today())::int, extract(month from public.taipei_today())::int) s) x));
+select tests.ok('訓練日誌：里程碑有第一次完攀', (select exists (select 1 from jsonb_array_elements(public.my_milestones()) m where (m ->> 'first')::boolean and (m ->> 'grade')::int = 5)));
+reset role;
+set role authenticated; select tests.login(:B);
+select tests.ok('訓練日誌：人物卡沒公開時別人看不到公開的日誌', not exists (select 1 from public.training_days where user_id = :A));
+select tests.ok('訓練日誌：別人看不到每天的紀錄', not exists (select 1 from public.climb_days where user_id = :A));
+select tests.ok('訓練日誌：別人看不到訓練設定', not exists (select 1 from public.training_settings where user_id = :A));
+reset role;
+update public.profiles set card_public = true where id = :A;
+set role authenticated; select tests.login(:B);
+select tests.ok('訓練日誌：人物卡公開後看得到公開的那天和那天的路線',
+  (select count(*) = 1 from public.training_days where user_id = :A)
+  and (select count(*) = 1 and min(day) = public.taipei_today() - 1 from public.climb_days where user_id = :A));
+select tests.lives('訓練日誌：別人改不到（0 筆）', format($q$update public.training_days set note = '亂改' where user_id = %L$q$, :A));
+select tests.lives('訓練日誌：幫別人寫的會記成自己的', format($q$insert into public.training_days (user_id, day) values (%L, public.taipei_today() - 5)$q$, :A));
+select tests.ok('訓練日誌：私人心得照舊看不到', not exists (select 1 from public.ascents where user_id = :A));
+reset role;
+set role anon; select tests.login(null);
+select tests.ok('訓練日誌：沒登入也看得到公開的', (select count(*) = 1 from public.training_days where user_id = :A));
+select tests.throws('訓練日誌：沒登入不能寫', $q$insert into public.training_days (day) values (public.taipei_today())$q$);
+reset role;
+select tests.ok('訓練日誌：B 的那則沒被改', (select note = '黃色那條第三手終於抓住' from public.training_days where user_id = :A));
+select tests.ok('訓練日誌：B 寫的變成自己的', not exists (select 1 from public.training_days where user_id = :A and day = public.taipei_today() - 5));
+set role authenticated; select tests.login(:B);
+select tests.throws('訓練日誌：顧客不能隱藏別人的日誌', format($q$select public.hide_training_day(%L, public.taipei_today() - 1, 'mingde')$q$, :A), '店長');
+reset role;
+update public.profiles set card_public = false where id = :A;
+set role authenticated; select tests.login(:MG);
+select tests.throws('訓練日誌：人物卡沒公開的日誌店長不能隱藏（不能從操作紀錄讀到）', format($q$select public.hide_training_day(%L, public.taipei_today() - 1, 'mingde')$q$, :A), '沒有公開');
+reset role;
+update public.profiles set card_public = true where id = :A;
+set role authenticated; select tests.login(:MG);
+select tests.lives('訓練日誌：店長隱藏不當的公開日誌', format($q$select public.hide_training_day(%L, public.taipei_today() - 1, 'mingde')$q$, :A));
+reset role;
+select tests.ok('訓練日誌：隱藏後改成不公開、日誌留著、寫操作紀錄',
+  (select not is_public and note is not null from public.training_days where user_id = :A and day = public.taipei_today() - 1)
+  and exists (select 1 from public.audit_log where action = 'diary.hide' and detail ->> 'note' = '黃色那條第三手終於抓住'));
+update public.profiles set suspended_until = now() + interval '1 day' where id = :A;
+set role authenticated; select tests.login(:A);
+select tests.lives('訓練日誌：停權中可以先關掉公開', $q$update public.training_days set is_public = false where day = public.taipei_today() - 1$q$);
+select tests.throws('訓練日誌：停權中不能公開日誌', $q$update public.training_days set is_public = true where day = public.taipei_today() - 1$q$, '停權');
+reset role; select tests.login(null);
+update public.profiles set suspended_until = null where id = :A;
+-- 專案：嘗試中、試了幾天幾次、清除紀錄只拿掉那天
+set role authenticated; select tests.login(:A);
+select tests.lives('訓練日誌：另一條嘗試中（前天 3 次）', format($q$insert into public.ascents (route_id, status, climbed_on, tries) values (%L, 'project', public.taipei_today() - 2, 3)$q$, (select v from ids where k = 'tp')));
+reset role; select tests.login(null);
+set session_replication_role = replica;
+update public.ascents set updated_at = now() - interval '3 days' where user_id = :A and route_id = (select v from ids where k = 'tp');
+set session_replication_role = origin;
+set role authenticated; select tests.login(:A);
+select tests.lives('訓練日誌：今天又來試（5 次）', format($q$update public.ascents set climbed_on = public.taipei_today(), tries = 5 where route_id = %L$q$, (select v from ids where k = 'tp')));
+select tests.ok('訓練日誌：專案寫來了 2 天、試了 8 次',
+  (select (p ->> 'days')::int = 2 and (p ->> 'tries')::int = 8 from jsonb_array_elements(public.my_projects()) p where p ->> 'route_id' = (select v::text from ids where k = 'tp')));
+select tests.lives('訓練日誌：同一天選錯日子（昨天）', format($q$update public.ascents set climbed_on = public.taipei_today() - 1 where route_id = %L$q$, (select v from ids where k = 'tp')));
+select tests.lives('訓練日誌：同一天又改回今天', format($q$update public.ascents set climbed_on = public.taipei_today() where route_id = %L$q$, (select v from ids where k = 'tp')));
+select tests.ok('訓練日誌：同一天裡選錯又改回來不會多一天', not exists (select 1 from public.climb_days where route_id = (select v from ids where k = 'tp') and day = public.taipei_today() - 1));
+select tests.lives('訓練日誌：離線排隊送出「換到今天＋試了 3 次」', format($q$update public.ascents set climbed_on = public.taipei_today() - 1, tries = 3 where route_id = %L$q$, (select v from ids where k = 'tp')));
+select tests.lives('訓練日誌：（再換到今天、試了 3 次）', format($q$update public.ascents set climbed_on = public.taipei_today(), tries = 3 where route_id = %L$q$, (select v from ids where k = 'tp')));
+select tests.ok('訓練日誌：排隊送出的次數不會被洗掉', (select tries = 3 from public.climb_days where route_id = (select v from ids where k = 'tp') and day = public.taipei_today()));
+select tests.lives('訓練日誌：選錯日子（昨天），次數清掉', format($q$update public.ascents set climbed_on = public.taipei_today() - 1, tries = null where route_id = %L$q$, (select v from ids where k = 'tp')));
+select tests.lives('訓練日誌：（改回今天，App 帶回打開卡片時的次數）', format($q$update public.ascents set climbed_on = public.taipei_today(), tries = 3 where route_id = %L$q$, (select v from ids where k = 'tp')));
+select tests.ok('訓練日誌：改回原本那天，那天的次數留著', (select tries = 3 from public.climb_days where route_id = (select v from ids where k = 'tp') and day = public.taipei_today()));
+select tests.lives('訓練日誌：同一天把次數清掉', format($q$update public.ascents set tries = null where route_id = %L$q$, (select v from ids where k = 'tp')));
+select tests.ok('訓練日誌：同一天清掉就清掉', (select tries is null from public.climb_days where route_id = (select v from ids where k = 'tp') and day = public.taipei_today()));
+select tests.ok('訓練日誌：完攀的不算專案', not exists (select 1 from jsonb_array_elements(public.my_projects()) p where p ->> 'route_id' = (select v::text from ids where k = 'tl')));
+select tests.lives('訓練日誌：清除完攀紀錄', format($q$delete from public.ascents where route_id = %L$q$, (select v from ids where k = 'tl')));
+select tests.ok('訓練日誌：清除只拿掉那天的，之前嘗試的留著',
+  (select count(*) = 1 and min(status) = 'project' from public.climb_days where route_id = (select v from ids where k = 'tl')));
+reset role; select tests.login(null);
+delete from public.ascents where user_id = :A and route_id = (select v from ids where k = 'tp');
+update public.profiles set card_public = false where id = :A;
+
 select tests.ok('每張資料表都有開 RLS', not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity),
   (select string_agg(tablename, ', ') from pg_tables where schemaname = 'public' and not rowsecurity));
 

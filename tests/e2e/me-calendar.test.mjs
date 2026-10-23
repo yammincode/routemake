@@ -28,7 +28,7 @@ test("我的紀錄：攀爬日點日期，看那天在哪一館、完攀幾條�
   mock.addAscent(me, route("g4", "A1", 5, "綠"), "send", lastDay);
 
   const { page, errors } = await phone(browser, mock);
-  await login(page, "climber88", "password1", "/me");
+  await login(page, "climber88", "password1", "/me?tab=month");
   await page.waitForTimeout(1200);
   const main = () => page.textContent("main");
   const summary = page.locator('main section[aria-label$="攀爬紀錄"]');

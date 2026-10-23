@@ -54,6 +54,11 @@ export async function withCache<T>(key: string, fetcher: () => Promise<T>, onCac
   }
 }
 
+// 改了設定直接存進手機裡的那份（下次打開先顯示的就是新的）
+export function putCache(key: string, v: unknown) {
+  write(PREFIX + key, v);
+}
+
 // 直接拿手機裡上次的資料（沒有就 null），畫面一打開就能先畫出來
 export function peekCache<T>(key: string): T | null {
   return read<T>(PREFIX + key);
@@ -84,7 +89,7 @@ export type PendingAscent = {
   routeId: string;
   at?: number; // 排隊的時間：送出成功只刪這一個版本（送的過程中又改了，新的那筆留著）
   // null = 清除紀錄；highpoint：長耐力最高爬到第幾點（其他路線沒有）
-  ascent: { status: string; climbed_on: string; feel: number | null; grade_feel: number | null; private_note: string | null; highpoint?: number | null } | null;
+  ascent: { status: string; climbed_on: string; feel: number | null; grade_feel: number | null; private_note: string | null; highpoint?: number | null; tries?: number | null } | null;
 };
 
 export const getPending = () => read<PendingAscent[]>(QUEUE_KEY) ?? [];

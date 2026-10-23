@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import fs from "node:fs";
-import { BASE, WALL, createMock, launch, login, phone, taipeiDay } from "./helpers.mjs";
+import { BASE, WALL, createMock, launch, login, phone, taipeiDay, openAccount } from "./helpers.mjs";
 
 let browser;
 before(async () => (browser = await launch()));
@@ -101,6 +101,7 @@ test("還有紀錄沒送出時按登出：先提醒，再按一次才登出（�
   await page.goto(BASE + "/me", { waitUntil: "networkidle" });
   await page.waitForTimeout(800);
 
+  await openAccount(page);
   await page.click('main button:has-text("登出")');
   await page.waitForTimeout(300);
   assert.ok((await page.textContent("main")).includes("還有 1 筆紀錄沒送出，登出會刪掉，再按一次"), "先提醒");
@@ -119,6 +120,7 @@ test("沒網路、登入又剛好過期時按登出：手機裡的登入一定�
   const { page, ctx } = await phone(browser, mock);
   await login(page, "climber88", "password1", "/me");
   await page.waitForTimeout(500);
+  await openAccount(page);
 
   mock.state.offline = true;
   await ctx.setOffline(true);

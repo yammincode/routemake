@@ -5,6 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { PageCheer } from "@/components/MascotCheer";
 import PointsPanel from "@/components/PointsPanel";
+import DiaryEditor from "@/components/me/DiaryEditor";
+import LogTab from "@/components/me/LogTab";
+import WeekTab, { weekLines } from "@/components/me/WeekTab";
 import RouteSheet from "@/components/RouteSheet";
 import { Button } from "@/components/ui/Button";
 import { Empty, SectionTitle, Tip } from "@/components/ui/Card";
@@ -13,9 +16,17 @@ import { Points, RouteList, RouteRow } from "@/components/ui/Route";
 import { CalendarHeat, DaySummary, Delta, MonthGradeChart, MonthSwitcher, StatGrid, StatTile, TotalRow, type DayGym, type MonthCol } from "@/components/ui/Stats";
 import { Tabs } from "@/components/ui/Tabs";
 import { ShareButton, SharePicker, SharePreview } from "@/components/ui/Share";
+import { HomePin, MeTabs, PyramidCard } from "@/components/ui/Training";
 import { useToast } from "@/components/ui/Toast";
 import {
+  DEFAULT_TRAINING,
   getGyms,
+  getMyRouteCard,
+  getProfileCard,
+  getTrainingDays,
+  getTrainingSettings,
+  NO_TRAINING,
+  saveTrainingSettings,
   getLiveWallRoutes,
   getMonthAscents,
   getMonthlyStats,
@@ -25,7 +36,12 @@ import {
   seqPhotoUrl,
   heroPhoto,
   seqTotal,
+  type Ascent,
   type Gym,
+  type HomeTab,
+  type Project,
+  type TrainingDay,
+  type TrainingSettings,
   type MonthAscent,
   type MonthStats,
   type MySend,
@@ -41,11 +57,12 @@ import { useMascot } from "@/lib/mascot-store";
 import { canShareIg } from "@/lib/share";
 import { drawMonthCard } from "@/lib/share-cards";
 import { loadShow, saveShow, type MonthShow } from "@/lib/share-options";
-import { overlayPending, withCache } from "@/lib/offline";
+import { overlayPending, putCache, withCache } from "@/lib/offline";
 import { myProgress, progressGyms, wallProgress, type ProgressRow } from "@/lib/progress";
 import { ascentPoints } from "@/lib/scoring";
 import { slamAction, slamPath } from "@/lib/slam";
 import { useScoring } from "@/lib/useScoring";
+import { ME_TABS, pyramid, tabLabel } from "@/lib/training";
 
 // 路線進度的兩個分頁；選哪一個記在手機
 type ProgressTab = "wall" | "mine";
@@ -90,7 +107,8 @@ export default function MeView({ gymId }: { gymId: string }) {
   // 路線卡片：各館有沒有開放留言（打開哪一館的路線就查哪一館；存在手機，離線也查得到）
   const [gymComments, setGymComments] = useState<Record<string, boolean> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState<MonthAscent | null>(null);
+  // 路線卡片：路線和自己現在的紀錄（從專案、日誌點進來的先讀紀錄）
+  const [open, setOpen] = useState<{ route: MonthAscent["route"]; ascent: Ascent | null } | null>(null);
   const uid = session?.user.id;
   // 分享到 IG（C1 本月完攀圖）：按了先打開預覽、在手機上畫圖
   const [card, setCard] = useState<{ file: File | null; url: string | null } | null>(null);
@@ -102,6 +120,14 @@ export default function MeView({ gymId }: { gymId: string }) {
   const [monthShow, setMonthShow] = useState<MonthShow | null>(null); // 勾選要放的資料（打開預覽時從手機讀）
   const mascot = useMascot(canShareIg(access) ? uid : null); // 分享圖用的原岩夥伴
   const toast = useToast();
+  // 訓練日誌（step51）：本週目標、主頁（undefined＝還在讀；null＝資料庫還沒套用）
+  const [settings, setSettings] = useState<TrainingSettings | null | undefined>(undefined);
+  const [meTab, setMeTab] = useState<HomeTab | null>(null);
+  const [version, setVersion] = useState(0); // 紀錄改了就加 1：這週、日誌重讀
+  const [cardPublic, setCardPublic] = useState<boolean | null>(null);
+  const [projects, setProjects] = useState<Project[] | null>(null);
+  const [monthDiaries, setMonthDiaries] = useState<Record<string, TrainingDay>>({});
+  const [dayEdit, setDayEdit] = useState(false);
 
   // 第一次載入時先顯示手機裡上次的資料，抓到最新的再換掉
   const firstMonth = useRef(true);
@@ -204,6 +230,87 @@ export default function MeView({ gymId }: { gymId: string }) {
   useEffect(() => {
     if (ready) void Promise.resolve().then(loadGyms);
   }, [ready, loadGyms]);
+  // 訓練設定：先用手機裡上次的（打開就停在主頁），抓到最新的再換
+  useEffect(() => {
+    let live = true;
+    queueMicrotask(() => {
+      if (!live) return;
+      // 換人登入：先清掉上一個人的設定、分頁、專案、日誌，再讀這個人的
+      setSettings(undefined);
+      setMeTab(null);
+      setProjects(null);
+      setCardPublic(null);
+      setMonthDiaries({});
+      if (!ready || !uid) return;
+      withCache<TrainingSettings | null>(`training:${uid}`, getTrainingSettings, (s) => live && setSettings(s))
+        .then(({ data }) => live && setSettings(data))
+        .catch(() => live && setSettings((s) => (s === undefined ? { ...DEFAULT_TRAINING } : s)));
+    });
+    return () => {
+      live = false;
+    };
+  }, [ready, uid]);
+  // 第一次知道設定：停在主頁（網址 ?tab= 指定的優先，例如從夥伴、通知點進來）；資料庫還沒套用時停在這個月
+  useEffect(() => {
+    if (settings === undefined || meTab) return;
+    let want: string | null = null;
+    try {
+      want = new URLSearchParams(window.location.search).get("tab");
+    } catch {}
+    const t = ME_TABS.find((x) => x.key === want)?.key ?? (settings ? settings.home_tab : "month");
+    void Promise.resolve().then(() => setMeTab(t));
+  }, [settings, meTab]);
+  useEffect(() => {
+    const bump = () => setVersion((v) => v + 1);
+    window.addEventListener("routemake:synced", bump);
+    return () => window.removeEventListener("routemake:synced", bump);
+  }, []);
+  // 人物卡有沒有公開（日誌「公開到人物卡」旁邊的說明用）
+  useEffect(() => {
+    if (!uid || !settings) return;
+    let live = true;
+    getProfileCard(uid)
+      .then((c) => live && setCardPublic(c.public))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [uid, settings]);
+  // 這個月寫過日誌的日子（攀爬日月曆右上角黃點、點一天看那天的日誌）
+  useEffect(() => {
+    if (!uid || !settings) return;
+    let live = true;
+    queueMicrotask(() => setMonthDiaries({}));
+    const from = `${ym.y}-${String(ym.m).padStart(2, "0")}-01`;
+    const to = `${ym.y}-${String(ym.m).padStart(2, "0")}-${String(new Date(ym.y, ym.m, 0).getDate()).padStart(2, "0")}`;
+    getTrainingDays(uid, from, to)
+      .then((d) => live && setMonthDiaries(d))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [uid, settings, ym.y, ym.m, version]);
+  const saveSettings = async (next: TrainingSettings, msg: string) => {
+    if (!uid) return;
+    const before = settings;
+    setSettings(next);
+    try {
+      await saveTrainingSettings(uid, next);
+      putCache(`training:${uid}`, next);
+      toast(msg);
+    } catch (e) {
+      setSettings(before);
+      toast((e as Error).message);
+    }
+  };
+  // 從專案、日誌點一條路線：先讀路線和自己現在的紀錄
+  const openRoute = async (routeId: string) => {
+    try {
+      setOpen(await getMyRouteCard(routeId));
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
   useEffect(() => {
     void Promise.resolve().then(() => setTab(savedTab()));
   }, []);
@@ -226,8 +333,8 @@ export default function MeView({ gymId }: { gymId: string }) {
     );
 
   const isNow = ym.y === now.y && ym.m === now.m;
-  const prev = () => (setPick(null), setDay(null), setYm(({ y, m }) => (m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 })));
-  const next = () => (setPick(null), setDay(null), setYm(({ y, m }) => (m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 })));
+  const prev = () => (setPick(null), setDay(null), setDayEdit(false), setYm(({ y, m }) => (m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 })));
+  const next = () => (setPick(null), setDay(null), setDayEdit(false), setYm(({ y, m }) => (m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 })));
 
   const counts = stats ? Object.fromEntries(Object.entries(stats.by_day).map(([d, n]) => [+d, n])) : {};
 
@@ -237,7 +344,9 @@ export default function MeView({ gymId }: { gymId: string }) {
   const wall = progress ? wallProgress(progress.routes, (id) => progress.done.has(id)) : null;
   const near = wall ? [...wall.boulder, ...wall.rope].filter((r) => r.total >= 2 && r.total - r.done > 0 && r.total - r.done <= 2).map((r) => ({ grade: gradeLabel(r.grade), left: r.total - r.done })) : [];
   // 路線進度讀好（或讀不到）才說，差一兩條的大滿貫才講得到；換到別的月份不說
-  const mePool = isNow && stats && (progress || progressError) ? meLines({ sends: stats.sends, prev: stats.prev_sends, flashes: stats.flashes, days: stats.days, near }) : null;
+  const weekPool = settings && points?.week_days ? weekLines({ goal: settings.week_goal, days: new Set(points.week_days).size, streak: points.week_streak ?? 0, projects }) : [];
+  const mePool =
+    isNow && stats && (progress || progressError) ? [...weekPool, ...meLines({ sends: stats.sends, prev: stats.prev_sends, flashes: stats.flashes, days: stats.days, near })] : null;
   const prog = progress && (tab === "wall" ? wallProgress(progress.routes, (id) => progress.done.has(id)) : myProgress(progress.sends));
 
   // 本月完攀直條圖：抱石 VB–V10 每級一根；上攀 5.6–5.9 每級一根、5.10 以上 a–d 合成一根（20 根手機放不下）
@@ -279,7 +388,7 @@ export default function MeView({ gymId }: { gymId: string }) {
         quote={a.private_note ?? undefined}
         status={a.status}
         statusOld={!!a.route.archived_at}
-        onClick={() => setOpen(a)}
+        onClick={() => setOpen({ route: a.route, ascent: a })}
       />
     );
   };
@@ -309,6 +418,24 @@ export default function MeView({ gymId }: { gymId: string }) {
         return { gym, sends: sent.length, grades, more };
       })
     : [];
+
+  // 難度金字塔（全部分頁）：全部完攀過的岩館抱石路線
+  const pyr = progress && settings !== undefined ? pyramid(progress.sends) : null;
+  const pyrShort = pyr?.rows.find((x) => x.grade === pyr.next);
+  const pyrTip = !pyr
+    ? ""
+    : pyr.next == null
+      ? "每一層都穩了，你已經是 V10 的人了！"
+      : pyrShort
+        ? `${gradeLabel(pyrShort.grade)} 再完攀 ${pyrShort.goal - pyrShort.done} 條，金字塔就更穩了。每一層是那個難度的膠帶顏色。`
+        : `每一層都穩了，可以挑戰 ${gradeLabel(pyr.next)}！每一層是那個難度的膠帶顏色。`;
+  const pickedYmd = pickedDay ? `${ym.y}-${String(ym.m).padStart(2, "0")}-${String(pickedDay.d).padStart(2, "0")}` : null;
+  const pickedDiary = pickedYmd ? (monthDiaries[pickedYmd] ?? null) : null;
+  const ymKey = `${ym.y}-${String(ym.m).padStart(2, "0")}-`;
+  const diaryMarks = Object.keys(monthDiaries)
+    .filter((d) => d.startsWith(ymKey))
+    .map((d) => +d.slice(8, 10));
+  const onDiary = (t: TrainingDay) => setMonthDiaries((m) => ({ ...m, [t.day]: t }));
 
   // C1 本月完攀圖：正在看的那個月（上個月也可以分享）；數字跟上面四格、本月完攀直條圖一樣
   // show：勾選要放的資料；改勾選時預覽先留著舊的圖，畫好再換
@@ -352,108 +479,163 @@ export default function MeView({ gymId }: { gymId: string }) {
   return (
     <>
       {uid && <PageCheer uid={uid} page="me" pool={mePool} />}
-      <MonthSwitcher year={ym.y} month={ym.m} onPrev={prev} onNext={next} nextDisabled={isNow} />
-      <StatGrid>
-        <StatTile value={stats?.sends ?? "–"} label="完攀" />
-        <StatTile value={stats?.flashes ?? "–"} label="Flash" flash />
-        <StatTile value={stats?.days ?? "–"} label="攀爬天數" />
-        <StatTile
-          value={stats?.top_grade != null ? gradeLabel(stats.top_grade) : stats?.top_yds != null ? gradeLabel(stats.top_yds) : "–"}
-          label={stats?.top_grade != null && stats?.top_yds != null ? `最高（上攀 ${gradeLabel(stats.top_yds)}）` : "最高難度"}
-        />
-      </StatGrid>
-      {stats && (stats.sends > 0 || stats.prev_sends > 0) && <Delta diff={stats.sends - stats.prev_sends} />}
-      {canShareIg(access) && stats && (
-        <ShareButton className="mt-2" disabled={!stats.sends || loadedMonth !== `${ym.y}-${ym.m}` || !mascot} onClick={() => void openCard()}>
-          {stats.sends ? `分享 ${ym.m} 月成績到 IG` : `${ym.m} 月還沒有完攀，不能分享`}
-        </ShareButton>
-      )}
-
-      <PointsPanel year={ym.y} month={ym.m} isNow={isNow} todayDay={now.d} summary={points} />
-
-      <SectionTitle>攀爬日</SectionTitle>
-      <CalendarHeat
-        year={ym.y}
-        month={ym.m}
-        counts={counts}
-        today={isNow ? now.d : undefined}
-        gyms={dayGyms}
-        picked={pickedDay?.d ?? null}
-        onPick={(d) => setDay(d ? { d, open: false } : null)}
-      />
-      {pickedDay ? (
-        <DaySummary
-          title={`${ym.m}/${pickedDay.d}（${"日一二三四五六"[new Date(ym.y, ym.m - 1, pickedDay.d).getDay()]}）`}
-          sends={daySent.length}
-          flashes={daySent.filter((a) => a.status === "flash").length}
-          points={points?.by_day[String(pickedDay.d)]}
-          gyms={dayGymRows}
-          open={pickedDay.open}
-          onOpen={() => setDay({ d: pickedDay.d, open: true })}
-          onClose={() => setDay(null)}
-        >
-          <RouteList>{dayList.map(ascentRow)}</RouteList>
-        </DaySummary>
-      ) : (
-        Object.keys(dayGyms).length > 0 && (
-          <>
-            <GymLegend gyms={[...new Set(Object.values(dayGyms).flat())].sort((x, y) => gymOrder(x) - gymOrder(y))} />
-            <Tip>點有顏色的日期，看那天在哪一館、爬了哪些路線。圓點是館的顏色。</Tip>
-          </>
-        )
-      )}
-
-      <SectionTitle>本月完攀</SectionTitle>
-      {chartCols.some((c) => c.items) ? (
+      {meTab && (
         <>
-          {boulderCols.some((c) => c.items) && <MonthGradeChart title="抱石" cols={boulderCols} picked={picked} onPick={choose} />}
-          {ropeCols.some((c) => c.items) && <MonthGradeChart title="上攀" cols={ropeCols} picked={picked} onPick={choose} tone="accent" />}
-          {picked ? (
-            <>
-              <p className="mt-3 mb-2 text-note text-muted">
-                <b className="text-ink">{chartCols.find((c) => c.key === picked)?.label}</b>・{shown.length} 條，點路線看心得、改紀錄
-              </p>
-              <RouteList>
-                {shown.map(ascentRow)}
-              </RouteList>
-            </>
-          ) : (
-            <Tip>點一根長條，看這個難度這個月爬了哪些路線和心得。黃色那段是 Flash。</Tip>
+          <MeTabs tabs={ME_TABS} value={meTab} home={settings ? settings.home_tab : null} onChange={setMeTab} />
+          {settings && (
+            <HomePin
+              home={settings.home_tab === meTab}
+              onSet={() => void saveSettings({ ...settings, home_tab: meTab }, `已把「${tabLabel(meTab)}」設成主頁，打開我的紀錄先看這頁`)}
+            />
           )}
         </>
-      ) : (
-        <Empty>這個月還沒有完攀紀錄。</Empty>
       )}
-
-      <TotalRow label="累計完攀" value={stats?.total_sends ?? "–"} />
-
-      {/* 路線進度（版型固定，見 CLAUDE.md）：牆上進度／我的進度 → 各館圖例 → 說明 → 抱石、上攀卡片 */}
-      <SectionTitle>路線進度</SectionTitle>
-      <Tabs tabs={PROGRESS_TABS} value={tab} onChange={pickTab} />
-      {!prog ? (
-        progressError ? (
-          <>
-            <Empty>{progressError}</Empty>
-            <div className="mt-3">
-              <Button onClick={() => void loadProgress()}>重新整理</Button>
-            </div>
-          </>
-        ) : (
-          <Empty>讀取中…</Empty>
-        )
-      ) : prog.boulder.length || prog.rope.length ? (
+      {(meTab === "week" || meTab === "log") && !settings && <Empty>{access?.is_owner ? NO_TRAINING : "訓練日誌還沒開放，敬請期待。"}</Empty>}
+      {meTab === "week" && settings && uid && (
+        <WeekTab
+          uid={uid}
+          goal={settings.week_goal}
+          summary={points}
+          cardPublic={cardPublic}
+          version={version}
+          onGoal={(n) => void saveSettings({ ...settings, week_goal: n }, `這週目標改成 ${n} 天`)}
+          onRoute={(id) => void openRoute(id)}
+          onProjects={setProjects}
+          onDiary={onDiary}
+        />
+      )}
+      {meTab === "log" && settings && uid && <LogTab uid={uid} cardPublic={cardPublic} version={version} onRoute={(id) => void openRoute(id)} onDiary={onDiary} />}
+      {meTab === "month" && (
         <>
-          <GymLegend gyms={progressGyms(prog)} />
-          <Tip>
-            {tab === "wall"
-              ? "現在牆上的路線，開放的館全部一起算（Spray Wall 不算）；一個難度全部完成就是 ★ 大滿貫。點一行看各館。"
-              : "你到現在完攀過的路線，換線拆掉的也算（跟上面的累計完攀一樣）；顏色是在哪一館爬的。點一行看各館。"}
-          </Tip>
-          {prog.boulder.length > 0 && <ProgressCard key={`${tab}-b`} title="抱石" rows={prog.boulder} mode={tab} slam={slam} onSlam={openSlam} />}
-          {prog.rope.length > 0 && <ProgressCard key={`${tab}-r`} title="上攀" rows={prog.rope} mode={tab} slam={slam} onSlam={openSlam} />}
+          <MonthSwitcher year={ym.y} month={ym.m} onPrev={prev} onNext={next} nextDisabled={isNow} />
+          <StatGrid>
+            <StatTile value={stats?.sends ?? "–"} label="完攀" />
+            <StatTile value={stats?.flashes ?? "–"} label="Flash" flash />
+            <StatTile value={stats?.days ?? "–"} label="攀爬天數" />
+            <StatTile
+              value={stats?.top_grade != null ? gradeLabel(stats.top_grade) : stats?.top_yds != null ? gradeLabel(stats.top_yds) : "–"}
+              label={stats?.top_grade != null && stats?.top_yds != null ? `最高（上攀 ${gradeLabel(stats.top_yds)}）` : "最高難度"}
+            />
+          </StatGrid>
+          {stats && (stats.sends > 0 || stats.prev_sends > 0) && <Delta diff={stats.sends - stats.prev_sends} />}
+          {canShareIg(access) && stats && (
+            <ShareButton className="mt-2" disabled={!stats.sends || loadedMonth !== `${ym.y}-${ym.m}` || !mascot} onClick={() => void openCard()}>
+              {stats.sends ? `分享 ${ym.m} 月成績到 IG` : `${ym.m} 月還沒有完攀，不能分享`}
+            </ShareButton>
+          )}
+
+          <PointsPanel year={ym.y} month={ym.m} isNow={isNow} todayDay={now.d} summary={points} />
+
+          <SectionTitle>攀爬日</SectionTitle>
+          <CalendarHeat
+            year={ym.y}
+            month={ym.m}
+            counts={counts}
+            today={isNow ? now.d : undefined}
+            gyms={dayGyms}
+            picked={pickedDay?.d ?? null}
+            marked={diaryMarks}
+            onPick={(d) => (setDayEdit(false), setDay(d ? { d, open: false } : null))}
+          />
+          {pickedDay ? (
+            <DaySummary
+              title={`${ym.m}/${pickedDay.d}（${"日一二三四五六"[new Date(ym.y, ym.m - 1, pickedDay.d).getDay()]}）`}
+              sends={daySent.length}
+              flashes={daySent.filter((a) => a.status === "flash").length}
+              points={points?.by_day[String(pickedDay.d)]}
+              gyms={dayGymRows}
+              open={pickedDay.open}
+              onOpen={() => setDay({ d: pickedDay.d, open: true })}
+              onClose={() => setDay(null)}
+              extra={
+                settings && uid && pickedYmd ? (
+                  dayEdit ? (
+                    <DiaryEditor
+                      userId={uid}
+                      day={pickedYmd}
+                      value={pickedDiary}
+                      cardPublic={cardPublic}
+                      onCancel={() => setDayEdit(false)}
+                      onSaved={(t) => (setDayEdit(false), setMonthDiaries((m) => ({ ...m, [t.day]: t })), setVersion((v) => v + 1))}
+                    />
+                  ) : (
+                    <div className="mt-2 grid gap-1 text-note">
+                      {pickedDiary?.note && <p className="m-0 rounded-cell bg-sunk px-2.5 py-1.5 break-words">{pickedDiary.note}</p>}
+                      <button onClick={() => setDayEdit(true)} className="justify-self-start py-0.5 font-bold text-accent">
+                        {pickedDiary ? "編輯這天的日誌" : "＋ 寫這天的日誌"}
+                      </button>
+                    </div>
+                  )
+                ) : undefined
+              }
+            >
+              <RouteList>{dayList.map(ascentRow)}</RouteList>
+            </DaySummary>
+          ) : (
+            Object.keys(dayGyms).length > 0 && (
+              <>
+                <GymLegend gyms={[...new Set(Object.values(dayGyms).flat())].sort((x, y) => gymOrder(x) - gymOrder(y))} />
+                <Tip>點有顏色的日期，看那天在哪一館、爬了哪些路線。圓點是館的顏色。</Tip>
+              </>
+            )
+          )}
+
+          <SectionTitle>本月完攀</SectionTitle>
+          {chartCols.some((c) => c.items) ? (
+            <>
+              {boulderCols.some((c) => c.items) && <MonthGradeChart title="抱石" cols={boulderCols} picked={picked} onPick={choose} />}
+              {ropeCols.some((c) => c.items) && <MonthGradeChart title="上攀" cols={ropeCols} picked={picked} onPick={choose} tone="accent" />}
+              {picked ? (
+                <>
+                  <p className="mt-3 mb-2 text-note text-muted">
+                    <b className="text-ink">{chartCols.find((c) => c.key === picked)?.label}</b>・{shown.length} 條，點路線看心得、改紀錄
+                  </p>
+                  <RouteList>
+                    {shown.map(ascentRow)}
+                  </RouteList>
+                </>
+              ) : (
+                <Tip>點一根長條，看這個難度這個月爬了哪些路線和心得。黃色那段是 Flash。</Tip>
+              )}
+            </>
+          ) : (
+            <Empty>這個月還沒有完攀紀錄。</Empty>
+          )}
         </>
-      ) : (
-        <Empty>{tab === "wall" ? "牆上目前沒有路線。" : "還沒有完攀紀錄：路線按「完攀」或「Flash」就會算進來。"}</Empty>
+      )}
+      {meTab === "all" && (
+        <>
+          <TotalRow label="累計完攀" value={stats?.total_sends ?? "–"} />
+          {pyr && <PyramidCard rows={pyr.rows} next={pyr.next} tip={pyrTip} />}
+          {/* 路線進度（版型固定，見 CLAUDE.md）：牆上進度／我的進度 → 各館圖例 → 說明 → 抱石、上攀卡片 */}
+          <SectionTitle>路線進度</SectionTitle>
+          <Tabs tabs={PROGRESS_TABS} value={tab} onChange={pickTab} />
+          {!prog ? (
+            progressError ? (
+              <>
+                <Empty>{progressError}</Empty>
+                <div className="mt-3">
+                  <Button onClick={() => void loadProgress()}>重新整理</Button>
+                </div>
+              </>
+            ) : (
+              <Empty>讀取中…</Empty>
+            )
+          ) : prog.boulder.length || prog.rope.length ? (
+            <>
+              <GymLegend gyms={progressGyms(prog)} />
+              <Tip>
+                {tab === "wall"
+                  ? "現在牆上的路線，開放的館全部一起算（Spray Wall 不算）；一個難度全部完成就是 ★ 大滿貫。點一行看各館。"
+                  : "你到現在完攀過的路線，換線拆掉的也算（跟上面的累計完攀一樣）；顏色是在哪一館爬的。點一行看各館。"}
+              </Tip>
+              {prog.boulder.length > 0 && <ProgressCard key={`${tab}-b`} title="抱石" rows={prog.boulder} mode={tab} slam={slam} onSlam={openSlam} />}
+              {prog.rope.length > 0 && <ProgressCard key={`${tab}-r`} title="上攀" rows={prog.rope} mode={tab} slam={slam} onSlam={openSlam} />}
+            </>
+          ) : (
+            <Empty>{tab === "wall" ? "牆上目前沒有路線。" : "還沒有完攀紀錄：路線按「完攀」或「Flash」就會算進來。"}</Empty>
+          )}
+        </>
       )}
 
       <RouteSheet
@@ -463,9 +645,9 @@ export default function MeView({ gymId }: { gymId: string }) {
         zoneName={open?.route.zone_name ?? ""}
         gymId={open?.route.gym_id ?? gymId}
         gymCommentsOn={gymComments?.[open?.route.gym_id ?? gymId] ?? false}
-        ascent={open}
+        ascent={open?.ascent ?? null}
         onClose={() => setOpen(null)}
-        onSaved={() => void (loadMonth(), loadProgress())}
+        onSaved={() => void (loadMonth(), loadProgress(), setVersion((v) => v + 1))}
       />
       <SharePreview
         open={!!card}

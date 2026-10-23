@@ -129,7 +129,7 @@ test("長耐力：顧客記錄最高爬到第幾點、照比例算分、完攀�
   // 我的紀錄：沒爬完也列出來，寫進度和分數
   await c.keyboard.press("Escape");
   await c.waitForTimeout(300); // 關掉全螢幕卡片會退掉多記的那一筆瀏覽紀錄，等退完再換頁
-  await c.goto(BASE + "/me", { waitUntil: "networkidle" });
+  await c.goto(BASE + "/me?tab=month", { waitUntil: "networkidle" });
   await c.waitForTimeout(1000);
   await monthGrade(c, "5.11");
   const me = await c.textContent("main");
@@ -184,7 +184,7 @@ test("長耐力：館首頁「最新路線」跳到區域頁，打開的卡片�
   mock.db.ascents.push({ id: "a-en", user_id: uid, route_id: r.id, status: "project", climbed_on: new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date()), feel: null, grade_feel: null, private_note: null, highpoint: 3, updated_at: new Date().toISOString() });
   r.archived_at = new Date(Date.now() - 60_000).toISOString();
   const open = async () => {
-    await c.goto(BASE + "/me", { waitUntil: "networkidle" });
+    await c.goto(BASE + "/me?tab=month", { waitUntil: "networkidle" });
     await c.waitForTimeout(1000);
     await monthGrade(c, "5.11");
     await c.locator("main ul li button", { hasText: r.code }).click();
@@ -223,7 +223,7 @@ test("資料庫還沒套用 step30：一般路線照常記錄、我的紀錄照�
   assert.equal(mock.db.ascents.find((x) => x.route_id === r.id)?.status, "send", "照常記錄");
   await c.keyboard.press("Escape");
   await c.waitForTimeout(300); // 關掉全螢幕卡片會退掉多記的那一筆瀏覽紀錄，等退完再換頁
-  await c.goto(BASE + "/me", { waitUntil: "networkidle" });
+  await c.goto(BASE + "/me?tab=month", { waitUntil: "networkidle" });
   await c.waitForTimeout(1000);
   await monthGrade(c, "V3");
   assert.ok((await c.textContent("main")).includes("藍色"), "我的紀錄照常");
